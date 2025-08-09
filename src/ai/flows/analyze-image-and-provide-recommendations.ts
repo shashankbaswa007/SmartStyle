@@ -19,15 +19,15 @@ const AnalyzeImageAndProvideRecommendationsInputSchema = z.object({
     ),
   occasion: z.string().describe('The occasion for which the recommendation is needed.'),
   gender: z.string().describe('The gender of the person in the photo.'),
-  weather: z.string().describe('The weather conditions at the person\'s current location.'),
-  skinTone: z.string().describe('The skin tone of the person in the photo.'),
-  dressColors: z.string().describe('The colors of the dress worn by the person in the photo.'),
+  weather: z.string().describe("The weather conditions at the person's current location."),
+  skinTone: z.string().describe("The person's estimated skin tone."),
+  dressColors: z.string().describe('A comma-separated list of the primary colors of the outfit.'),
 });
 export type AnalyzeImageAndProvideRecommendationsInput = z.infer<typeof AnalyzeImageAndProvideRecommendationsInputSchema>;
 
 const AnalyzeImageAndProvideRecommendationsOutputSchema = z.object({
-  recommendation: z.string().describe('The clothing recommendation for the person.'),
-  analysis: z.string().describe('The analysis of the person\'s current outfit and colors.'),
+  recommendation: z.string().describe('The detailed clothing recommendation for the person.'),
+  analysis: z.string().describe("The analysis of the person's current outfit, colors, and how they work with their skin tone."),
 });
 export type AnalyzeImageAndProvideRecommendationsOutput = z.infer<typeof AnalyzeImageAndProvideRecommendationsOutputSchema>;
 
@@ -39,20 +39,19 @@ const prompt = ai.definePrompt({
   name: 'analyzeImageAndProvideRecommendationsPrompt',
   input: {schema: AnalyzeImageAndProvideRecommendationsInputSchema},
   output: {schema: AnalyzeImageAndProvideRecommendationsOutputSchema},
-  prompt: `You are a personal stylist who gives clothing recommendations based on the person's skin tone, the colors in the image, the occasion, gender, and the weather at their current location.
+  prompt: `You are a world-class personal stylist. You provide clothing recommendations based on a person's skin tone, their current outfit, the occasion, gender, and local weather.
 
-  Analyze the image, skin tone, dress colors, occasion, gender, and weather information to provide a clothing recommendation. Provide feedback on the person's current outfit and colors, and suggest improvements if necessary.
+  First, provide a detailed analysis of their current outfit. Comment on the provided dress colors ({{{dressColors}}}) and how they complement or clash with the user's skin tone ({{{skinTone}}}).
 
-  Here is the information you will use:
+  Then, provide a concrete, actionable clothing recommendation. Your recommendation must take all of the following into account:
+  - Occasion: {{{occasion}}}
+  - Gender: {{{gender}}}
+  - Weather: {{{weather}}}
+  - Skin Tone: {{{skinTone}}}
+  - Original Dress Colors: {{{dressColors}}}
+  - Image: {{media url=photoDataUri}}
 
-  Occasion: {{{occasion}}}
-  Gender: {{{gender}}}
-  Weather: {{{weather}}}
-  Skin Tone: {{{skinTone}}}
-  Dress Colors: {{{dressColors}}}
-  Image: {{media url=photoDataUri}}
-
-  Based on this information, provide a detailed clothing recommendation and analysis.
+  Based on this information, provide a detailed clothing recommendation and a thoughtful analysis.
   `,
 });
 

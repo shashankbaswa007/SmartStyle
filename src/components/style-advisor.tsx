@@ -7,7 +7,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Loader2, Sparkles, UploadCloud } from "lucide-react";
 
-import { analyzeCurrentOutfitAndProvideFeedback, type OutfitAnalysisOutput } from "@/ai/flows/analyze-current-outfit-and-provide-feedback";
+import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
+import { extractColorsFromImage, type ColorExtractionOutput } from "@/ai/flows/extract-colors-from-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -31,8 +32,9 @@ export function StyleAdvisor() {
   const { toast } = useToast();
   const [weather, setWeather] = React.useState<string | null>(null);
   const [isFetchingWeather, setIsFetchingWeather] = React.useState(true);
-  const [analysisResult, setAnalysisResult] = React.useState<OutfitAnalysisOutput | null>(null);
+  const [analysisResult, setAnalysisResult] = React.useState<AnalyzeImageAndProvideRecommendationsOutput | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [loadingMessage, setLoadingMessage] = React.useState("Analyzing Your Style...");
   const [previewImage, setPreviewImage] = React.useState<string | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -64,12 +66,12 @@ export function StyleAdvisor() {
           setIsFetchingWeather(false);
         }
       },
-      () => {
+      (geoError) => {
         setWeather("Clear skies, around 25°C");
         toast({
-          variant: "default",
-          title: "Could not access location",
-          description: "Using default weather. For better results, enable location access in your browser settings.",
+          variant: 'default',
+          title: 'Location Access Denied',
+          description: "Using default weather. For better results, enable location access.",
         });
         setIsFetchingWeather(false);
       }
@@ -108,11 +110,17 @@ export function StyleAdvisor() {
       setAnalysisResult(null);
 
       try {
-        const result = await analyzeCurrentOutfitAndProvideFeedback({
+        setLoadingMessage("Extracting colors from your image...");
+        const { skinTone, dressColors } = await extractColorsFromImage({ photoDataUri });
+
+        setLoadingMessage("Getting your style recommendations...");
+        const result = await analyzeImageAndProvideRecommendations({
           photoDataUri,
           occasion: values.occasion,
           gender: values.gender,
-          weatherInfo: weather,
+          weather: weather,
+          skinTone,
+          dressColors,
         });
         setAnalysisResult(result);
       } catch (e) {
@@ -240,7 +248,7 @@ export function StyleAdvisor() {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Analyzing...
+                    {loadingMessage}
                   </>
                 ) : isFetchingWeather ? (
                    <>
@@ -260,7 +268,7 @@ export function StyleAdvisor() {
         <Card className="w-full shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="text-accent animate-pulse" /> Analyzing Your Style...
+              <Sparkles className="text-accent animate-pulse" /> {loadingMessage}
             </CardTitle>
             <CardDescription>Our AI is crafting your personalized feedback. This might take a moment.</CardDescription>
           </CardHeader>
@@ -290,12 +298,12 @@ export function StyleAdvisor() {
           <CardContent className="space-y-6 text-base">
             <div>
               <h3 className="font-semibold text-xl mb-2 text-foreground">Feedback on Your Outfit</h3>
-              <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.feedback}</p>
+              <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.analysis}</p>
             </div>
             <Separator />
             <div>
               <h3 className="font-semibold text-xl mb-2 text-foreground">Recommendations</h3>
-              <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.recommendations}</p>
+              <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.recommendation}</p>
             </div>
           </CardContent>
         </Card>
