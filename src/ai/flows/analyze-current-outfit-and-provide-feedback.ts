@@ -20,7 +20,7 @@ const OutfitAnalysisInputSchema = z.object({
     ),
   occasion: z.string().describe('The occasion for which the outfit is intended.'),
   gender: z.string().describe('The gender of the person in the outfit.'),
-  weatherInfo: z.string().describe('The current weather conditions at the user\'s location.'),
+  weatherInfo: z.string().describe('The current weather conditions at the user\'s location. This could be a string like "The weather in London is 25°C with clear skies."'),
 });
 export type OutfitAnalysisInput = z.infer<typeof OutfitAnalysisInputSchema>;
 
@@ -40,17 +40,18 @@ const analyzeOutfitPrompt = ai.definePrompt({
   name: 'analyzeOutfitPrompt',
   input: {schema: OutfitAnalysisInputSchema},
   output: {schema: OutfitAnalysisOutputSchema},
-  prompt: `Analyze the user's outfit in the provided image, considering the occasion, gender, and current weather conditions. Provide feedback on the color combinations and suggest improvements if needed.
+  prompt: `You are a world-class fashion stylist. Analyze the user's outfit in the provided image. Be highly accurate in identifying clothing items, colors, and style.
 
-  Image: {{media url=photoDataUri}}
-  Occasion: {{{occasion}}}
-  Gender: {{{gender}}}
-  Weather: {{{weatherInfo}}}
+  Your analysis must consider the following context:
+  - Occasion: {{{occasion}}}
+  - Gender: {{{gender}}}
+  - Weather: {{{weatherInfo}}}
 
-  Respond with feedback on the outfit and recommendations for alternative clothing options, if any, in a clear and concise manner.
-  Make sure the colors that are analysed in the image are accurate. To get accurate results get the skin tone, dress colors , occasion , gender and weather info and give it to Gemini API by creating a chat and giving this information to it to get the proper result.Return the result to the user in a appropriate, clean manner.
-  Feedback:
-  Recommendations:`,
+  Provide constructive, specific, and actionable feedback on the current outfit. Comment on color combinations, fit, and appropriateness for the occasion and weather.
+
+  Then, provide 2-3 concrete recommendations for alternative outfits or improvements. Recommendations should be specific (e.g., "swap the black shoes for brown loafers," not just "wear different shoes").
+
+  Ensure your response is helpful, encouraging, and provides clear style advice.`,
 });
 
 const analyzeCurrentOutfitAndProvideFeedbackFlow = ai.defineFlow(

@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { getWeatherData } from "@/app/actions";
 
 const formSchema = z.object({
   image: z
@@ -29,6 +30,7 @@ const formSchema = z.object({
 export function StyleAdvisor() {
   const { toast } = useToast();
   const [weather, setWeather] = React.useState<string | null>(null);
+  const [isFetchingWeather, setIsFetchingWeather] = React.useState(true);
   const [analysisResult, setAnalysisResult] = React.useState<OutfitAnalysisOutput | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [previewImage, setPreviewImage] = React.useState<string | null>(null);
@@ -42,27 +44,42 @@ export function StyleAdvisor() {
   });
 
   React.useEffect(() => {
-    if (!weather) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setWeather(`Weather at Lat ${position.coords.latitude.toFixed(2)}, Lon ${position.coords.longitude.toFixed(2)}`);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const weatherData = await getWeatherData({
+            lat: position.coords.latitude,
+            lon: position.coords.longitude,
+          });
+          setWeather(weatherData);
           toast({
             title: "Location detected",
-            description: "Using your current location for weather context.",
+            description: "Using your current location for accurate weather.",
           });
-        },
-        (geoError) => {
-          console.error("Geolocation error:", geoError);
+        } catch (error) {
+          console.error("Failed to fetch weather data", error);
           setWeather("Clear skies, around 25°C");
           toast({
             variant: "default",
-            title: "Could not access location",
-            description: "Using default weather. For better results, enable location access.",
+            title: "Could not fetch weather",
+            description: "Using default weather.",
           });
+        } finally {
+          setIsFetchingWeather(false);
         }
-      );
-    }
-  }, [weather, toast]);
+      },
+      (geoError) => {
+        console.error("Geolocation error:", geoError);
+        setWeather("Clear skies, around 25°C");
+        toast({
+          variant: "default",
+          title: "Could not access location",
+          description: "Using default weather. For better results, enable location access.",
+        });
+        setIsFetchingWeather(false);
+      }
+    );
+  }, [toast]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -224,11 +241,16 @@ export function StyleAdvisor() {
                   )}
                 />
               </div>
-              <Button type="submit" size="lg" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoading}>
+              <Button type="submit" size="lg" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoading || isFetchingWeather}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     Analyzing...
+                  </>
+                ) : isFetchingWeather ? (
+                   <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Fetching Weather...
                   </>
                 ) : (
                   "Get Style Advice"
