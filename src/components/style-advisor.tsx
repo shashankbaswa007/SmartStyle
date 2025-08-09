@@ -7,8 +7,8 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { Loader2, Sparkles, UploadCloud, RefreshCw } from "lucide-react";
 
-import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
-import { extractColorsFromImage, type ColorExtractionOutput } from "@/ai/flows/extract-colors-from-image";
+import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsInput } from "@/ai/flows/analyze-image-and-provide-recommendations";
+import { extractColorsFromImage } from "@/ai/flows/extract-colors-from-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -28,14 +28,18 @@ const formSchema = z.object({
   gender: z.string({ required_error: "Please select a gender." }).min(1),
 });
 
+type AnalysisRequest = Omit<AnalyzeImageAndProvideRecommendationsInput, 'previousRecommendation'>;
+
 export function StyleAdvisor() {
   const { toast } = useToast();
   const [weather, setWeather] = React.useState<string | null>(null);
   const [isFetchingWeather, setIsFetchingWeather] = React.useState(true);
-  const [analysisResult, setAnalysisResult] = React.useState<AnalyzeImageAndProvideRecommendationsOutput | null>(null);
+  const [analysisResult, setAnalysisResult] = React.useState<{ analysis: string; recommendation: string; } | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [loadingMessage, setLoadingMessage] = React.useState("Analyzing Your Style...");
   const [previewImage, setPreviewImage] = React.useState<string | null>(null);
+  const [lastAnalysisRequest, setLastAnalysisRequest] = React.useState<AnalysisRequest | null>(null);
+
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -66,7 +70,7 @@ export function StyleAdvisor() {
           setIsFetchingWeather(false);
         }
       },
-      (geoError) => {
+      () => {
         setWeather("Clear skies, around 25°C");
         toast({
           variant: "default",
@@ -95,6 +99,46 @@ export function StyleAdvisor() {
     form.reset();
     setPreviewImage(null);
     setAnalysisResult(null);
+    setLastAnalysisRequest(null);
+  };
+
+  const performAnalysis = async (request: AnalyzeImageAndProvideRecommendationsInput) => {
+    setIsLoading(true);
+    setAnalysisResult(null);
+
+    try {
+      // Don't extract colors again if we are just getting a new recommendation
+      if (!request.previousRecommendation) {
+        setLoadingMessage("Extracting colors from your image...");
+        const { skinTone, dressColors } = await extractColorsFromImage({ photoDataUri: request.photoDataUri });
+
+        request.skinTone = skinTone;
+        request.dressColors = dressColors;
+        
+        // Save the request details for re-tries
+        setLastAnalysisRequest({
+          photoDataUri: request.photoDataUri,
+          occasion: request.occasion,
+          gender: request.gender,
+          weather: request.weather,
+          skinTone: skinTone,
+          dressColors: dressColors,
+        });
+      }
+
+      setLoadingMessage("Getting your style recommendations...");
+      const result = await analyzeImageAndProvideRecommendations(request);
+      setAnalysisResult(result);
+    } catch (e) {
+      console.error(e);
+      toast({
+        variant: "destructive",
+        title: "Analysis Failed",
+        description: "An unexpected error occurred. Please try again later.",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
@@ -112,33 +156,14 @@ export function StyleAdvisor() {
 
     reader.onload = async () => {
       const photoDataUri = reader.result as string;
-      setIsLoading(true);
-      setAnalysisResult(null);
-
-      try {
-        setLoadingMessage("Extracting colors from your image...");
-        const { skinTone, dressColors } = await extractColorsFromImage({ photoDataUri });
-
-        setLoadingMessage("Getting your style recommendations...");
-        const result = await analyzeImageAndProvideRecommendations({
-          photoDataUri,
-          occasion: values.occasion,
-          gender: values.gender,
-          weather: weather,
-          skinTone,
-          dressColors,
-        });
-        setAnalysisResult(result);
-      } catch (e) {
-        console.error(e);
-        toast({
-          variant: "destructive",
-          title: "Analysis Failed",
-          description: "An unexpected error occurred. Please try again later.",
-        });
-      } finally {
-        setIsLoading(false);
-      }
+      await performAnalysis({
+        photoDataUri,
+        occasion: values.occasion,
+        gender: values.gender,
+        weather: weather,
+        skinTone: '', // Will be populated in performAnalysis
+        dressColors: '', // Will be populated in performAnalysis
+      });
     };
 
     reader.onerror = () => {
@@ -150,6 +175,15 @@ export function StyleAdvisor() {
     };
 
     reader.readAsDataURL(file);
+  };
+
+  const handleGetAnotherRecommendation = async () => {
+    if (!lastAnalysisRequest || !analysisResult) return;
+    
+    await performAnalysis({
+      ...lastAnalysisRequest,
+      previousRecommendation: analysisResult.recommendation,
+    });
   };
 
   return (
@@ -318,9 +352,13 @@ export function StyleAdvisor() {
               <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.recommendation}</p>
             </div>
           </CardContent>
-          <CardFooter>
-            <Button onClick={resetForm} variant="outline" className="w-full text-base">
+          <CardFooter className="flex flex-col md:flex-row gap-4">
+            <Button onClick={handleGetAnotherRecommendation} variant="outline" className="w-full text-base">
               <RefreshCw className="mr-2 h-4 w-4" />
+              Get Another Recommendation
+            </Button>
+            <Button onClick={resetForm} variant="secondary" className="w-full text-base">
+              <UploadCloud className="mr-2 h-4 w-4" />
               Analyze Another Outfit
             </Button>
           </CardFooter>

@@ -22,6 +22,7 @@ const AnalyzeImageAndProvideRecommendationsInputSchema = z.object({
   weather: z.string().describe("The weather conditions at the person's current location."),
   skinTone: z.string().describe("The person's estimated skin tone."),
   dressColors: z.string().describe('A comma-separated list of the primary colors of the outfit.'),
+  previousRecommendation: z.string().optional().describe('A previous recommendation that the user was not satisfied with. If provided, generate a different recommendation.'),
 });
 export type AnalyzeImageAndProvideRecommendationsInput = z.infer<typeof AnalyzeImageAndProvideRecommendationsInputSchema>;
 
@@ -51,6 +52,11 @@ const prompt = ai.definePrompt({
   - Skin Tone: {{{skinTone}}}
   - Original Dress Colors: {{{dressColors}}}
   - Image: {{media url=photoDataUri}}
+
+  {{#if previousRecommendation}}
+  The user was not satisfied with this previous recommendation: "{{{previousRecommendation}}}"
+  Please generate a new, distinctly different recommendation. Do not repeat ideas from the previous one.
+  {{/if}}
 
   Based on this information, provide a detailed clothing recommendation, including which color the dress and shoes should be, and a thoughtful analysis.
   `,
