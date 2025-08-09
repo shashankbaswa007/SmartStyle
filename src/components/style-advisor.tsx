@@ -69,9 +69,9 @@ export function StyleAdvisor() {
       (geoError) => {
         setWeather("Clear skies, around 25°C");
         toast({
-          variant: 'default',
-          title: 'Location Access Denied',
-          description: "Using default weather. For better results, enable location access.",
+          variant: "default",
+          title: "Location is unavailable",
+          description: "Could not get your location, using default weather. Enable location access for better results.",
         });
         setIsFetchingWeather(false);
       }
@@ -148,9 +148,9 @@ export function StyleAdvisor() {
 
   return (
     <div className="space-y-12">
-      <Card className="w-full shadow-lg border-primary/20">
+      <Card className="w-full shadow-2xl shadow-primary/10 border-border/20 animate-slide-up-fade">
         <CardHeader>
-          <CardTitle>Create Your Style Profile</CardTitle>
+          <CardTitle className="text-3xl">Create Your Style Profile</CardTitle>
           <CardDescription>
             Tell us a bit about your look, and our AI will provide personalized feedback.
           </CardDescription>
@@ -163,9 +163,9 @@ export function StyleAdvisor() {
                 name="image"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base">Your Outfit</FormLabel>
+                    <FormLabel className="text-base font-semibold">Your Outfit</FormLabel>
                     <FormControl>
-                      <div className="relative flex justify-center items-center w-full h-64 border-2 border-dashed border-muted-foreground/50 rounded-lg p-4 text-center hover:border-accent transition-colors cursor-pointer bg-primary/20">
+                      <div className="relative flex justify-center items-center w-full h-64 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 text-center hover:border-accent hover:bg-accent/10 transition-all duration-300 cursor-pointer bg-primary/5 group">
                         <Input
                           type="file"
                           accept="image/*"
@@ -184,9 +184,9 @@ export function StyleAdvisor() {
                             data-ai-hint="person outfit"
                           />
                         ) : (
-                          <div className="flex flex-col items-center justify-center space-y-2 text-muted-foreground">
-                            <UploadCloud className="w-12 h-12 text-accent" />
-                            <p>Click to upload or drag and drop</p>
+                          <div className="flex flex-col items-center justify-center space-y-2 text-muted-foreground group-hover:text-accent transition-colors">
+                            <UploadCloud className="w-12 h-12 text-accent/80 group-hover:text-accent transition-colors" />
+                            <p className="font-semibold">Click to upload or drag and drop</p>
                             <p className="text-xs">PNG, JPG up to 10MB</p>
                           </div>
                         )}
@@ -202,10 +202,10 @@ export function StyleAdvisor() {
                   name="occasion"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base">Occasion</FormLabel>
+                      <FormLabel className="text-base font-semibold">Occasion</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="text-base">
                             <SelectValue placeholder="Select an occasion" />
                           </SelectTrigger>
                         </FormControl>
@@ -226,10 +226,10 @@ export function StyleAdvisor() {
                   name="gender"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base">Gender</FormLabel>
+                      <FormLabel className="text-base font-semibold">Gender</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="text-base">
                             <SelectValue placeholder="Select a gender" />
                           </SelectTrigger>
                         </FormControl>
@@ -244,7 +244,7 @@ export function StyleAdvisor() {
                   )}
                 />
               </div>
-              <Button type="submit" size="lg" className="w-full bg-accent text-accent-foreground hover:bg-accent/90" disabled={isLoading || isFetchingWeather}>
+              <Button type="submit" size="lg" className="w-full text-lg font-bold bg-accent text-accent-foreground hover:bg-accent/90 transition-transform hover:scale-105" disabled={isLoading || isFetchingWeather}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -265,7 +265,7 @@ export function StyleAdvisor() {
       </Card>
 
       {isLoading && (
-        <Card className="w-full shadow-lg">
+        <Card className="w-full shadow-lg animate-slide-up-fade">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="text-accent animate-pulse" /> {loadingMessage}
@@ -273,14 +273,16 @@ export function StyleAdvisor() {
             <CardDescription>Our AI is crafting your personalized feedback. This might take a moment.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Skeleton className="h-5 w-1/3" />
+              <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-5/6" />
             </div>
             <Separator />
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Skeleton className="h-5 w-1/3" />
+              <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-full" />
               <Skeleton className="h-4 w-4/6" />
             </div>
@@ -289,20 +291,20 @@ export function StyleAdvisor() {
       )}
 
       {analysisResult && !isLoading && (
-        <Card className="w-full shadow-lg animate-fade-in border-accent/30">
+        <Card className="w-full shadow-xl shadow-accent/10 animate-slide-up-fade border-accent/30">
           <CardHeader>
-            <CardTitle className="flex items-center gap-3 text-2xl">
+            <CardTitle className="flex items-center gap-3 text-3xl">
               <Sparkles className="w-8 h-8 text-accent" /> Your Style Analysis
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6 text-base">
+          <CardContent className="space-y-8 text-base">
             <div>
-              <h3 className="font-semibold text-xl mb-2 text-foreground">Feedback on Your Outfit</h3>
+              <h3 className="font-bold text-2xl mb-3 text-foreground tracking-tight">Feedback on Your Outfit</h3>
               <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.analysis}</p>
             </div>
             <Separator />
             <div>
-              <h3 className="font-semibold text-xl mb-2 text-foreground">Recommendations</h3>
+              <h3 className="font-bold text-2xl mb-3 text-foreground tracking-tight">Recommendations</h3>
               <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.recommendation}</p>
             </div>
           </CardContent>
