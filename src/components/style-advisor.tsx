@@ -5,12 +5,12 @@ import Image from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Loader2, Sparkles, UploadCloud } from "lucide-react";
+import { Loader2, Sparkles, UploadCloud, RefreshCw } from "lucide-react";
 
 import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
 import { extractColorsFromImage, type ColorExtractionOutput } from "@/ai/flows/extract-colors-from-image";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -89,6 +89,12 @@ export function StyleAdvisor() {
     } else {
       setPreviewImage(null);
     }
+  };
+  
+  const resetForm = () => {
+    form.reset();
+    setPreviewImage(null);
+    setAnalysisResult(null);
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
@@ -312,6 +318,12 @@ export function StyleAdvisor() {
               <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.recommendation}</p>
             </div>
           </CardContent>
+          <CardFooter>
+            <Button onClick={resetForm} variant="outline" className="w-full text-base">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Analyze Another Outfit
+            </Button>
+          </CardFooter>
         </Card>
       )}
     </div>
