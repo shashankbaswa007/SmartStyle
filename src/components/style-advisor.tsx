@@ -70,12 +70,16 @@ export function StyleAdvisor() {
           setIsFetchingWeather(false);
         }
       },
-      () => {
+      (geoError) => {
+        // Don't log error if user denied permission
+        if (geoError.code !== geoError.PERMISSION_DENIED) {
+          console.error("Geolocation error:", geoError.message);
+        }
         setWeather("Clear skies, around 25°C");
         toast({
           variant: "default",
           title: "Location is unavailable",
-          description: "Could not get your location, using default weather. Enable location access for better results.",
+          description: "Using default weather. For better results, enable location access in your browser.",
         });
         setIsFetchingWeather(false);
       }
@@ -188,7 +192,7 @@ export function StyleAdvisor() {
 
   return (
     <div className="space-y-12">
-      <Card className="w-full shadow-2xl shadow-primary/10 border-border/20 animate-slide-up-fade">
+      <Card className="w-full shadow-2xl shadow-primary/10 border-border/20 animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
         <CardHeader>
           <CardTitle className="text-3xl font-headline">Create Your Style Profile</CardTitle>
           <CardDescription>
@@ -309,7 +313,7 @@ export function StyleAdvisor() {
       </Card>
 
       {isLoading && (
-        <Card className="w-full shadow-lg animate-slide-up-fade">
+        <Card className="w-full shadow-lg animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 font-headline">
               <Sparkles className="text-accent animate-pulse" /> {loadingMessage}
@@ -335,7 +339,7 @@ export function StyleAdvisor() {
       )}
 
       {analysisResult && !isLoading && (
-        <Card className="w-full shadow-xl shadow-accent/10 animate-slide-up-fade border-accent/30">
+        <Card className="w-full shadow-xl shadow-accent/10 animate-slide-up-fade border-accent/30 bg-card/60 dark:bg-card/40 backdrop-blur-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-3 text-3xl font-headline">
               <Sparkles className="w-8 h-8 text-accent" /> Your Style Analysis
