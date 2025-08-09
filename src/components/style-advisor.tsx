@@ -150,7 +150,7 @@ export function StyleAdvisor() {
     <div className="space-y-12">
       <Card className="w-full shadow-2xl shadow-primary/10 border-border/20 animate-slide-up-fade">
         <CardHeader>
-          <CardTitle className="text-3xl">Create Your Style Profile</CardTitle>
+          <CardTitle className="text-3xl font-headline">Create Your Style Profile</CardTitle>
           <CardDescription>
             Tell us a bit about your look, and our AI will provide personalized feedback.
           </CardDescription>
@@ -205,7 +205,7 @@ export function StyleAdvisor() {
                       <FormLabel className="text-base font-semibold">Occasion</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger className="text-base">
+                          <SelectTrigger className="text-base transition-all duration-300 hover:border-primary focus:ring-primary">
                             <SelectValue placeholder="Select an occasion" />
                           </SelectTrigger>
                         </FormControl>
@@ -215,6 +215,10 @@ export function StyleAdvisor() {
                           <SelectItem value="Party">Party</SelectItem>
                           <SelectItem value="Work">Work</SelectItem>
                           <SelectItem value="Workout">Workout</SelectItem>
+                          <SelectItem value="Date Night">Date Night</SelectItem>
+                          <SelectItem value="Wedding Guest">Wedding Guest</SelectItem>
+                          <SelectItem value="Vacation">Vacation</SelectItem>
+                          <SelectItem value="Weekend Brunch">Weekend Brunch</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -229,7 +233,7 @@ export function StyleAdvisor() {
                       <FormLabel className="text-base font-semibold">Gender</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value}>
                         <FormControl>
-                          <SelectTrigger className="text-base">
+                          <SelectTrigger className="text-base transition-all duration-300 hover:border-primary focus:ring-primary">
                             <SelectValue placeholder="Select a gender" />
                           </SelectTrigger>
                         </FormControl>
@@ -244,7 +248,7 @@ export function StyleAdvisor() {
                   )}
                 />
               </div>
-              <Button type="submit" size="lg" className="w-full text-lg font-bold bg-accent text-accent-foreground hover:bg-accent/90 transition-transform hover:scale-105" disabled={isLoading || isFetchingWeather}>
+              <Button type="submit" size="lg" className="w-full text-lg font-bold bg-gradient-to-r from-primary to-accent text-white hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 hover:scale-105" disabled={isLoading || isFetchingWeather}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
@@ -267,7 +271,7 @@ export function StyleAdvisor() {
       {isLoading && (
         <Card className="w-full shadow-lg animate-slide-up-fade">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 font-headline">
               <Sparkles className="text-accent animate-pulse" /> {loadingMessage}
             </CardTitle>
             <CardDescription>Our AI is crafting your personalized feedback. This might take a moment.</CardDescription>
@@ -293,18 +297,18 @@ export function StyleAdvisor() {
       {analysisResult && !isLoading && (
         <Card className="w-full shadow-xl shadow-accent/10 animate-slide-up-fade border-accent/30">
           <CardHeader>
-            <CardTitle className="flex items-center gap-3 text-3xl">
+            <CardTitle className="flex items-center gap-3 text-3xl font-headline">
               <Sparkles className="w-8 h-8 text-accent" /> Your Style Analysis
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-8 text-base">
             <div>
-              <h3 className="font-bold text-2xl mb-3 text-foreground tracking-tight">Feedback on Your Outfit</h3>
+              <h3 className="font-bold text-2xl mb-3 text-foreground tracking-tight font-headline">Feedback on Your Outfit</h3>
               <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.analysis}</p>
             </div>
             <Separator />
             <div>
-              <h3 className="font-bold text-2xl mb-3 text-foreground tracking-tight">Recommendations</h3>
+              <h3 className="font-bold text-2xl mb-3 text-foreground tracking-tight font-headline">Recommendations</h3>
               <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.recommendation}</p>
             </div>
           </CardContent>
