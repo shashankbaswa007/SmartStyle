@@ -52,10 +52,6 @@ export function StyleAdvisor() {
             lon: position.coords.longitude,
           });
           setWeather(weatherData);
-          toast({
-            title: "Location detected",
-            description: "Using your current location for accurate weather.",
-          });
         } catch (error) {
           console.error("Failed to fetch weather data", error);
           setWeather("Clear skies, around 25°C");
@@ -68,13 +64,12 @@ export function StyleAdvisor() {
           setIsFetchingWeather(false);
         }
       },
-      (geoError) => {
-        console.error("Geolocation error:", geoError.message);
+      () => {
         setWeather("Clear skies, around 25°C");
         toast({
           variant: "default",
           title: "Could not access location",
-          description: "Using default weather. For better results, enable location access.",
+          description: "Using default weather. For better results, enable location access in your browser settings.",
         });
         setIsFetchingWeather(false);
       }
