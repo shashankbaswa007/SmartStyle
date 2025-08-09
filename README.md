@@ -1,6 +1,10 @@
 # StyleAI Advisor
 
-This is a Next.js application built in Firebase Studio that acts as a personal style assistant. It analyzes your outfit through an uploaded image and provides personalized style feedback and recommendations based on the occasion, your gender, and real-time weather data.
+## Abstract
+
+StyleAI Advisor is a modern, AI-powered web application designed to serve as a personal fashion consultant. By leveraging the multimodal capabilities of Google's Gemini 2.0 Flash model, the application analyzes a user's outfit from an uploaded image and provides personalized style feedback and concrete recommendations. The system enriches its advice by integrating contextual information such as the specified occasion, gender, and real-time weather data fetched from the OpenWeather API. 
+
+The frontend is built with Next.js, React, and TypeScript, featuring a vibrant, interactive user interface styled with Tailwind CSS and ShadCN UI components. The backend utilizes Next.js Server Actions and Google's Genkit framework to orchestrate the AI-driven logic, which employs a two-step prompting process: first, to extract skin tone and clothing colors from the image, and second, to synthesize this data with user-provided context to generate tailored and actionable fashion advice. This innovative approach delivers a dynamic and highly personalized user experience, making expert style guidance accessible to everyone.
 
 ## Tech Stack
 
@@ -22,13 +26,3 @@ This project is a full-stack application that utilizes a modern web development 
 
 - **APIs:**
   - **OpenWeather API:** Provides real-time weather data based on the user's location to enhance recommendation accuracy.
-
-## Machine Learning / AI Approach
-
-Instead of traditional machine learning models, this application employs a sophisticated two-step process powered by the Google Gemini generative AI model:
-
-1.  **Color Extraction:** When a user uploads an image of their outfit, the application first makes a call to the Gemini model. In this step, the AI's task is to analyze the image and extract two key pieces of information: the user's estimated **skin tone** and the dominant **colors of their clothing**.
-
-2.  **Personalized Recommendation:** The extracted skin tone and clothing colors are then combined with the user's provided context (occasion, gender) and real-time weather data fetched from the OpenWeather API. This rich set of information is sent to the Gemini model in a second, more detailed prompt. The model then generates a comprehensive style analysis and a set of personalized recommendations.
-
-This chained-prompting approach allows the application to provide highly relevant and contextual style advice that is tailored to the user's appearance and current environment.
