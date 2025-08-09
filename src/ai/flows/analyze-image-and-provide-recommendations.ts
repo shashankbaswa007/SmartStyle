@@ -26,7 +26,7 @@ const AnalyzeImageAndProvideRecommendationsInputSchema = z.object({
 export type AnalyzeImageAndProvideRecommendationsInput = z.infer<typeof AnalyzeImageAndProvideRecommendationsInputSchema>;
 
 const AnalyzeImageAndProvideRecommendationsOutputSchema = z.object({
-  recommendation: z.string().describe('The detailed clothing recommendation for the person.'),
+  recommendation: z.string().describe('The detailed clothing recommendation for the person, including specific suggestions for outfit items and colors for dresses and shoes.'),
   analysis: z.string().describe("The analysis of the person's current outfit, colors, and how they work with their skin tone."),
 });
 export type AnalyzeImageAndProvideRecommendationsOutput = z.infer<typeof AnalyzeImageAndProvideRecommendationsOutputSchema>;
@@ -43,7 +43,8 @@ const prompt = ai.definePrompt({
 
   First, provide a detailed analysis of their current outfit. Comment on the provided dress colors ({{{dressColors}}}) and how they complement or clash with the user's skin tone ({{{skinTone}}}).
 
-  Then, provide a concrete, actionable clothing recommendation. Your recommendation must take all of the following into account:
+  Then, provide a concrete, actionable clothing recommendation. Your recommendation must go beyond simple feedback and suggest a complete outfit.
+  It must take all of the following into account:
   - Occasion: {{{occasion}}}
   - Gender: {{{gender}}}
   - Weather: {{{weather}}}
@@ -51,7 +52,7 @@ const prompt = ai.definePrompt({
   - Original Dress Colors: {{{dressColors}}}
   - Image: {{media url=photoDataUri}}
 
-  Based on this information, provide a detailed clothing recommendation and a thoughtful analysis.
+  Based on this information, provide a detailed clothing recommendation, including which color the dress and shoes should be, and a thoughtful analysis.
   `,
 });
 
