@@ -69,7 +69,7 @@ export function StyleAdvisor() {
         }
       },
       (geoError) => {
-        console.error("Geolocation error:", geoError);
+        console.error("Geolocation error:", geoError.message);
         setWeather("Clear skies, around 25°C");
         toast({
           variant: "default",
