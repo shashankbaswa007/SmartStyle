@@ -71,9 +71,9 @@ export function StyleAdvisor() {
         }
       },
       (geoError) => {
-        // Don't log error if user denied permission
+        // Don't log error if user denied permission, the toast is enough.
         if (geoError.code !== geoError.PERMISSION_DENIED) {
-          console.error("Geolocation error:", geoError.message);
+          // console.error("Geolocation error:", geoError.message);
         }
         setWeather("Clear skies, around 25°C");
         toast({
