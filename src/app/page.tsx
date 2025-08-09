@@ -2,7 +2,8 @@ import { StyleAdvisor } from '@/components/style-advisor';
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-br from-background via-secondary to-background py-12 px-4 sm:px-6 lg:px-8">
+    <main className="relative min-h-screen overflow-hidden bg-background py-12 px-4 sm:px-6 lg:px-8">
+      <div className="absolute inset-0 -z-10 h-full w-full bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,hsl(var(--primary)/0.3),rgba(255,255,255,0))]"></div>
       <div className="max-w-4xl mx-auto">
         <header className="text-center mb-16">
           <h1 className="text-5xl md:text-7xl font-headline font-extrabold text-foreground tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
