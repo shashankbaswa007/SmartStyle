@@ -10,8 +10,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        body: ['Inter', 'sans-serif'],
-        headline: ['Poppins', 'sans-serif'],
+        body: ['DM Sans', 'sans-serif'],
+        headline: ['Syne', 'sans-serif'],
         code: ['monospace'],
       },
       colors: {

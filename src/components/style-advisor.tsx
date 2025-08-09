@@ -59,7 +59,6 @@ export function StyleAdvisor() {
           });
           setWeather(weatherData);
         } catch (error) {
-          console.error("Failed to fetch weather data", error);
           setWeather("Clear skies, around 25°C");
           toast({
             variant: "default",
@@ -71,7 +70,6 @@ export function StyleAdvisor() {
         }
       },
       (geoError) => {
-        // Don't log error if user denied permission, the toast is enough.
         if (geoError.code !== geoError.PERMISSION_DENIED) {
           // console.error("Geolocation error:", geoError.message);
         }
@@ -111,7 +109,6 @@ export function StyleAdvisor() {
     setAnalysisResult(null);
 
     try {
-      // Don't extract colors again if we are just getting a new recommendation
       if (!request.previousRecommendation) {
         setLoadingMessage("Extracting colors from your image...");
         const { skinTone, dressColors } = await extractColorsFromImage({ photoDataUri: request.photoDataUri });
@@ -119,7 +116,6 @@ export function StyleAdvisor() {
         request.skinTone = skinTone;
         request.dressColors = dressColors;
         
-        // Save the request details for re-tries
         setLastAnalysisRequest({
           photoDataUri: request.photoDataUri,
           occasion: request.occasion,
@@ -165,8 +161,8 @@ export function StyleAdvisor() {
         occasion: values.occasion,
         gender: values.gender,
         weather: weather,
-        skinTone: '', // Will be populated in performAnalysis
-        dressColors: '', // Will be populated in performAnalysis
+        skinTone: '', 
+        dressColors: '',
       });
     };
 
@@ -192,7 +188,7 @@ export function StyleAdvisor() {
 
   return (
     <div className="space-y-12">
-      <Card className="w-full shadow-2xl shadow-primary/10 border-border/20 animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
+      <Card className="w-full shadow-2xl shadow-primary/20 border-border/20 animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
         <CardHeader>
           <CardTitle className="text-3xl font-headline">Create Your Style Profile</CardTitle>
           <CardDescription>
@@ -339,7 +335,7 @@ export function StyleAdvisor() {
       )}
 
       {analysisResult && !isLoading && (
-        <Card className="w-full shadow-xl shadow-accent/10 animate-slide-up-fade border-accent/30 bg-card/60 dark:bg-card/40 backdrop-blur-xl">
+        <Card className="w-full shadow-xl shadow-accent/20 animate-slide-up-fade border-accent/30 bg-card/60 dark:bg-card/40 backdrop-blur-xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-3 text-3xl font-headline">
               <Sparkles className="w-8 h-8 text-accent" /> Your Style Analysis
