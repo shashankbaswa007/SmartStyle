@@ -8,7 +8,7 @@ export default function Home() {
       <div className="relative z-10 max-w-4xl mx-auto animate-fade-in">
         <header className="text-center mb-16">
           <h1 className="text-5xl md:text-7xl font-headline font-extrabold text-foreground tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
-            StyleAI Advisor
+            SmartStyle
           </h1>
           <p className="mt-6 text-lg text-muted-foreground max-w-3xl mx-auto">
             Upload your outfit, and let our AI be your personal stylist. Get instant feedback and curated recommendations based on your look, occasion, and local weather.

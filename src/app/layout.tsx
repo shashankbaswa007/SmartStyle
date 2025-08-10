@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'StyleAI Advisor',
+  title: 'SmartStyle',
   description: 'Get AI-powered style feedback and recommendations.',
 };
 
