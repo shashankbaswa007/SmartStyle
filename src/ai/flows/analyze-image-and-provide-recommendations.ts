@@ -29,6 +29,7 @@ export type AnalyzeImageAndProvideRecommendationsInput = z.infer<typeof AnalyzeI
 const AnalyzeImageAndProvideRecommendationsOutputSchema = z.object({
   recommendation: z.string().describe('The detailed clothing recommendation for the person, including specific suggestions for outfit items and colors for dresses and shoes.'),
   analysis: z.string().describe("The analysis of the person's current outfit, colors, and how they work with their skin tone."),
+  imagePrompt: z.string().describe('A concise, descriptive prompt for an image generation model, describing the recommended outfit on a mannequin or person.'),
 });
 export type AnalyzeImageAndProvideRecommendationsOutput = z.infer<typeof AnalyzeImageAndProvideRecommendationsOutputSchema>;
 
@@ -59,6 +60,8 @@ const prompt = ai.definePrompt({
   {{/if}}
 
   Based on this information, provide a detailed clothing recommendation, including which color the dress and shoes should be, and a thoughtful analysis.
+  
+  Finally, create a concise, descriptive prompt for an image generation model to create a photorealistic image of the recommended outfit. This prompt should describe the clothing items, colors, and style on a mannequin or anonymous person, suitable for a fashion lookbook.
   `,
 });
 

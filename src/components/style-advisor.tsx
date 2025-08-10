@@ -5,9 +5,10 @@ import Image from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Loader2, Sparkles, UploadCloud, RefreshCw } from "lucide-react";
+import { Loader2, Sparkles, UploadCloud, RefreshCw, Wand2 } from "lucide-react";
 
-import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsInput } from "@/ai/flows/analyze-image-and-provide-recommendations";
+import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsInput, type AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
+import { generateOutfitImage } from "@/ai/flows/generate-outfit-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -50,7 +51,8 @@ export function StyleAdvisor() {
   const { toast } = useToast();
   const [weather, setWeather] = React.useState<string | null>(null);
   const [isFetchingWeather, setIsFetchingWeather] = React.useState(true);
-  const [analysisResult, setAnalysisResult] = React.useState<{ analysis: string; recommendation: string; } | null>(null);
+  const [analysisResult, setAnalysisResult] = React.useState<AnalyzeImageAndProvideRecommendationsOutput | null>(null);
+  const [generatedImageUrl, setGeneratedImageUrl] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
   const [loadingMessage, setLoadingMessage] = React.useState("Analyzing Your Style...");
   const [previewImage, setPreviewImage] = React.useState<string | null>(null);
@@ -87,6 +89,9 @@ export function StyleAdvisor() {
         }
       },
       (geoError) => {
+        if (geoError.code !== geoError.PERMISSION_DENIED) {
+           // Don't log error if user denied permission, but do for other errors.
+        }
         setWeather("Clear skies, around 25°C");
         toast({
           variant: "default",
@@ -116,6 +121,7 @@ export function StyleAdvisor() {
     setPreviewImage(null);
     setAnalysisResult(null);
     setLastAnalysisRequest(null);
+    setGeneratedImageUrl(null);
   };
 
   const extractColorsFromCanvas = (): { skinTone: string; dressColors: string; } => {
@@ -189,6 +195,7 @@ export function StyleAdvisor() {
   const performAnalysis = async (request: AnalyzeImageAndProvideRecommendationsInput) => {
     setIsLoading(true);
     setAnalysisResult(null);
+    setGeneratedImageUrl(null);
 
     try {
       if (!request.previousRecommendation) {
@@ -212,6 +219,11 @@ export function StyleAdvisor() {
       setLoadingMessage("Getting your style recommendations...");
       const result = await analyzeImageAndProvideRecommendations(request);
       setAnalysisResult(result);
+      
+      setLoadingMessage("Generating outfit image...");
+      const imageResult = await generateOutfitImage({ outfitDescription: result.imagePrompt });
+      setGeneratedImageUrl(imageResult.imageUrl);
+
     } catch (e) {
       console.error(e);
       toast({
@@ -439,6 +451,21 @@ export function StyleAdvisor() {
               <h3 className="font-bold text-2xl mb-3 text-foreground tracking-tight font-headline">Recommendations</h3>
               <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.recommendation}</p>
             </div>
+            {generatedImageUrl ? (
+                <div className="mt-6">
+                  <h3 className="font-bold text-2xl mb-4 text-foreground tracking-tight font-headline flex items-center gap-2">
+                    <Wand2 /> Visual Suggestion
+                  </h3>
+                  <div className="relative aspect-square w-full max-w-md mx-auto rounded-lg overflow-hidden shadow-lg border-2 border-accent/30">
+                     <Image src={generatedImageUrl} alt="Generated outfit recommendation" fill className="object-cover" data-ai-hint="fashion outfit" />
+                  </div>
+                </div>
+            ) : (
+                <div className="space-y-3 mt-6">
+                  <Skeleton className="h-8 w-1/2" />
+                  <Skeleton className="h-64 w-full max-w-md mx-auto rounded-lg" />
+                </div>
+            )}
           </CardContent>
           <CardFooter className="flex flex-col md:flex-row gap-4">
             <Button onClick={handleGetAnotherRecommendation} variant="outline" className="w-full text-base">
