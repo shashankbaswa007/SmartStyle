@@ -87,8 +87,6 @@ export function StyleAdvisor() {
         }
       },
       (geoError) => {
-        if (geoError.code !== geoError.PERMISSION_DENIED) {
-        }
         setWeather("Clear skies, around 25°C");
         toast({
           variant: "default",
