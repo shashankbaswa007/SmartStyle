@@ -8,7 +8,6 @@ import { z } from "zod";
 import { Loader2, Sparkles, UploadCloud, RefreshCw } from "lucide-react";
 
 import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsInput } from "@/ai/flows/analyze-image-and-provide-recommendations";
-import { extractColorsFromImage } from "@/ai/flows/extract-colors-from-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
@@ -30,6 +29,23 @@ const formSchema = z.object({
 
 type AnalysisRequest = Omit<AnalyzeImageAndProvideRecommendationsInput, 'previousRecommendation'>;
 
+// Helper function to calculate color distance
+function colorDistance(color1: number[], color2: number[]): number {
+  return Math.sqrt(
+    Math.pow(color1[0] - color2[0], 2) +
+    Math.pow(color1[1] - color2[1], 2) +
+    Math.pow(color1[2] - color2[2], 2)
+  );
+}
+
+// Simple skin tone detection (heuristic)
+function isSkinColor(r: number, g: number, b: number): boolean {
+  return r > 95 && g > 40 && b > 20 &&
+         r > g && r > b &&
+         Math.max(r, g, b) - Math.min(r, g, b) > 15 &&
+         Math.abs(r - g) > 15;
+}
+
 export function StyleAdvisor() {
   const { toast } = useToast();
   const [weather, setWeather] = React.useState<string | null>(null);
@@ -39,6 +55,7 @@ export function StyleAdvisor() {
   const [loadingMessage, setLoadingMessage] = React.useState("Analyzing Your Style...");
   const [previewImage, setPreviewImage] = React.useState<string | null>(null);
   const [lastAnalysisRequest, setLastAnalysisRequest] = React.useState<AnalysisRequest | null>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -71,7 +88,6 @@ export function StyleAdvisor() {
       },
       (geoError) => {
         if (geoError.code !== geoError.PERMISSION_DENIED) {
-          // console.error("Geolocation error:", geoError.message);
         }
         setWeather("Clear skies, around 25°C");
         toast({
@@ -104,6 +120,93 @@ export function StyleAdvisor() {
     setLastAnalysisRequest(null);
   };
 
+  const extractColorsFromCanvas = (): { skinTone: string; dressColors: string; } => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { skinTone: "not detected", dressColors: "not detected" };
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return { skinTone: "not detected", dressColors: "not detected" };
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imageData.data;
+    const colorCounts: { [key: string]: number } = {};
+    let skinTonePixels: number[][] = [];
+
+    // Top 25% of the image for skin tone
+    const skinAreaHeight = canvas.height * 0.25;
+    const skinAreaWidth = canvas.width * 0.5;
+    const skinAreaX = canvas.width * 0.25;
+
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const y = Math.floor(i / 4 / canvas.width);
+      const x = (i / 4) % canvas.width;
+
+      if(isSkinColor(r,g,b)) {
+        // Check if pixel is in the upper-middle region
+        if (y < skinAreaHeight && x > skinAreaX && x < skinAreaX + skinAreaWidth) {
+            skinTonePixels.push([r, g, b]);
+        }
+      } else {
+        // Simplified color binning for dress colors
+        const r_bin = Math.floor(r / 32) * 32;
+        const g_bin = Math.floor(g / 32) * 32;
+        const b_bin = Math.floor(b / 32) * 32;
+        const colorKey = `${r_bin},${g_bin},${b_bin}`;
+        colorCounts[colorKey] = (colorCounts[colorKey] || 0) + 1;
+      }
+    }
+    
+    // Determine skin tone
+    let skinTone = "fair";
+    if (skinTonePixels.length > 0) {
+        const avgSkin = skinTonePixels.reduce((acc, val) => [acc[0] + val[0], acc[1] + val[1], acc[2] + val[2]], [0,0,0]).map(c => c / skinTonePixels.length);
+        const avgLuminance = (0.299 * avgSkin[0] + 0.587 * avgSkin[1] + 0.114 * avgSkin[2]);
+        if (avgLuminance < 80) skinTone = "dark";
+        else if (avgLuminance < 160) skinTone = "olive";
+        else skinTone = "fair";
+    }
+
+    // Get dominant dress colors
+    const sortedColors = Object.entries(colorCounts).sort(([, a], [, b]) => b - a);
+    const dominantColors = sortedColors.slice(0, 3).map(([key]) => key);
+    
+    const colorNames: { [key: string]: string } = {
+        '0,0,0': 'black', '255,255,255': 'white', '128,128,128': 'gray',
+        '255,0,0': 'red', '0,255,0': 'green', '0,0,255': 'blue',
+        '255,255,0': 'yellow', '255,165,0': 'orange', '128,0,128': 'purple',
+        '255,192,203': 'pink', '165,42,42': 'brown',
+    };
+
+    const dressColorsStr = dominantColors.map(colorKey => {
+      const rgb = colorKey.split(',').map(Number);
+      let closestColor = 'unknown';
+      let minDistance = Infinity;
+      for (const [name, hex] of Object.entries(colorNames)) {
+          const nameRgb = hex.startsWith('#') 
+              ? [parseInt(hex.slice(1,3), 16), parseInt(hex.slice(3,5), 16), parseInt(hex.slice(5,7), 16)]
+              : Object.entries(colorNames).find(([_, n]) => n === name)![0].split(',').map(Number)
+          const dist = colorDistance(rgb, nameRgb)
+          if (dist < minDistance) {
+              minDistance = dist;
+              closestColor = Object.keys(colorNames).find(key => colorNames[key] === name)!;
+          }
+      }
+       // A simple mapping for demo
+      if (colorDistance(rgb, [0,0,0]) < 80) return 'black';
+      if (colorDistance(rgb, [255,255,255]) < 80) return 'white';
+      if (colorDistance(rgb, [128,128,128]) < 80) return 'gray';
+      if (rgb[0] > 150 && rgb[1] < 100 && rgb[2] < 100) return 'red';
+      if (rgb[1] > 150 && rgb[0] < 100 && rgb[2] < 100) return 'green';
+      if (rgb[2] > 150 && rgb[0] < 100 && rgb[1] < 100) return 'blue';
+      return 'neutral';
+    }).join(', ');
+    
+    return { skinTone, dressColors: dressColorsStr || 'not detected' };
+  };
+  
   const performAnalysis = async (request: AnalyzeImageAndProvideRecommendationsInput) => {
     setIsLoading(true);
     setAnalysisResult(null);
@@ -111,7 +214,8 @@ export function StyleAdvisor() {
     try {
       if (!request.previousRecommendation) {
         setLoadingMessage("Extracting colors from your image...");
-        const { skinTone, dressColors } = await extractColorsFromImage({ photoDataUri: request.photoDataUri });
+        
+        const { skinTone, dressColors } = extractColorsFromCanvas();
 
         request.skinTone = skinTone;
         request.dressColors = dressColors;
@@ -150,31 +254,35 @@ export function StyleAdvisor() {
       });
       return;
     }
+    
+    if (!previewImage) {
+      toast({ variant: 'destructive', title: 'Image not selected', description: 'Please select an image to analyze.' });
+      return;
+    }
 
-    const file = values.image[0];
-    const reader = new FileReader();
-
-    reader.onload = async () => {
-      const photoDataUri = reader.result as string;
-      await performAnalysis({
-        photoDataUri,
-        occasion: values.occasion,
-        gender: values.gender,
-        weather: weather,
-        skinTone: '', 
-        dressColors: '',
-      });
+    const imageElement = document.createElement('img');
+    imageElement.src = previewImage;
+    imageElement.onload = async () => {
+        const canvas = canvasRef.current;
+        if (canvas) {
+            canvas.width = imageElement.width;
+            canvas.height = imageElement.height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(imageElement, 0, 0);
+            
+            await performAnalysis({
+              photoDataUri: previewImage,
+              occasion: values.occasion,
+              gender: values.gender,
+              weather: weather,
+              skinTone: '', 
+              dressColors: '',
+            });
+        }
     };
-
-    reader.onerror = () => {
-      toast({
-        variant: "destructive",
-        title: "File Read Error",
-        description: "Could not read the selected image file.",
-      });
-    };
-
-    reader.readAsDataURL(file);
+    imageElement.onerror = () => {
+        toast({ variant: 'destructive', title: 'Image Load Error', description: 'Could not load the selected image for analysis.' });
+    }
   };
 
   const handleGetAnotherRecommendation = async () => {
@@ -188,6 +296,7 @@ export function StyleAdvisor() {
 
   return (
     <div className="space-y-12">
+      <canvas ref={canvasRef} className="hidden"></canvas>
       <Card className="w-full shadow-2xl shadow-primary/20 border-border/20 animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
         <CardHeader>
           <CardTitle className="text-3xl font-headline">Create Your Style Profile</CardTitle>
