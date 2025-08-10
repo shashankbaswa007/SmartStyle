@@ -21,7 +21,10 @@ export function InteractiveBackground() {
     <div
       className="pointer-events-none fixed inset-0 z-0 transition duration-300"
       style={{
-        background: `radial-gradient(600px at ${mousePosition.x}px ${mousePosition.y}px, hsl(var(--primary)/0.25), transparent 80%)`,
+        background: `
+          radial-gradient(600px at ${mousePosition.x}px ${mousePosition.y}px, hsl(var(--primary)/0.4), transparent 80%),
+          radial-gradient(1200px at ${mousePosition.x}px ${mousePosition.y}px, hsl(var(--accent)/0.2), transparent 80%)
+        `,
       }}
     />
   );
