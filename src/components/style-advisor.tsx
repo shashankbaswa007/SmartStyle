@@ -171,28 +171,9 @@ export function StyleAdvisor() {
     const sortedColors = Object.entries(colorCounts).sort(([, a], [, b]) => b - a);
     const dominantColors = sortedColors.slice(0, 3).map(([key]) => key);
     
-    const colorNames: { [key: string]: string } = {
-        '0,0,0': 'black', '255,255,255': 'white', '128,128,128': 'gray',
-        '255,0,0': 'red', '0,255,0': 'green', '0,0,255': 'blue',
-        '255,255,0': 'yellow', '255,165,0': 'orange', '128,0,128': 'purple',
-        '255,192,203': 'pink', '165,42,42': 'brown',
-    };
-
     const dressColorsStr = dominantColors.map(colorKey => {
       const rgb = colorKey.split(',').map(Number);
-      let closestColor = 'unknown';
-      let minDistance = Infinity;
-      for (const [name, hex] of Object.entries(colorNames)) {
-          const nameRgb = hex.startsWith('#') 
-              ? [parseInt(hex.slice(1,3), 16), parseInt(hex.slice(3,5), 16), parseInt(hex.slice(5,7), 16)]
-              : Object.entries(colorNames).find(([_, n]) => n === name)![0].split(',').map(Number)
-          const dist = colorDistance(rgb, nameRgb)
-          if (dist < minDistance) {
-              minDistance = dist;
-              closestColor = Object.keys(colorNames).find(key => colorNames[key] === name)!;
-          }
-      }
-       // A simple mapping for demo
+      // A simple mapping for demo
       if (colorDistance(rgb, [0,0,0]) < 80) return 'black';
       if (colorDistance(rgb, [255,255,255]) < 80) return 'white';
       if (colorDistance(rgb, [128,128,128]) < 80) return 'gray';
