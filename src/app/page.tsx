@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { InteractiveBackground } from '@/components/interactive-background';
-import { Eye, Bot, Sparkles } from 'lucide-react';
+import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
+import { ArrowRight, Bot, Eye, Palette, Sparkles } from 'lucide-react';
+import Image from 'next/image';
 
 export default function Home() {
   const features = [
@@ -19,36 +20,67 @@ export default function Home() {
     {
       icon: <Sparkles className="w-8 h-8 text-accent" />,
       title: "Visual Recommendations",
-      description: "Don't just read suggestions. See them. Our AI generates images of recommended outfits to inspire you."
+      description: "Don't just read suggestions—see them. Our AI generates images of recommended outfits to inspire you."
     }
   ];
 
-  return (
-    <div className="relative overflow-hidden">
-      <InteractiveBackground />
-      <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 py-20 md:py-32 text-center">
-        <div className="animate-fade-in-up">
-          <h1 className="text-5xl md:text-7xl font-headline font-extrabold text-foreground tracking-tight">
-            Elevate Your Style with <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">AI</span>
-          </h1>
-          <p className="mt-6 text-lg text-muted-foreground max-w-3xl mx-auto">
-            SmartStyle is your personal AI stylist. Snap a photo of your outfit and get instant, intelligent feedback and visual recommendations to perfect your look for any occasion.
-          </p>
-          <div className="mt-12">
-            <Link href="/style-check">
-              <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 transform hover:scale-105">
-                Check My Fit ✨
-              </Button>
-            </Link>
-          </div>
-        </div>
+  const galleryItems = [
+    { src: "https://placehold.co/600x800.png", alt: "Stylish urban outfit", hint: "urban fashion" },
+    { src: "https://placehold.co/600x800.png", alt: "Elegant evening wear", hint: "elegant dress" },
+    { src: "https://placehold.co/600x800.png", alt: "Casual summer look", hint: "summer casual" },
+    { src: "https://placehold.co/600x800.png", alt: "Professional work attire", hint: "work attire" },
+    { src: "https://placehold.co/600x800.png", alt: "Vibrant party dress", hint: "party fashion" },
+  ];
 
-        <div className="mt-24 md:mt-32">
-          <h2 className="text-4xl font-headline font-bold text-center mb-12 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>How It Works</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            {features.map((feature, index) => (
-              <div key={index} className="animate-fade-in-up" style={{ animationDelay: `${0.4 + index * 0.2}s` }}>
-                <Card className="h-full bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg hover:shadow-accent/20 hover:-translate-y-2 transition-transform duration-300">
+  return (
+    <div className="flex flex-col min-h-screen">
+      <main className="flex-grow">
+        {/* 1. Hero Section */}
+        <section className="relative h-[80vh] min-h-[600px] flex items-center justify-center text-center text-white">
+          <Image
+            src="https://placehold.co/1920x1080.png"
+            alt="Fashion runway background"
+            fill
+            className="object-cover -z-10"
+            data-ai-hint="fashion runway"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
+          <div className="relative z-10 p-4 animate-fade-in-up">
+            <h1 className="text-5xl md:text-7xl font-headline font-extrabold tracking-tight text-foreground">
+              Elevate Your Style with <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">AI</span>
+            </h1>
+            <p className="mt-6 text-lg text-muted-foreground max-w-3xl mx-auto">
+              Your personal AI stylist is here. Snap a photo of your outfit and get instant, intelligent feedback and visual recommendations.
+            </p>
+            <div className="mt-12">
+              <Link href="/style-check">
+                <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 transform hover:scale-105">
+                  Upload Your Outfit <ArrowRight className="ml-2" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* 2. About SmartStyle Section */}
+        <section className="py-20 bg-primary/20">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <Card className="max-w-4xl mx-auto bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg p-8">
+                    <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">What is SmartStyle?</h2>
+                    <p className="text-muted-foreground text-lg">
+                        SmartStyle is a cutting-edge application that leverages artificial intelligence to serve as your personal fashion consultant. By analyzing your outfits, considering the occasion, and even checking the weather, SmartStyle provides you with tailored recommendations to ensure you always look your best. It's more than just advice; it's visual inspiration.
+                    </p>
+                </Card>
+            </div>
+        </section>
+
+        {/* 3. Features Section */}
+        <section className="py-20">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="text-4xl font-headline font-bold text-center mb-12">How It Works</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {features.map((feature, index) => (
+                <Card key={index} className="h-full bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg hover:shadow-accent/20 hover:-translate-y-2 transition-transform duration-300">
                   <CardHeader className="items-center">
                     <div className="p-4 bg-primary/10 rounded-full mb-4">
                       {feature.icon}
@@ -59,11 +91,97 @@ export default function Home() {
                     {feature.description}
                   </CardContent>
                 </Card>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      </div>
+        </section>
+
+        {/* 4. AI Style in Action Section */}
+         <section className="py-20 bg-primary/20">
+            <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+                    <div className="relative w-full h-96 rounded-lg overflow-hidden shadow-2xl">
+                        <Image src="https://placehold.co/800x600.png" alt="Fashion model silhouette" layout="fill" objectFit="cover" data-ai-hint="fashion model" />
+                    </div>
+                    <div>
+                        <h2 className="text-4xl font-headline font-bold mb-6">From Upload to Upgrade</h2>
+                        <ul className="space-y-6 text-lg">
+                            <li className="flex items-start gap-4">
+                                <div className="p-3 bg-accent/20 text-accent rounded-full"><Eye /></div>
+                                <div>
+                                    <h3 className="font-bold text-xl">1. Snap & Upload</h3>
+                                    <p className="text-muted-foreground">Start by uploading a clear photo of your outfit.</p>
+                                </div>
+                            </li>
+                            <li className="flex items-start gap-4">
+                                <div className="p-3 bg-accent/20 text-accent rounded-full"><Bot /></div>
+                                <div>
+                                    <h3 className="font-bold text-xl">2. AI Analysis</h3>
+                                    <p className="text-muted-foreground">Our AI analyzes colors, patterns, and style in seconds.</p>
+                                </div>
+                            </li>
+                             <li className="flex items-start gap-4">
+                                <div className="p-3 bg-accent/20 text-accent rounded-full"><Palette /></div>
+                                <div>
+                                    <h3 className="font-bold text-xl">3. Get Style Advice</h3>
+                                    <p className="text-muted-foreground">Receive personalized feedback and visual suggestions.</p>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        {/* 5. Inspiration Gallery Section */}
+        <section className="py-20">
+          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="text-4xl font-headline font-bold text-center mb-12">Find Your Inspiration</h2>
+            <Carousel opts={{ loop: true }} className="w-full max-w-5xl mx-auto">
+              <CarouselContent>
+                {galleryItems.map((item, index) => (
+                  <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3">
+                    <div className="p-1">
+                      <Card className="overflow-hidden group">
+                        <CardContent className="p-0 aspect-[3/4] relative">
+                          <Image src={item.src} alt={item.alt} fill className="object-cover transition-transform duration-300 group-hover:scale-105" data-ai-hint={item.hint} />
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              <CarouselPrevious className="ml-12" />
+              <CarouselNext className="mr-12" />
+            </Carousel>
+          </div>
+        </section>
+
+        {/* 6. Call-to-Action Footer Section */}
+        <section className="relative py-20 text-center text-white">
+          <Image
+            src="https://placehold.co/1920x600.png"
+            alt="Stylish accessories flat lay"
+            fill
+            className="object-cover -z-10"
+            data-ai-hint="fashion accessories"
+          />
+          <div className="absolute inset-0 bg-black/60" />
+          <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8">
+            <h2 className="text-4xl md:text-5xl font-headline font-bold">Ready to upgrade your style?</h2>
+            <p className="mt-4 text-lg max-w-2xl mx-auto">
+              Let our AI be your guide to a more confident and stylish you. Get started for free.
+            </p>
+            <div className="mt-8">
+              <Link href="/style-check">
+                <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 transform hover:scale-105">
+                  Try SmartStyle Now ✨
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }
