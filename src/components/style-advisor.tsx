@@ -5,7 +5,7 @@ import Image from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Loader2, Sparkles, UploadCloud, RefreshCw, Wand2, Shirt, Briefcase, PartyPopper, Dumbbell, GlassWater, Plane, User } from "lucide-react";
+import { Loader2, Sparkles, UploadCloud, RefreshCw, Wand2, Shirt, Briefcase, PartyPopper, Dumbbell, GlassWater, Plane, User, VenetianMask, Building, Handshake, PersonStanding, Rocket } from "lucide-react";
 
 import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsInput, type AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
 import { generateOutfitImage } from "@/ai/flows/generate-outfit-image";
@@ -28,10 +28,18 @@ const occasions = [
   { value: "Vacation", label: "Vacation", icon: <Plane /> },
 ];
 
+const genres = [
+  { value: "Formal", label: "Formal", icon: <Handshake /> },
+  { value: "Semi-formal", label: "Semi-formal", icon: <Building /> },
+  { value: "Casual", label: "Casual", icon: <PersonStanding /> },
+  { value: "Trendy/Streetwear", label: "Streetwear", icon: <Rocket /> },
+  { value: "Traditional/Ethnic", label: "Traditional", icon: <VenetianMask /> },
+];
+
 const genders = [
   { value: "Male", label: "Male" },
   { value: "Female", label: "Female" },
-  { value: "Other", label: "Other" },
+  { value: "Neutral", label: "Neutral" },
 ];
 
 const formSchema = z.object({
@@ -40,6 +48,7 @@ const formSchema = z.object({
     .refine((files) => files?.length === 1, "An image of your outfit is required.")
     .refine((files) => files?.[0]?.size <= 10000000, `Max file size is 10MB.`),
   occasion: z.string({ required_error: "Please select an occasion." }).min(1),
+  genre: z.string({ required_error: "Please select a genre." }).min(1),
   gender: z.string({ required_error: "Please select a gender." }).min(1),
 });
 
@@ -79,6 +88,7 @@ export function StyleAdvisor() {
     resolver: zodResolver(formSchema),
     defaultValues: {
       occasion: "",
+      genre: "",
       gender: "",
     },
   });
@@ -224,6 +234,7 @@ export function StyleAdvisor() {
         setLastAnalysisRequest({
           photoDataUri: request.photoDataUri,
           occasion: request.occasion,
+          genre: request.genre,
           gender: request.gender,
           weather: request.weather,
           skinTone: skinTone,
@@ -279,6 +290,7 @@ export function StyleAdvisor() {
             await performAnalysis({
               photoDataUri: previewImage,
               occasion: values.occasion,
+              genre: values.genre,
               gender: values.gender,
               weather: weather,
               skinTone: '', 
@@ -386,13 +398,43 @@ export function StyleAdvisor() {
                     </FormItem>
                   )}
                 />
+                
+                <FormField
+                  control={form.control}
+                  name="genre"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-semibold">3. Select a Genre Preference</FormLabel>
+                      <div className="flex flex-wrap gap-3 pt-2">
+                        {genres.map((genre) => (
+                          <Button
+                            key={genre.value}
+                            type="button"
+                            variant={field.value === genre.value ? "default" : "outline"}
+                            className={cn(
+                              "rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 transform hover:scale-105",
+                              field.value === genre.value
+                                ? "bg-accent text-accent-foreground shadow-lg"
+                                : "bg-primary/50 border-border/50"
+                            )}
+                            onClick={() => field.onChange(genre.value)}
+                          >
+                            {React.cloneElement(genre.icon, { className: "w-4 h-4 mr-2" })}
+                            {genre.label}
+                          </Button>
+                        ))}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
 
                 <FormField
                   control={form.control}
                   name="gender"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base font-semibold">3. Select Your Gender</FormLabel>
+                      <FormLabel className="text-base font-semibold">4. Select Your Gender</FormLabel>
                        <div className="flex flex-wrap gap-3 pt-2">
                         {genders.map((gender) => (
                           <Button
@@ -473,12 +515,6 @@ export function StyleAdvisor() {
           </CardHeader>
           <CardContent className="space-y-8 text-base">
             <div>
-              <h3 className="font-bold text-2xl mb-3 text-foreground tracking-tight font-headline">Feedback on Your Outfit</h3>
-              <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.analysis}</p>
-            </div>
-            <Separator />
-            <div>
-              <h3 className="font-bold text-2xl mb-3 text-foreground tracking-tight font-headline">Recommendations</h3>
               <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.recommendation}</p>
             </div>
             {generatedImageUrl ? (

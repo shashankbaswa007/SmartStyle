@@ -18,7 +18,8 @@ const AnalyzeImageAndProvideRecommendationsInputSchema = z.object({
       "A photo of a person, as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
   occasion: z.string().describe('The occasion for which the recommendation is needed.'),
-  gender: z.string().describe('The gender of the person in the photo.'),
+  genre: z.string().describe('The preferred style genre (e.g., Formal, Casual, Streetwear).'),
+  gender: z.string().describe('The gender of the person in the photo (male/female/neutral).'),
   weather: z.string().describe("The weather conditions at the person's current location."),
   skinTone: z.string().describe("The person's estimated skin tone."),
   dressColors: z.string().describe('A comma-separated list of the primary colors of the outfit.'),
@@ -27,9 +28,8 @@ const AnalyzeImageAndProvideRecommendationsInputSchema = z.object({
 export type AnalyzeImageAndProvideRecommendationsInput = z.infer<typeof AnalyzeImageAndProvideRecommendationsInputSchema>;
 
 const AnalyzeImageAndProvideRecommendationsOutputSchema = z.object({
-  recommendation: z.string().describe('The detailed clothing recommendation for the person, including specific suggestions for outfit items and colors for dresses and shoes.'),
-  analysis: z.string().describe("The analysis of the person's current outfit, colors, and how they work with their skin tone."),
-  imagePrompt: z.string().describe('A concise, descriptive prompt for an image generation model, describing the recommended outfit on a mannequin or person.'),
+  recommendation: z.string().describe('The detailed clothing recommendation, formatted with a list of outfits and a pro tip.'),
+  imagePrompt: z.string().describe('A concise, descriptive prompt for an image generation model, describing the top recommended outfit on a mannequin or person.'),
 });
 export type AnalyzeImageAndProvideRecommendationsOutput = z.infer<typeof AnalyzeImageAndProvideRecommendationsOutputSchema>;
 
@@ -41,27 +41,41 @@ const prompt = ai.definePrompt({
   name: 'analyzeImageAndProvideRecommendationsPrompt',
   input: {schema: AnalyzeImageAndProvideRecommendationsInputSchema},
   output: {schema: AnalyzeImageAndProvideRecommendationsOutputSchema},
-  prompt: `You are a world-class personal stylist. You provide clothing recommendations based on a person's skin tone, their current outfit, the occasion, gender, and local weather.
+  prompt: `You are a friendly, world-class fashion expert. Your task is to recommend clothing and styling choices based on user inputs.
 
-  First, provide a detailed analysis of their current outfit. Comment on the provided dress colors ({{{dressColors}}}) and how they complement or clash with the user's skin tone ({{{skinTone}}}).
+  **User's Context:**
+  - **Occasion:** {{{occasion}}}
+  - **Genre Preference:** {{{genre}}}
+  - **Gender:** {{{gender}}}
+  - **Current Weather:** {{{weather}}}
+  - **User's Skin Tone:** {{{skinTone}}}
+  - **User's Current Outfit Colors:** {{{dressColors}}}
+  - **User's Photo:** {{media url=photoDataUri}}
 
-  Then, provide a concrete, actionable clothing recommendation. Your recommendation must go beyond simple feedback and suggest a complete outfit.
-  It must take all of the following into account:
-  - Occasion: {{{occasion}}}
-  - Gender: {{{gender}}}
-  - Weather: {{{weather}}}
-  - Skin Tone: {{{skinTone}}}
-  - Original Dress Colors: {{{dressColors}}}
-  - Image: {{media url=photoDataUri}}
-
+  **Your Guidelines:**
+  1.  **Match Occasion & Genre:** Recommendations MUST perfectly match both the occasion and the chosen genre. A "Party" in "Formal" genre is a suit/tux, while a "Party" in "Casual" is jeans/trendy shirt.
+  2.  **Weather Practicality:** Adapt all suggestions for the weather. Don't suggest a heavy coat in hot weather.
+  3.  **Stylish but Realistic:** Keep suggestions stylish but practical. Avoid overly extravagant items unless the genre is high-fashion.
+  4.  **Color Science:** Mention specific color combinations that complement the user’s skin tone and their original outfit colors.
+  5.  **Complete the Look:** Include specific accessory and shoe recommendations that fit the vibe (e.g., sneakers for streetwear, loafers for semi-formal).
+  6.  **Provide Variety:** Give 2-3 distinct alternative outfit ideas so the user has choices.
+  
   {{#if previousRecommendation}}
   The user was not satisfied with this previous recommendation: "{{{previousRecommendation}}}"
-  Please generate a new, distinctly different recommendation. Do not repeat ideas from the previous one.
+  Please generate new, distinctly different recommendations. Do not repeat ideas from the previous one.
   {{/if}}
 
-  Based on this information, provide a detailed clothing recommendation, including which color the dress and shoes should be, and a thoughtful analysis.
-  
-  Finally, create a concise, descriptive prompt for an image generation model to create a photorealistic image of the recommended outfit. This prompt should describe the clothing items, colors, and style on a mannequin or anonymous person, suitable for a fashion lookbook.
+  **Output Structure:**
+  Your entire response should be a single block of text formatted exactly like this:
+
+  **Recommended Outfits:**
+  1.  **[Outfit Title e.g., "Chic Casual Look"]**: [Describe top, bottom, footwear, and accessories. Explain why it fits the occasion, genre, and user's features.]
+  2.  **[Outfit Title e.g., "Smart Streetwear Vibe"]**: [Describe a different complete outfit, offering variety.]
+  3.  **[Outfit Title e.g., "Elegant Alternative"]**: [Optional: A third suggestion for added style or a different take.]
+
+  💡 **Pro tip:** [Give one quick, actionable styling or color-matching tip.]
+
+  Finally, based on your **first and best** recommendation, create a concise, descriptive prompt for an image generation model to create a photorealistic image of that recommended outfit. This prompt should describe the clothing items, colors, and style on a mannequin or anonymous person, suitable for a fashion lookbook.
   `,
 });
 
@@ -73,6 +87,7 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
+    // The prompt now combines analysis and recommendation, so we only need the 'recommendation' and 'imagePrompt' fields.
     return output!;
   }
 );
