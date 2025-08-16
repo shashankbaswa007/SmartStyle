@@ -5,19 +5,33 @@ import Image from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Loader2, Sparkles, UploadCloud, RefreshCw, Wand2 } from "lucide-react";
+import { Loader2, Sparkles, UploadCloud, RefreshCw, Wand2, Shirt, Briefcase, PartyPopper, Dumbbell, GlassWater, Plane, User } from "lucide-react";
 
 import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsInput, type AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
 import { generateOutfitImage } from "@/ai/flows/generate-outfit-image";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { getWeatherData } from "@/app/actions";
+import { cn } from "@/lib/utils";
+
+const occasions = [
+  { value: "Casual", label: "Casual", icon: <Shirt /> },
+  { value: "Work", label: "Work", icon: <Briefcase /> },
+  { value: "Party", label: "Party", icon: <PartyPopper /> },
+  { value: "Date Night", label: "Date Night", icon: <GlassWater /> },
+  { value: "Workout", label: "Workout", icon: <Dumbbell /> },
+  { value: "Vacation", label: "Vacation", icon: <Plane /> },
+];
+
+const genders = [
+  { value: "Male", label: "Male" },
+  { value: "Female", label: "Female" },
+  { value: "Other", label: "Other" },
+];
 
 const formSchema = z.object({
   image: z
@@ -288,7 +302,7 @@ export function StyleAdvisor() {
   return (
     <div className="space-y-12">
       <canvas ref={canvasRef} className="hidden"></canvas>
-      <Card className="w-full shadow-2xl shadow-primary/20 border-border/20 animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
+      <Card className="w-full shadow-2xl shadow-accent/20 border-border/20 animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
         <CardHeader>
           <CardTitle className="text-3xl font-headline">Create Your Style Profile</CardTitle>
           <CardDescription>
@@ -303,9 +317,13 @@ export function StyleAdvisor() {
                 name="image"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-base font-semibold">Your Outfit</FormLabel>
+                    <FormLabel className="text-base font-semibold">1. Upload Your Outfit</FormLabel>
                     <FormControl>
-                      <div className="relative flex justify-center items-center w-full h-64 border-2 border-dashed border-muted-foreground/30 rounded-lg p-4 text-center hover:border-accent hover:bg-accent/10 transition-all duration-300 cursor-pointer bg-primary/5 group">
+                      <div className="relative flex justify-center items-center w-full h-80 rounded-lg p-4 text-center cursor-pointer bg-primary/20 group animate-fade-in-up transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl hover:shadow-accent/20"
+                           style={{
+                             border: "2px dashed hsl(var(--border))",
+                             boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), inset 0 0 10px 5px rgba(255,255,255,0.05)"
+                           }}>
                         <Input
                           type="file"
                           accept="image/*"
@@ -320,7 +338,7 @@ export function StyleAdvisor() {
                             src={previewImage}
                             alt="Outfit preview"
                             fill
-                            className="object-contain rounded-md"
+                            className="object-contain rounded-md p-2"
                             data-ai-hint="person outfit"
                           />
                         ) : (
@@ -336,59 +354,70 @@ export function StyleAdvisor() {
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+              <div className="space-y-6">
                 <FormField
                   control={form.control}
                   name="occasion"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base font-semibold">Occasion</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="text-base transition-all duration-300 hover:border-primary focus:ring-primary">
-                            <SelectValue placeholder="Select an occasion" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Casual">Casual</SelectItem>
-                          <SelectItem value="Formal">Formal</SelectItem>
-                          <SelectItem value="Party">Party</SelectItem>
-                          <SelectItem value="Work">Work</SelectItem>
-                          <SelectItem value="Workout">Workout</SelectItem>
-                          <SelectItem value="Date Night">Date Night</SelectItem>
-                          <SelectItem value="Wedding Guest">Wedding Guest</SelectItem>
-                          <SelectItem value="Vacation">Vacation</SelectItem>
-                          <SelectItem value="Weekend Brunch">Weekend Brunch</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <FormLabel className="text-base font-semibold">2. Select an Occasion</FormLabel>
+                      <div className="flex flex-wrap gap-3 pt-2">
+                        {occasions.map((occasion) => (
+                          <Button
+                            key={occasion.value}
+                            type="button"
+                            variant={field.value === occasion.value ? "default" : "outline"}
+                            className={cn(
+                              "rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 transform hover:scale-105",
+                              field.value === occasion.value
+                                ? "bg-accent text-accent-foreground shadow-lg"
+                                : "bg-primary/50 border-border/50"
+                            )}
+                            onClick={() => field.onChange(occasion.value)}
+                          >
+                            {React.cloneElement(occasion.icon, { className: "w-4 h-4 mr-2" })}
+                            {occasion.label}
+                          </Button>
+                        ))}
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
                 <FormField
                   control={form.control}
                   name="gender"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base font-semibold">Gender</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="text-base transition-all duration-300 hover:border-primary focus:ring-primary">
-                            <SelectValue placeholder="Select a gender" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="Male">Male</SelectItem>
-                          <SelectItem value="Female">Female</SelectItem>
-                          <SelectItem value="Other">Other</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <FormLabel className="text-base font-semibold">3. Select Your Gender</FormLabel>
+                       <div className="flex flex-wrap gap-3 pt-2">
+                        {genders.map((gender) => (
+                          <Button
+                            key={gender.value}
+                            type="button"
+                            variant={field.value === gender.value ? "default" : "outline"}
+                            className={cn(
+                              "rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 transform hover:scale-105",
+                              field.value === gender.value
+                                ? "bg-accent text-accent-foreground shadow-lg"
+                                : "bg-primary/50 border-border/50"
+                            )}
+                            onClick={() => field.onChange(gender.value)}
+                          >
+                             <User className="w-4 h-4 mr-2" />
+                            {gender.label}
+                          </Button>
+                        ))}
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-              <Button type="submit" size="lg" className="w-full text-lg font-bold bg-gradient-to-r from-primary to-accent text-white hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 hover:scale-105" disabled={isLoading || isFetchingWeather}>
+
+              <Button type="submit" size="lg" className="w-full text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 hover:scale-105" disabled={isLoading || isFetchingWeather}>
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />

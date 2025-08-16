@@ -36,8 +36,8 @@ export default function Home() {
           </p>
           <div className="mt-12">
             <Link href="/style-check">
-              <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-primary to-accent text-white hover:shadow-lg hover:shadow-primary/30 transition-all duration-300 transform hover:scale-105">
-                Wanna check your fit? ;)
+              <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 transform hover:scale-105">
+                Check My Fit ✨
               </Button>
             </Link>
           </div>
@@ -48,7 +48,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {features.map((feature, index) => (
               <div key={index} className="animate-fade-in-up" style={{ animationDelay: `${0.4 + index * 0.2}s` }}>
-                <Card className="h-full bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg hover:shadow-primary/20 hover:-translate-y-2 transition-transform duration-300">
+                <Card className="h-full bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg hover:shadow-accent/20 hover:-translate-y-2 transition-transform duration-300">
                   <CardHeader className="items-center">
                     <div className="p-4 bg-primary/10 rounded-full mb-4">
                       {feature.icon}
