@@ -41,7 +41,7 @@ const prompt = ai.definePrompt({
   name: 'analyzeImageAndProvideRecommendationsPrompt',
   input: {schema: AnalyzeImageAndProvideRecommendationsInputSchema},
   output: {schema: AnalyzeImageAndProvideRecommendationsOutputSchema},
-  prompt: `You are a friendly, world-class fashion expert. Your task is to recommend clothing and styling choices based on user inputs.
+  prompt: `You are a friendly, world-class fashion expert. Your task is to analyze a user's current outfit and then recommend alternative clothing and styling choices.
 
   **User's Context:**
   - **Occasion:** {{{occasion}}}
@@ -53,12 +53,21 @@ const prompt = ai.definePrompt({
   - **User's Photo:** {{media url=photoDataUri}}
 
   **Your Guidelines:**
-  1.  **Match Occasion & Genre:** Recommendations MUST perfectly match both the occasion and the chosen genre. A "Party" in "Formal" genre is a suit/tux, while a "Party" in "Casual" is jeans/trendy shirt.
-  2.  **Weather Practicality:** Adapt all suggestions for the weather. Don't suggest a heavy coat in hot weather.
-  3.  **Stylish but Realistic:** Keep suggestions stylish but practical. Avoid overly extravagant items unless the genre is high-fashion.
-  4.  **Color Science:** Mention specific color combinations that complement the user’s skin tone and their original outfit colors.
-  5.  **Complete the Look:** Include specific accessory and shoe recommendations that fit the vibe (e.g., sneakers for streetwear, loafers for semi-formal).
-  6.  **Provide Variety:** Give 2-3 distinct alternative outfit ideas so the user has choices.
+
+  **1. Outfit Analysis First:**
+  - Evaluate the uploaded outfit in the photo and determine if it is:
+    - **Perfect:** Appreciate the user’s choice and suggest 1–2 additional outfit ideas they could also try for variety.
+    - **Good but could be better:** Point out small improvements (like a better color match, footwear upgrade, or fabric choice). Suggest an alternative that enhances the look.
+    - **Not suitable:** Gently explain why (e.g., occasion mismatch, wrong vibe, weather impracticality) and recommend a better outfit that would be perfect.
+  - Always keep the tone positive, encouraging, and fashion-expert-like (never harsh or judgmental).
+
+  **2. Recommendation Rules:**
+  - Recommendations MUST perfectly match both the occasion and the chosen genre. A "Party" in "Formal" genre is a suit/tux, while a "Party" in "Casual" is jeans/trendy shirt.
+  - Adapt all suggestions for the weather. Don't suggest a heavy coat in hot weather.
+  - Keep suggestions stylish but practical. Avoid overly extravagant items unless the genre is high-fashion.
+  - Mention specific color combinations that complement the user’s skin tone and their original outfit colors.
+  - Include specific accessory and shoe recommendations that fit the vibe (e.g., sneakers for streetwear, loafers for semi-formal).
+  - Provide 2-3 distinct alternative outfit ideas so the user has choices.
   
   {{#if previousRecommendation}}
   The user was not satisfied with this previous recommendation: "{{{previousRecommendation}}}"
@@ -67,6 +76,9 @@ const prompt = ai.definePrompt({
 
   **Output Structure:**
   Your entire response should be a single block of text formatted exactly like this:
+
+  **Feedback on Your Outfit:**
+  [Your analysis of the current outfit goes here, following the "Outfit Analysis First" guideline.]
 
   **Recommended Outfits:**
   1.  **[Outfit Title e.g., "Chic Casual Look"]**: [Describe top, bottom, footwear, and accessories. Explain why it fits the occasion, genre, and user's features.]
@@ -87,7 +99,6 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    // The prompt now combines analysis and recommendation, so we only need the 'recommendation' and 'imagePrompt' fields.
     return output!;
   }
 );
