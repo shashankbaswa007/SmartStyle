@@ -63,7 +63,7 @@ export default function Home() {
         </section>
 
         {/* 2. About SmartStyle Section */}
-        <section className="py-20 bg-primary/20">
+        <section className="py-20 bg-gradient-to-br from-primary/20 via-background to-accent/20">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
                 <Card className="max-w-4xl mx-auto bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg p-8">
                     <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">What is SmartStyle?</h2>
