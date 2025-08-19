@@ -37,30 +37,41 @@ export default function Home() {
       <main className="flex-grow">
         {/* 1. Hero Section */}
         <section className="relative h-[80vh] min-h-[600px] flex items-center justify-center text-center text-white">
-          <Image
-            src="https://placehold.co/1920x1080.png"
-            alt="Fashion runway background"
-            fill
-            className="object-cover -z-10"
-            data-ai-hint="fashion runway"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
-          <div className="relative z-10 p-4 animate-fade-in-up">
-            <h1 className="text-5xl md:text-7xl font-headline font-extrabold tracking-tight text-foreground">
-              Elevate Your Style with <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">AI</span>
-            </h1>
-            <p className="mt-6 text-lg text-muted-foreground max-w-3xl mx-auto">
-              Your personal AI stylist is here. Snap a photo of your outfit and get instant, intelligent feedback and visual recommendations.
-            </p>
-            <div className="mt-12">
-              <Link href="/style-check">
-                <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 transform hover:scale-105">
-                  Upload Your Outfit <ArrowRight className="ml-2" />
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </section>
+      <Image
+        src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80"
+        alt="Fashion runway background"
+        fill
+        className="object-cover -z-10"
+        priority
+      />
+
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
+
+      {/* Content */}
+      <div className="relative z-10 p-4 animate-fade-in-up">
+        <h1 className="text-5xl md:text-7xl font-headline font-extrabold tracking-tight text-foreground">
+          Elevate Your Style with{" "}
+          <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+            AI
+          </span>
+        </h1>
+        <p className="mt-6 text-lg text-muted-foreground max-w-3xl mx-auto">
+          Your personal AI stylist is here. Snap a photo of your outfit and get
+          instant, intelligent feedback and visual recommendations.
+        </p>
+        <div className="mt-12">
+          <Link href="/style-check">
+            <Button
+              size="lg"
+              className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 transform hover:scale-105"
+            >
+              Upload Your Outfit <ArrowRight className="ml-2" />
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </section>
 
         {/* 2. About SmartStyle Section */}
         <section className="py-20 bg-gradient-to-br from-primary/20 via-background to-accent/20">
