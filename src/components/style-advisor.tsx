@@ -5,7 +5,7 @@ import Image from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Loader2, Sparkles, UploadCloud, RefreshCw, Wand2, Shirt, Briefcase, PartyPopper, Dumbbell, GlassWater, Plane, User, VenetianMask, Building, Handshake, PersonStanding, Rocket } from "lucide-react";
+import { Loader2, Sparkles, UploadCloud, RefreshCw, Wand2, User } from "lucide-react";
 
 import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsInput, type AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
 import { generateOutfitImage } from "@/ai/flows/generate-outfit-image";
@@ -19,23 +19,6 @@ import { useToast } from "@/hooks/use-toast";
 import { getWeatherData } from "@/app/actions";
 import { cn } from "@/lib/utils";
 
-const occasions = [
-  { value: "Casual", label: "Casual", icon: <Shirt /> },
-  { value: "Work", label: "Work", icon: <Briefcase /> },
-  { value: "Party", label: "Party", icon: <PartyPopper /> },
-  { value: "Date Night", label: "Date Night", icon: <GlassWater /> },
-  { value: "Workout", label: "Workout", icon: <Dumbbell /> },
-  { value: "Vacation", label: "Vacation", icon: <Plane /> },
-];
-
-const genres = [
-  { value: "Formal", label: "Formal", icon: <Handshake /> },
-  { value: "Semi-formal", label: "Semi-formal", icon: <Building /> },
-  { value: "Casual", label: "Casual", icon: <PersonStanding /> },
-  { value: "Trendy/Streetwear", label: "Streetwear", icon: <Rocket /> },
-  { value: "Traditional/Ethnic", label: "Traditional", icon: <VenetianMask /> },
-];
-
 const genders = [
   { value: "Male", label: "Male" },
   { value: "Female", label: "Female" },
@@ -47,8 +30,8 @@ const formSchema = z.object({
     .any()
     .refine((files) => files?.length === 1, "An image of your outfit is required.")
     .refine((files) => files?.[0]?.size <= 10000000, `Max file size is 10MB.`),
-  occasion: z.string({ required_error: "Please select an occasion." }).min(1),
-  genre: z.string({ required_error: "Please select a genre." }).min(1),
+  occasion: z.string({ required_error: "Please enter an occasion." }).min(3, "Occasion must be at least 3 characters."),
+  genre: z.string({ required_error: "Please enter a genre." }).min(3, "Genre must be at least 3 characters."),
   gender: z.string({ required_error: "Please select a gender." }).min(1),
 });
 
@@ -374,26 +357,13 @@ export function StyleAdvisor() {
                   name="occasion"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base font-semibold">2. Select an Occasion</FormLabel>
-                      <div className="flex flex-wrap gap-3 pt-2">
-                        {occasions.map((occasion) => (
-                          <Button
-                            key={occasion.value}
-                            type="button"
-                            variant={field.value === occasion.value ? "default" : "outline"}
-                            className={cn(
-                              "rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 transform hover:scale-105",
-                              field.value === occasion.value
-                                ? "bg-accent text-accent-foreground shadow-lg"
-                                : "bg-primary/50 border-border/50"
-                            )}
-                            onClick={() => field.onChange(occasion.value)}
-                          >
-                            {React.cloneElement(occasion.icon, { className: "w-4 h-4 mr-2" })}
-                            {occasion.label}
-                          </Button>
-                        ))}
-                      </div>
+                      <FormLabel className="text-base font-semibold">2. Describe the Occasion</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="e.g., Casual brunch, formal wedding, birthday party..." 
+                          {...field} 
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -404,26 +374,13 @@ export function StyleAdvisor() {
                   name="genre"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base font-semibold">3. Select a Genre Preference</FormLabel>
-                      <div className="flex flex-wrap gap-3 pt-2">
-                        {genres.map((genre) => (
-                          <Button
-                            key={genre.value}
-                            type="button"
-                            variant={field.value === genre.value ? "default" : "outline"}
-                            className={cn(
-                              "rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 transform hover:scale-105",
-                              field.value === genre.value
-                                ? "bg-accent text-accent-foreground shadow-lg"
-                                : "bg-primary/50 border-border/50"
-                            )}
-                            onClick={() => field.onChange(genre.value)}
-                          >
-                            {React.cloneElement(genre.icon, { className: "w-4 h-4 mr-2" })}
-                            {genre.label}
-                          </Button>
-                        ))}
-                      </div>
+                      <FormLabel className="text-base font-semibold">3. Define the Style Genre</FormLabel>
+                      <FormControl>
+                         <Input 
+                           placeholder="e.g., Streetwear, minimalist, formal, vintage..." 
+                           {...field} 
+                         />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -548,3 +505,5 @@ export function StyleAdvisor() {
     </div>
   );
 }
+
+    
