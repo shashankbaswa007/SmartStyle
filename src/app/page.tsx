@@ -6,24 +6,6 @@ import { ArrowRight, Bot, Eye, Palette, Sparkles } from 'lucide-react';
 import Image from 'next/image';
 
 export default function Home() {
-  const features = [
-    {
-      icon: <Eye className="w-8 h-8 text-accent" />,
-      title: "Visual Outfit Analysis",
-      description: "Upload an image of your outfit and our AI will instantly analyze your look, identifying colors, styles, and items."
-    },
-    {
-      icon: <Bot className="w-8 h-8 text-accent" />,
-      title: "AI-Powered Feedback",
-      description: "Receive personalized and constructive feedback based on your outfit, occasion, and even the local weather."
-    },
-    {
-      icon: <Sparkles className="w-8 h-8 text-accent" />,
-      title: "Visual Recommendations",
-      description: "Don't just read suggestions—see them. Our AI generates images of recommended outfits to inspire you."
-    }
-  ];
-
   const galleryItems = [
     { src: "https://placehold.co/600x800.png", alt: "Stylish urban outfit", hint: "urban fashion" },
     { src: "https://placehold.co/600x800.png", alt: "Elegant evening wear", hint: "elegant dress" },
@@ -83,28 +65,6 @@ export default function Home() {
                     </p>
                 </Card>
             </div>
-        </section>
-
-        {/* 3. Features Section */}
-        <section className="py-20">
-          <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-4xl font-headline font-bold text-center mb-12">How It Works</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-              {features.map((feature, index) => (
-                <Card key={index} className="h-full bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg hover:shadow-accent/20 hover:-translate-y-2 transition-transform duration-300">
-                  <CardHeader className="items-center">
-                    <div className="p-4 bg-primary/10 rounded-full mb-4">
-                      {feature.icon}
-                    </div>
-                    <CardTitle className="font-headline text-2xl">{feature.title}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="text-center text-muted-foreground">
-                    {feature.description}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
         </section>
 
         {/* 4. AI Style in Action Section */}
