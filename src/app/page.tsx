@@ -20,8 +20,9 @@ export default function Home() {
         {/* 1. Hero Section */}
         <section className="relative h-[80vh] min-h-[600px] flex items-center justify-center text-center text-white">
       <Image
-        src="https://images.unsplash.com/photo-1501785888041-af3ef285b470?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80"
-        alt="Fashion runway background"
+        src="https://images.unsplash.com/photo-1511556532299-8967196e5005?ixlib=rb-4.0.3&auto=format&fit=crop&w=1920&q=80"
+        alt="Fashion flat lay background"
+        data-ai-hint="fashion flat lay"
         fill
         className="object-cover -z-10"
         priority
