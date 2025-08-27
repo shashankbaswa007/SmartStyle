@@ -20,7 +20,7 @@ export default function Home() {
         {/* 1. Hero Section */}
         <section className="relative h-[80vh] min-h-[600px] flex items-center justify-center text-center text-white">
       <Image
-        src="https://www.pexels.com/photo/green-high-top-sneakers-beside-bottoms-and-sunglasses-934069/"
+        src="https://images.pexels.com/photos/934069/pexels-photo-934069.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
         alt="Fashion flat lay background"
         data-ai-hint="fashion flat lay"
         fill
