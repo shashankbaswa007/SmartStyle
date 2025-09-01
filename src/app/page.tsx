@@ -7,11 +7,11 @@ import Image from 'next/image';
 
 export default function Home() {
   const galleryItems = [
-    { src: "https://placehold.co/600x800.png", alt: "Stylish urban outfit", hint: "urban fashion" },
-    { src: "https://placehold.co/600x800.png", alt: "Elegant evening wear", hint: "elegant dress" },
-    { src: "https://placehold.co/600x800.png", alt: "Casual summer look", hint: "summer casual" },
-    { src: "https://placehold.co/600x800.png", alt: "Professional work attire", hint: "work attire" },
-    { src: "https://placehold.co/600x800.png", alt: "Vibrant party dress", hint: "party fashion" },
+    { src: "https://images.pexels.com/photos/1926769/pexels-photo-1926769.jpeg?auto=compress&cs=tinysrgb&w=600", alt: "Stylish urban outfit", hint: "urban fashion" },
+    { src: "https://images.pexels.com/photos/983569/pexels-photo-983569.jpeg?auto=compress&cs=tinysrgb&w=600", alt: "Elegant evening wear", hint: "elegant dress" },
+    { src: "https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg?auto=compress&cs=tinysrgb&w=600", alt: "Casual summer look", hint: "summer casual" },
+    { src: "https://images.pexels.com/photos/298863/pexels-photo-298863.jpeg?auto=compress&cs=tinysrgb&w=600", alt: "Professional work attire", hint: "work attire" },
+    { src: "https://images.pexels.com/photos/1040945/pexels-photo-1040945.jpeg?auto=compress&cs=tinysrgb&w=600", alt: "Vibrant party dress", hint: "party fashion" },
   ];
 
   return (
