@@ -28,9 +28,6 @@ export default function Home() {
         priority
       />
 
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-t from-black via-black/70 to-transparent" />
-
       {/* Content */}
       <div className="relative z-10 p-4 animate-fade-in-up">
         <h1 className="text-5xl md:text-7xl font-headline font-extrabold tracking-tight text-foreground">
