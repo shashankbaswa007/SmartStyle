@@ -18,7 +18,7 @@ export default function Home() {
     <div className="flex flex-col min-h-screen">
       <main className="flex-grow">
         {/* 1. Hero Section */}
-        <section className="relative h-[80vh] min-h-[600px] flex items-center justify-center text-center text-white">
+        <section className="relative h-[80vh] min-h-[600px] flex items-center justify-center text-center">
       <Image
         src="https://images.pexels.com/photos/934069/pexels-photo-934069.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
         alt="Fashion flat lay background"
@@ -27,6 +27,7 @@ export default function Home() {
         className="object-cover -z-10"
         priority
       />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/20 to-transparent"></div>
 
       {/* Content */}
       <div className="relative z-10 p-4 animate-fade-in-up">
