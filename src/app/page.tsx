@@ -132,7 +132,7 @@ export default function Home() {
         {/* 6. Call-to-Action Footer Section */}
         <section className="relative py-20 text-center text-white">
           <Image
-            src="https://images.pexels.com/photos/3184454/pexels-photo-3184454.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
+            src="https://images.pexels.com/photos/322207/pexels-photo-322207.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
             alt="Stylish accessories flat lay"
             fill
             className="object-cover -z-10"
