@@ -73,7 +73,7 @@ export default function Home() {
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
                     <div className="relative w-full h-96 rounded-lg overflow-hidden shadow-2xl">
-                        <Image src="https://placehold.co/800x600.png" alt="Fashion model silhouette" layout="fill" objectFit="cover" data-ai-hint="fashion model" />
+                        <Image src="https://images.pexels.com/photos/8306370/pexels-photo-8306370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" alt="Fashion model silhouette" layout="fill" objectFit="cover" data-ai-hint="fashion model" />
                     </div>
                     <div>
                         <h2 className="text-4xl font-headline font-bold mb-6">From Upload to Upgrade</h2>
@@ -132,7 +132,7 @@ export default function Home() {
         {/* 6. Call-to-Action Footer Section */}
         <section className="relative py-20 text-center text-white">
           <Image
-            src="https://placehold.co/1920x600.png"
+            src="https://images.pexels.com/photos/3184454/pexels-photo-3184454.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
             alt="Stylish accessories flat lay"
             fill
             className="object-cover -z-10"
