@@ -23,12 +23,23 @@ const AnalyzeImageAndProvideRecommendationsInputSchema = z.object({
   weather: z.string().describe("The weather conditions at the person's current location."),
   skinTone: z.string().describe("The person's estimated skin tone."),
   dressColors: z.string().describe('A comma-separated list of the primary colors of the outfit.'),
-  previousRecommendation: z.string().optional().describe('A previous recommendation that the user was not satisfied with. If provided, generate a different recommendation.'),
+  previousRecommendation: z.string().optional().describe('A JSON string of a previous recommendation that the user was not satisfied with. If provided, generate a different recommendation.'),
 });
 export type AnalyzeImageAndProvideRecommendationsInput = z.infer<typeof AnalyzeImageAndProvideRecommendationsInputSchema>;
 
 const AnalyzeImageAndProvideRecommendationsOutputSchema = z.object({
-  recommendation: z.string().describe('The detailed clothing recommendation, formatted with a list of outfits and a pro tip.'),
+  feedback: z.string().describe("A paragraph of general feedback on the user's current outfit."),
+  highlights: z.array(z.string()).describe('A list of 2-3 key positive highlights or actionable style tips in short sentences.'),
+  colorSuggestions: z.array(z.object({
+    name: z.string().describe('The name of the color (e.g., "Dusty Rose").'),
+    hex: z.string().describe('The hex code for the color (e.g., "#D8A0A7").'),
+    reason: z.string().describe('A short sentence on why this color is recommended.'),
+  })).describe('An array of 3-4 recommended colors with their hex codes and reasons.'),
+  outfitRecommendations: z.array(z.object({
+    title: z.string().describe('A catchy title for the outfit (e.g., "Chic Casual Look").'),
+    items: z.array(z.string()).describe('A list of 2-4 clothing items for this outfit (e.g., "White Linen Shirt", "Beige Chino Shorts", "Brown Leather Loafers").'),
+  })).describe('A list of 2-3 complete outfit recommendations.'),
+  notes: z.string().describe('A concluding pro tip or a gentle style note in a single sentence.'),
   imagePrompt: z.string().describe('A concise, descriptive prompt for an image generation model, describing the top recommended outfit on a mannequin or person.'),
 });
 export type AnalyzeImageAndProvideRecommendationsOutput = z.infer<typeof AnalyzeImageAndProvideRecommendationsOutputSchema>;
@@ -41,7 +52,7 @@ const prompt = ai.definePrompt({
   name: 'analyzeImageAndProvideRecommendationsPrompt',
   input: {schema: AnalyzeImageAndProvideRecommendationsInputSchema},
   output: {schema: AnalyzeImageAndProvideRecommendationsOutputSchema},
-  prompt: `You are a friendly, world-class fashion expert. Your task is to analyze a user's current outfit and then recommend alternative clothing and styling choices.
+  prompt: `You are a friendly, world-class fashion expert. Your task is to analyze a user's current outfit and then recommend alternative clothing and styling choices in a structured format.
 
   **User's Context:**
   - **Occasion:** {{{occasion}}}
@@ -56,18 +67,17 @@ const prompt = ai.definePrompt({
 
   **1. Outfit Analysis First:**
   - Evaluate the uploaded outfit in the photo and determine if it is:
-    - **Perfect:** Appreciate the user’s choice and suggest 1–2 additional outfit ideas they could also try for variety.
-    - **Good but could be better:** Point out small improvements (like a better color match, footwear upgrade, or fabric choice). Suggest an alternative that enhances the look.
-    - **Not suitable:** Gently explain why (e.g., occasion mismatch, wrong vibe, weather impracticality) and recommend a better outfit that would be perfect.
-  - Always keep the tone positive, encouraging, and fashion-expert-like (never harsh or judgmental).
+    - **Perfect:** Appreciate the user’s choice and suggest additional ideas for variety.
+    - **Good but could be better:** Point out small improvements.
+    - **Not suitable:** Gently explain why and recommend better alternatives.
+  - Your analysis should form the basis of the "feedback" field. Always keep the tone positive and encouraging.
 
   **2. Recommendation Rules:**
-  - Recommendations MUST perfectly match both the occasion and the chosen genre. A "Party" in "Formal" genre is a suit/tux, while a "Party" in "Casual" is jeans/trendy shirt.
-  - Adapt all suggestions for the weather. Don't suggest a heavy coat in hot weather.
-  - Keep suggestions stylish but practical. Avoid overly extravagant items unless the genre is high-fashion.
-  - Mention specific color combinations that complement the user’s skin tone and their original outfit colors.
-  - Include specific accessory and shoe recommendations that fit the vibe (e.g., sneakers for streetwear, loafers for semi-formal).
-  - Provide 2-3 distinct alternative outfit ideas so the user has choices.
+  - Recommendations MUST perfectly match the occasion and genre.
+  - Adapt all suggestions for the weather.
+  - Keep suggestions stylish but practical.
+  - Mention specific color combinations that complement the user’s skin tone.
+  - Provide 2-3 distinct alternative outfit ideas.
   
   {{#if previousRecommendation}}
   The user was not satisfied with this previous recommendation: "{{{previousRecommendation}}}"
@@ -75,19 +85,13 @@ const prompt = ai.definePrompt({
   {{/if}}
 
   **Output Structure:**
-  Your entire response should be a single block of text formatted exactly like this:
-
-  **Feedback on Your Outfit:**
-  [Your analysis of the current outfit goes here, following the "Outfit Analysis First" guideline.]
-
-  **Recommended Outfits:**
-  1.  **[Outfit Title e.g., "Chic Casual Look"]**: [Describe top, bottom, footwear, and accessories. Explain why it fits the occasion, genre, and user's features.]
-  2.  **[Outfit Title e.g., "Smart Streetwear Vibe"]**: [Describe a different complete outfit, offering variety.]
-  3.  **[Outfit Title e.g., "Elegant Alternative"]**: [Optional: A third suggestion for added style or a different take.]
-
-  💡 **Pro tip:** [Give one quick, actionable styling or color-matching tip.]
-
-  Finally, based on your **first and best** recommendation, create a concise, descriptive prompt for an image generation model to create a photorealistic image of that recommended outfit. This prompt should describe the clothing items, colors, and style on a mannequin or anonymous person, suitable for a fashion lookbook.
+  Your entire response MUST be a valid JSON object matching the output schema. Populate each field according to these instructions:
+  - **feedback**: Your overall analysis of the user's current outfit.
+  - **highlights**: 2-3 short, bullet-point-style highlights or key takeaways.
+  - **colorSuggestions**: Suggest 3-4 complementary colors. Provide a name, a valid hex code, and a brief reason.
+  - **outfitRecommendations**: Create 2-3 distinct outfit suggestions, each with a title and a list of specific clothing items.
+  - **notes**: A final, single-sentence "pro tip".
+  - **imagePrompt**: Based on your **first and best** outfit recommendation, create a concise prompt for an image generation model to create a photorealistic image of that outfit on a mannequin.
   `,
 });
 

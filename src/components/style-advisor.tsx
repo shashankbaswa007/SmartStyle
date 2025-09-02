@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { getWeatherData } from "@/app/actions";
 import { cn } from "@/lib/utils";
+import { StyleAdvisorResults } from "./style-advisor-results";
 
 const genders = [
   { value: "Male", label: "Male" },
@@ -291,151 +292,154 @@ export function StyleAdvisor() {
     
     await performAnalysis({
       ...lastAnalysisRequest,
-      previousRecommendation: analysisResult.recommendation,
+      previousRecommendation: JSON.stringify(analysisResult),
     });
   };
 
   return (
     <div className="space-y-12">
       <canvas ref={canvasRef} className="hidden"></canvas>
-      <Card className="w-full shadow-2xl shadow-accent/20 border-border/20 animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
-        <CardHeader>
-          <CardTitle className="text-3xl font-headline">Create Your Style Profile</CardTitle>
-          <CardDescription>
-            Tell us a bit about your look, and our AI will provide personalized feedback.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-              <FormField
-                control={form.control}
-                name="image"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-base font-semibold">1. Upload Your Outfit</FormLabel>
-                    <FormControl>
-                      <div className="relative flex justify-center items-center w-full h-80 rounded-lg p-4 text-center cursor-pointer bg-primary/20 group animate-fade-in-up transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl hover:shadow-accent/20"
-                           style={{
-                             border: "2px dashed hsl(var(--border))",
-                             boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), inset 0 0 10px 5px rgba(255,255,255,0.05)"
-                           }}>
-                        <Input
-                          type="file"
-                          accept="image/*"
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                          onChange={(e) => {
-                            field.onChange(e.target.files);
-                            handleImageChange(e);
-                          }}
-                        />
-                        {previewImage ? (
-                          <Image
-                            src={previewImage}
-                            alt="Outfit preview"
-                            fill
-                            className="object-contain rounded-md p-2"
-                            data-ai-hint="person outfit"
+      
+      {!analysisResult && !isLoading && (
+        <Card className="w-full shadow-2xl shadow-accent/20 border-border/20 animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
+          <CardHeader>
+            <CardTitle className="text-3xl font-headline">Create Your Style Profile</CardTitle>
+            <CardDescription>
+              Tell us a bit about your look, and our AI will provide personalized feedback.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+                <FormField
+                  control={form.control}
+                  name="image"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-base font-semibold">1. Upload Your Outfit</FormLabel>
+                      <FormControl>
+                        <div className="relative flex justify-center items-center w-full h-80 rounded-lg p-4 text-center cursor-pointer bg-primary/20 group animate-fade-in-up transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl hover:shadow-accent/20"
+                            style={{
+                              border: "2px dashed hsl(var(--border))",
+                              boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), inset 0 0 10px 5px rgba(255,255,255,0.05)"
+                            }}>
+                          <Input
+                            type="file"
+                            accept="image/*"
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                            onChange={(e) => {
+                              field.onChange(e.target.files);
+                              handleImageChange(e);
+                            }}
                           />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center space-y-2 text-muted-foreground group-hover:text-accent transition-colors">
-                            <UploadCloud className="w-12 h-12 text-accent/80 group-hover:text-accent transition-colors" />
-                            <p className="font-semibold">Click to upload or drag and drop</p>
-                            <p className="text-xs">PNG, JPG up to 10MB</p>
-                          </div>
-                        )}
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <div className="space-y-6">
-                <FormField
-                  control={form.control}
-                  name="occasion"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-semibold">2. Describe the Occasion</FormLabel>
-                      <FormControl>
-                        <Input 
-                          placeholder="e.g., Casual brunch, formal wedding, birthday party..." 
-                          {...field} 
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                
-                <FormField
-                  control={form.control}
-                  name="genre"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-semibold">3. Define the Style Genre</FormLabel>
-                      <FormControl>
-                         <Input 
-                           placeholder="e.g., Streetwear, minimalist, formal, vintage..." 
-                           {...field} 
-                         />
+                          {previewImage ? (
+                            <Image
+                              src={previewImage}
+                              alt="Outfit preview"
+                              fill
+                              className="object-contain rounded-md p-2"
+                              data-ai-hint="person outfit"
+                            />
+                          ) : (
+                            <div className="flex flex-col items-center justify-center space-y-2 text-muted-foreground group-hover:text-accent transition-colors">
+                              <UploadCloud className="w-12 h-12 text-accent/80 group-hover:text-accent transition-colors" />
+                              <p className="font-semibold">Click to upload or drag and drop</p>
+                              <p className="text-xs">PNG, JPG up to 10MB</p>
+                            </div>
+                          )}
+                        </div>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
 
-                <FormField
-                  control={form.control}
-                  name="gender"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-base font-semibold">4. Select Your Gender</FormLabel>
-                       <div className="flex flex-wrap gap-3 pt-2">
-                        {genders.map((gender) => (
-                          <Button
-                            key={gender.value}
-                            type="button"
-                            variant={field.value === gender.value ? "default" : "outline"}
-                            className={cn(
-                              "rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 transform hover:scale-105",
-                              field.value === gender.value
-                                ? "bg-accent text-accent-foreground shadow-lg"
-                                : "bg-primary/50 border-border/50"
-                            )}
-                            onClick={() => field.onChange(gender.value)}
-                          >
-                             <User className="w-4 h-4 mr-2" />
-                            {gender.label}
-                          </Button>
-                        ))}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+                <div className="space-y-6">
+                  <FormField
+                    control={form.control}
+                    name="occasion"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base font-semibold">2. Describe the Occasion</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="e.g., Casual brunch, formal wedding, birthday party..." 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  
+                  <FormField
+                    control={form.control}
+                    name="genre"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base font-semibold">3. Define the Style Genre</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="e.g., Streetwear, minimalist, formal, vintage..." 
+                            {...field} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-              <Button type="submit" size="lg" className="w-full text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 hover:scale-105" disabled={isLoading || isFetchingWeather}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    {loadingMessage}
-                  </>
-                ) : isFetchingWeather ? (
-                   <>
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Fetching Weather...
-                  </>
-                ) : (
-                  "Get Style Advice"
-                )}
-              </Button>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+                  <FormField
+                    control={form.control}
+                    name="gender"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base font-semibold">4. Select Your Gender</FormLabel>
+                        <div className="flex flex-wrap gap-3 pt-2">
+                          {genders.map((gender) => (
+                            <Button
+                              key={gender.value}
+                              type="button"
+                              variant={field.value === gender.value ? "default" : "outline"}
+                              className={cn(
+                                "rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 transform hover:scale-105",
+                                field.value === gender.value
+                                  ? "bg-accent text-accent-foreground shadow-lg"
+                                  : "bg-primary/50 border-border/50"
+                              )}
+                              onClick={() => field.onChange(gender.value)}
+                            >
+                              <User className="w-4 h-4 mr-2" />
+                              {gender.label}
+                            </Button>
+                          ))}
+                        </div>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <Button type="submit" size="lg" className="w-full text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 hover:scale-105" disabled={isLoading || isFetchingWeather}>
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      {loadingMessage}
+                    </>
+                  ) : isFetchingWeather ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Fetching Weather...
+                    </>
+                  ) : (
+                    "Get Style Advice"
+                  )}
+                </Button>
+              </form>
+            </Form>
+          </CardContent>
+        </Card>
+      )}
 
       {isLoading && (
         <Card className="w-full shadow-lg animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
@@ -464,33 +468,14 @@ export function StyleAdvisor() {
       )}
 
       {analysisResult && !isLoading && (
-        <Card className="w-full shadow-xl shadow-accent/20 animate-slide-up-fade border-accent/30 bg-card/60 dark:bg-card/40 backdrop-blur-xl">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-3 text-3xl font-headline">
-              <Sparkles className="w-8 h-8 text-accent" /> Your Style Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-8 text-base">
-            <div>
-              <p className="text-muted-foreground leading-relaxed whitespace-pre-wrap">{analysisResult.recommendation}</p>
-            </div>
-            {generatedImageUrl ? (
-                <div className="mt-6">
-                  <h3 className="font-bold text-2xl mb-4 text-foreground tracking-tight font-headline flex items-center gap-2">
-                    <Wand2 /> Visual Suggestion
-                  </h3>
-                  <div className="relative aspect-square w-full max-w-md mx-auto rounded-lg overflow-hidden shadow-lg border-2 border-accent/30">
-                     <Image src={generatedImageUrl} alt="Generated outfit recommendation" fill className="object-cover" data-ai-hint="fashion outfit" />
-                  </div>
-                </div>
-            ) : (
-                <div className="space-y-3 mt-6">
-                  <Skeleton className="h-8 w-1/2" />
-                  <Skeleton className="h-64 w-full max-w-md mx-auto rounded-lg" />
-                </div>
-            )}
+         <Card className="w-full shadow-xl shadow-accent/20 animate-slide-up-fade border-accent/30 bg-card/60 dark:bg-card/40 backdrop-blur-xl">
+          <CardContent className="p-6 md:p-8">
+             <StyleAdvisorResults 
+                analysisResult={analysisResult} 
+                generatedImageUrl={generatedImageUrl}
+              />
           </CardContent>
-          <CardFooter className="flex flex-col md:flex-row gap-4">
+           <CardFooter className="flex flex-col md:flex-row gap-4 p-6 bg-primary/20">
             <Button onClick={handleGetAnotherRecommendation} variant="outline" className="w-full text-base">
               <RefreshCw className="mr-2 h-4 w-4" />
               Get Another Recommendation
@@ -505,5 +490,3 @@ export function StyleAdvisor() {
     </div>
   );
 }
-
-    
