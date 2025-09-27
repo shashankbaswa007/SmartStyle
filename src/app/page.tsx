@@ -4,6 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { ArrowRight, Bot, Eye, Palette, Sparkles } from 'lucide-react';
 import Image from 'next/image';
+import GradientText from '@/components/GradientText';
+import TextType from '@/components/TextType';
+import DecryptedText from '@/components/DecryptedText';
+import FooterText from '@/components/FooterText';
+import Magnet from '@/components/Magnet';
 
 export default function Home() {
   const galleryItems = [
@@ -42,14 +47,16 @@ export default function Home() {
           instant, intelligent feedback and visual recommendations.
         </p>
         <div className="mt-12">
+            <Magnet padding={50} magnetStrength={2}>
           <Link href="/style-check">
             <Button
               size="lg"
-              className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 transform hover:scale-105"
+              className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30"
             >
               Upload Your Outfit <ArrowRight className="ml-2" />
             </Button>
           </Link>
+            </Magnet>
         </div>
       </div>
     </section>
@@ -58,10 +65,22 @@ export default function Home() {
         <section className="py-20 bg-gradient-to-br from-primary/20 via-background to-accent/20">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
                 <Card className="max-w-4xl mx-auto bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg p-8">
-                    <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">What is SmartStyle?</h2>
-                    <p className="text-muted-foreground text-lg">
-                        SmartStyle is a cutting-edge application that leverages artificial intelligence to serve as your personal fashion consultant. By analyzing your outfits, considering the occasion, and even checking the weather, SmartStyle provides you with tailored recommendations to ensure you always look your best. It's more than just advice; it's visual inspiration.
-                    </p>
+                    <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">
+                      <DecryptedText
+                        text="What is SmartStyle?"
+                        animateOn="view"
+                        revealDirection="center"
+                      />
+                    </h2>
+                    <TextType 
+                      text={["SmartStyle is a cutting-edge application that leverages artificial intelligence to serve as your personal fashion consultant. By analyzing your outfits, considering the occasion, and even checking the weather, SmartStyle provides you with tailored recommendations to ensure you always look your best. It's more than just advice; it's visual inspiration."]}
+                      typingSpeed={20}
+                      pauseDuration={10000}
+                      showCursor={true}
+                      cursorCharacter="|"
+                      className="text-muted-foreground text-lg"
+                      loop={false}
+                    />
                 </Card>
             </div>
         </section>
@@ -138,16 +157,23 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-black/60" />
           <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8">
-            <h2 className="text-4xl md:text-5xl font-headline font-bold">Ready to upgrade your style?</h2>
-            <p className="mt-4 text-lg max-w-2xl mx-auto">
-              Let our AI be your guide to a more confident and stylish you. Get started for free.
-            </p>
+            <GradientText
+              colors={["#A78BFA", "#F472B6", "#A78BFA"]}
+              animationSpeed={4}
+              showBorder={false}
+              className="text-4xl md:text-5xl font-headline font-bold"
+            >
+              Ready to upgrade your style?
+            </GradientText>
+            <FooterText />
             <div className="mt-8">
+                <Magnet padding={50} magnetStrength={2}>
               <Link href="/style-check">
-                <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 transform hover:scale-105">
+                <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30">
                   Try SmartStyle Now ✨
                 </Button>
               </Link>
+                </Magnet>
             </div>
           </div>
         </section>
