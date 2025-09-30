@@ -41,6 +41,12 @@ const nextConfig = {
       }
     ],
   },
+  webpack: (config) => {
+    config.externals.push({
+        'require-in-the-middle': 'require-in-the-middle',
+    });
+    return config;
+  }
 };
 
 module.exports = nextConfig;

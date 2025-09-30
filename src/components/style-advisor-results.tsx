@@ -91,7 +91,7 @@ export function StyleAdvisorResults({
            <motion.div variants={itemVariants} className={cardClasses}>
             <div className="p-6">
                <h3 className="font-bold text-xl mb-4 text-foreground flex items-center gap-2"><PenTool className="text-accent" /> Pro Tip</h3>
-              <p className="text-muted-foreground italic">"{analysisResult.notes}"</p>
+              <p className="text-muted-foreground italic">&ldquo;{analysisResult.notes}&rdquo;</p>
             </div>
           </motion.div>
         </div>
