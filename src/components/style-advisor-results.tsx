@@ -123,10 +123,10 @@ export function StyleAdvisorResults({
                 <ul className="space-y-1 list-disc pl-5 text-muted-foreground text-sm">
                   {outfit.items.map((item, j) => (
                     <li key={j}>{item}</li>
-                  ))}\
+                  ))}
                 </ul>
               </div>
-            ))}\
+            ))}
           </div>
         </div>
       </motion.div>
