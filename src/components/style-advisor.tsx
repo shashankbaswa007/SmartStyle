@@ -337,7 +337,8 @@ export function StyleAdvisor() {
                               src={previewImage}
                               alt="Outfit preview"
                               fill
-                              className="object-contain rounded-md p-2"
+                              style={{ objectFit: 'contain' }}
+                              className="rounded-md p-2"
                               data-ai-hint="person outfit"
                             />
                           ) : (

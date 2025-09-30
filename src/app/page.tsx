@@ -29,7 +29,8 @@ export default function Home() {
         alt="Fashion flat lay background"
         data-ai-hint="fashion flat lay"
         fill
-        className="object-cover -z-10"
+        style={{ objectFit: 'cover' }}
+        className="-z-10"
         priority
       />
       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
@@ -90,7 +91,7 @@ export default function Home() {
             <div className="container mx-auto px-4 sm:px-6 lg:px-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
                     <div className="relative w-full h-96 rounded-lg overflow-hidden shadow-2xl">
-                        <Image src="https://images.pexels.com/photos/8306370/pexels-photo-8306370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" alt="Fashion model silhouette" layout="fill" objectFit="cover" data-ai-hint="fashion model" />
+                        <Image src="https://images.pexels.com/photos/8306370/pexels-photo-8306370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" alt="Fashion model silhouette" fill style={{ objectFit: 'cover' }} data-ai-hint="fashion model" />
                     </div>
                     <div>
                         <h2 className="text-4xl font-headline font-bold mb-6">From Upload to Upgrade</h2>
@@ -133,7 +134,7 @@ export default function Home() {
                     <div className="p-1">
                       <Card className="overflow-hidden group">
                         <CardContent className="p-0 aspect-[3/4] relative">
-                          <Image src={item.src} alt={item.alt} fill className="object-cover transition-transform duration-300 group-hover:scale-105" data-ai-hint={item.hint} />
+                          <Image src={item.src} alt={item.alt} fill style={{ objectFit: 'cover' }} className="transition-transform duration-300 group-hover:scale-105" data-ai-hint={item.hint} />
                         </CardContent>
                       </Card>
                     </div>
@@ -152,7 +153,8 @@ export default function Home() {
             src="https://images.pexels.com/photos/322207/pexels-photo-322207.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
             alt="Stylish accessories flat lay"
             fill
-            className="object-cover -z-10"
+            style={{ objectFit: 'cover' }}
+            className="-z-10"
             data-ai-hint="fashion accessories"
           />
           <div className="absolute inset-0 bg-black/60" />

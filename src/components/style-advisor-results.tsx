@@ -103,7 +103,7 @@ export function StyleAdvisorResults({
                 <h3 className="font-bold text-xl mb-4 text-foreground flex items-center gap-2"><Wand2 className="text-accent" /> Visual Suggestion</h3>
                  {generatedImageUrl ? (
                     <div className="relative aspect-square w-full rounded-lg overflow-hidden shadow-lg border-2 border-accent/30">
-                       <Image src={generatedImageUrl} alt="Generated outfit recommendation" fill className="object-cover" data-ai-hint="fashion outfit" />
+                       <Image src={generatedImageUrl} alt="Generated outfit recommendation" fill style={{ objectFit: 'cover' }} data-ai-hint="fashion outfit" />
                     </div>
                   ) : (
                     <div className="aspect-square w-full rounded-lg bg-muted animate-pulse" />
@@ -123,10 +123,10 @@ export function StyleAdvisorResults({
                 <ul className="space-y-1 list-disc pl-5 text-muted-foreground text-sm">
                   {outfit.items.map((item, j) => (
                     <li key={j}>{item}</li>
-                  ))}
+                  ))}\
                 </ul>
               </div>
-            ))}
+            ))}\
           </div>
         </div>
       </motion.div>
