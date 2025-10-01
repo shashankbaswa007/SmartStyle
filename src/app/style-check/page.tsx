@@ -27,7 +27,6 @@ export default function StyleCheckPage() {
               stroke={true}
               width={false}
               weight={true}
-              italic={false}
               textColor="#C4B5FD"
               strokeColor="#5B21B6"
               minFontSize={36}

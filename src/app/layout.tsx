@@ -18,6 +18,9 @@ const playfairDisplay = Playfair_Display({
 export const metadata: Metadata = {
   title: 'SmartStyle',
   description: 'Get AI-powered style feedback and recommendations.',
+  icons: {
+    icon: '/favicon.ico',
+  },
 };
 
 export default function RootLayout({
