@@ -10,6 +10,14 @@ import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 
+// Debug: Log what environment variables are available
+console.log('🔍 Firebase env check:', {
+  apiKey: typeof process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: typeof process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: typeof process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  apiKeyValue: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.substring(0, 10) + '...',
+});
+
 // Firebase configuration from environment variables
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -20,8 +28,37 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
+console.log('🔍 Firebase config object:', {
+  hasApiKey: !!firebaseConfig.apiKey,
+  hasAuthDomain: !!firebaseConfig.authDomain,
+  hasProjectId: !!firebaseConfig.projectId,
+  configKeys: Object.keys(firebaseConfig),
+});
+
+// Validate Firebase configuration values (not process.env, but actual config values)
+const missingFields = Object.entries(firebaseConfig)
+  .filter(([key, value]) => !value)
+  .map(([key]) => key);
+
+if (missingFields.length > 0) {
+  console.error('❌ Missing Firebase configuration fields:', missingFields.join(', '));
+  console.error('Firebase config object:', firebaseConfig);
+  console.error('This usually means environment variables are not being loaded correctly.');
+  console.error('Check that .env or .env.local file exists with NEXT_PUBLIC_FIREBASE_* variables.');
+  throw new Error(
+    `Missing Firebase configuration: ${missingFields.map(f => 'NEXT_PUBLIC_FIREBASE_' + f.toUpperCase()).join(', ')}`
+  );
+}
+
 // Initialize Firebase (singleton pattern - only initialize once)
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+let app;
+try {
+  app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+  console.log('✅ Firebase initialized successfully');
+} catch (error) {
+  console.error('❌ Firebase initialization error:', error);
+  throw error;
+}
 
 // Initialize Firebase services
 export const auth: Auth = getAuth(app);

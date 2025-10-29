@@ -6,10 +6,12 @@ import { Sparkles, Palette, Shirt, PenTool, Wand2, ShoppingCart, ShoppingBag, Ex
 import type { AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
 import { Separator } from "./ui/separator";
 import { RecommendationFeedback } from "./RecommendationFeedback";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { collection, addDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { trackOutfitSelection } from "@/lib/personalization";
+import { saveLikedOutfit } from "@/lib/likedOutfits";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
@@ -21,16 +23,21 @@ interface StyleAdvisorResultsProps {
   generatedImageUrls: string[];
   imageSources?: ('gemini' | 'pollinations' | 'placeholder')[];
   recommendationId: string | null;
+  gender?: string; // Add gender for better shopping link results
 }
 
-type ShoppingLinks = { amazon?: string | null; flipkart?: string | null; myntra?: string | null };
+type ShoppingLinks = { amazon?: string | null; tatacliq?: string | null; myntra?: string | null };
+
+// Type for color palette - can be either Gemini object format or legacy string format
+type ColorValue = string | { name?: string; hex?: string; percentage?: number };
+
 
 // Helper function to convert color names to hex codes
 const convertColorNameToHex = (colorName: string): string => {
   // If already hex, return as-is
-  if (colorName.startsWith('#')) return colorName;
+  if (colorName.startsWith('#')) return colorName.toUpperCase();
   
-  // Common color name to hex mappings
+  // Common color name to hex mappings (comprehensive fashion color database)
   const colorMap: Record<string, string> = {
     // Basics
     'black': '#000000', 'white': '#FFFFFF', 'gray': '#808080', 'grey': '#808080',
@@ -39,27 +46,59 @@ const convertColorNameToHex = (colorName: string): string => {
     
     // Extended colors
     'navy': '#000080', 'navy blue': '#000080', 'teal': '#008080', 'maroon': '#800000',
-    'olive': '#808000', 'lime': '#00FF00', 'aqua': '#00FFFF', 'fuchsia': '#FF00FF',
-    'silver': '#C0C0C0', 'gold': '#FFD700', 'beige': '#F5F5DC', 'tan': '#D2B48C',
-    'khaki': '#F0E68C', 'ivory': '#FFFFF0', 'cream': '#FFFDD0', 'coral': '#FF7F50',
-    'salmon': '#FA8072', 'crimson': '#DC143C', 'burgundy': '#800020', 'wine': '#722F37',
+    'olive': '#808000', 'lime': '#00FF00', 'aqua': '#00FFFF', 'cyan': '#00FFFF',
+    'fuchsia': '#FF00FF', 'magenta': '#FF00FF', 'silver': '#C0C0C0', 'gold': '#FFD700',
+    'beige': '#F5F5DC', 'tan': '#D2B48C', 'khaki': '#F0E68C', 'ivory': '#FFFFF0',
+    'cream': '#FFFDD0', 'coral': '#FF7F50', 'salmon': '#FA8072', 'crimson': '#DC143C',
+    'burgundy': '#800020', 'wine': '#722F37', 'indigo': '#4B0082', 'violet': '#EE82EE',
     
-    // Shades
-    'light gray': '#D3D3D3', 'dark gray': '#A9A9A9', 'light blue': '#ADD8E6',
-    'dark blue': '#00008B', 'light green': '#90EE90', 'dark green': '#006400',
-    'light pink': '#FFB6C1', 'dark red': '#8B0000', 'sky blue': '#87CEEB',
+    // Shades of gray/grey
+    'light gray': '#D3D3D3', 'light grey': '#D3D3D3', 'dark gray': '#A9A9A9', 
+    'dark grey': '#A9A9A9', 'charcoal': '#36454F', 'slate': '#708090', 'ash': '#B2BEB5',
+    
+    // Shades of blue
+    'light blue': '#ADD8E6', 'dark blue': '#00008B', 'sky blue': '#87CEEB',
     'royal blue': '#4169E1', 'midnight blue': '#191970', 'powder blue': '#B0E0E6',
+    'steel blue': '#4682B4', 'cornflower blue': '#6495ED', 'cadet blue': '#5F9EA0',
     
-    // Fashion colors
-    'charcoal': '#36454F', 'slate': '#708090', 'taupe': '#483C32',
-    'mauve': '#E0B0FF', 'lavender': '#E6E6FA', 'mint': '#98FF98',
-    'peach': '#FFDAB9', 'rose': '#FF007F', 'sage': '#9DC183',
-    'mustard': '#FFDB58', 'rust': '#B7410E', 'emerald': '#50C878',
-    'sapphire': '#0F52BA', 'ruby': '#E0115F', 'amber': '#FFBF00',
+    // Shades of green
+    'light green': '#90EE90', 'dark green': '#006400', 'lime green': '#32CD32',
+    'forest green': '#228B22', 'sea green': '#2E8B57', 'olive green': '#556B2F',
+    
+    // Shades of red/pink
+    'light pink': '#FFB6C1', 'dark red': '#8B0000', 'deep pink': '#FF1493',
+    'hot pink': '#FF69B4', 'rose': '#FF007F', 'ruby': '#E0115F',
+    
+    // Fashion-specific colors
+    'taupe': '#483C32', 'mauve': '#E0B0FF', 'lavender': '#E6E6FA',
+    'mint': '#98FF98', 'mint green': '#98FF98', 'peach': '#FFDAB9',
+    'sage': '#9DC183', 'sage green': '#9DC183', 'mustard': '#FFDB58',
+    'rust': '#B7410E', 'emerald': '#50C878', 'emerald green': '#50C878',
+    'sapphire': '#0F52BA', 'amber': '#FFBF00', 'turquoise': '#40E0D0',
+    'copper': '#B87333', 'bronze': '#CD7F32', 'champagne': '#F7E7CE',
+    'denim': '#1560BD', 'denim blue': '#1560BD', 'sky': '#87CEEB',
+    
+    // Neutrals
+    'off white': '#FAF9F6', 'off-white': '#FAF9F6', 'eggshell': '#F0EAD6',
+    'bone': '#E3DAC9', 'ecru': '#C2B280', 'sand': '#C2B280',
+    
+    // Warm tones
+    'terracotta': '#E2725B', 'brick': '#CB4154', 'brick red': '#CB4154',
+    'burnt orange': '#CC5500', 'burnt sienna': '#E97451',
+    
+    // Cool tones
+    'periwinkle': '#CCCCFF', 'lilac': '#C8A2C8', 'plum': '#DDA0DD',
   };
 
   const normalized = colorName.toLowerCase().trim();
-  return colorMap[normalized] || '#808080'; // Default to gray if unknown
+  const hexValue = colorMap[normalized] || '#808080'; // Default to gray if unknown
+  
+  // Log if we had to use the default
+  if (hexValue === '#808080' && normalized !== 'gray' && normalized !== 'grey') {
+    console.warn(`⚠️ Unknown color name: "${colorName}" - using gray as fallback`);
+  }
+  
+  return hexValue;
 };
 
 const containerVariants = {
@@ -91,6 +130,7 @@ export function StyleAdvisorResults({
   generatedImageUrls,
   imageSources = [],
   recommendationId,
+  gender,
 }: StyleAdvisorResultsProps) {
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedOutfit, setSelectedOutfit] = useState<string | null>(null);
@@ -98,6 +138,8 @@ export function StyleAdvisorResults({
   const { toast } = useToast();
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
+  const [enrichedOutfits, setEnrichedOutfits] = useState(analysisResult.outfitRecommendations);
+  const [loadingLinks, setLoadingLinks] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   
   // NEW: Track image loading state
@@ -164,7 +206,7 @@ export function StyleAdvisorResults({
   }, []);
 
   const handleUseOutfit = async (outfitIndex: number, outfitTitle: string) => {
-    console.log('🔘 User clicked "Use This Outfit"', { 
+    console.log('❤️ User liked outfit', { 
       outfitIndex, 
       outfitTitle,
       userId, 
@@ -215,9 +257,94 @@ export function StyleAdvisorResults({
       const result = await saveRecommendationUsage(idToken, recommendationId, outfitIndex, outfitTitle);
       
       if (result.success) {
-        setSelectedOutfit(`outfit${outfitIndex}`);
-        // Also track for personalization
-        await trackOutfitSelection(userId, recommendationId, `outfit${outfitIndex}` as any);
+        setSelectedOutfit(`outfit${outfitIndex + 1}`);  // Fixed: Add + 1 to match UI rendering
+        
+        // Also track for personalization (wrapped in try-catch to prevent errors)
+        try {
+          await trackOutfitSelection(userId, recommendationId, `outfit${outfitIndex + 1}` as any);  // Fixed: Add + 1
+        } catch (trackError) {
+          console.warn('⚠️ Failed to track outfit selection (non-critical):', trackError);
+          // Don't throw - this is non-critical, the like still succeeded
+        }
+        
+        // Save to liked outfits collection
+        const outfit = enrichedOutfits[outfitIndex];
+        if (outfit) {
+          console.log('💾 Attempting to save outfit to likes...', {
+            userId,
+            outfitTitle: outfit.title,
+            hasImageUrl: !!generatedImageUrls[outfitIndex],
+            imageUrl: generatedImageUrls[outfitIndex]?.substring(0, 50) + '...',
+            hasShoppingLinks: !!outfit.shoppingLinks,
+            shoppingLinks: outfit.shoppingLinks,
+          });
+          
+          // Ensure we have valid data before saving
+          const imageUrl = generatedImageUrls[outfitIndex];
+          if (!imageUrl) {
+            console.error('❌ No image URL available for outfit', outfitIndex);
+            toast({
+              title: "Cannot Save",
+              description: "Image not available for this outfit",
+              variant: "destructive",
+            });
+            return;
+          }
+
+          // Convert color palette to hex strings safely
+          const colorPalette = (outfit.colorPalette || []).map(c => {
+            if (typeof c === 'string') {
+              return c.startsWith('#') ? c : convertColorNameToHex(c);
+            }
+            const colorObj = c as { hex?: string; name?: string };
+            return colorObj.hex || convertColorNameToHex(colorObj.name || 'gray');
+          });
+          
+          const likedOutfitResult = await saveLikedOutfit(userId, {
+            imageUrl,
+            title: outfit.title || 'Untitled Outfit',
+            description: outfit.description || outfit.title || 'No description',
+            items: Array.isArray(outfit.items) ? outfit.items : [],
+            colorPalette,
+            shoppingLinks: {
+              amazon: outfit.shoppingLinks?.amazon || null,
+              tatacliq: outfit.shoppingLinks?.tatacliq || null,
+              myntra: outfit.shoppingLinks?.myntra || null,
+            },
+            likedAt: Date.now(),
+            recommendationId: recommendationId || `rec_${Date.now()}`,
+          });
+          
+          console.log('📊 Save liked outfit result:', likedOutfitResult);
+          
+          if (likedOutfitResult.isDuplicate) {
+            console.log('ℹ️ Outfit already in likes');
+            toast({
+              title: "Already Liked",
+              description: "This outfit is already in your favorites!",
+            });
+          } else if (likedOutfitResult.success) {
+            console.log('✅ Outfit saved to likes collection');
+            toast({
+              title: "Added to Favorites! ❤️",
+              description: `"${outfit.title}" has been added to your likes!`,
+            });
+          } else {
+            console.error('❌ Failed to save to likes:', likedOutfitResult.message);
+            toast({
+              title: "Couldn't Save",
+              description: likedOutfitResult.message || "Failed to add to favorites",
+              variant: "destructive",
+            });
+          }
+        } else {
+          console.error('❌ Outfit data not found at index:', outfitIndex);
+          toast({
+            title: "Error",
+            description: "Outfit data not available",
+            variant: "destructive",
+          });
+        }
         
         console.log('✅ Outfit selection tracked successfully!');
         toast({
@@ -265,12 +392,12 @@ export function StyleAdvisorResults({
     }
   };
 
-  const findSimilar = async (query: string, colors?: string[]): Promise<ShoppingLinks | null> => {
+  const findSimilar = async (query: string, colors?: string[], genderParam?: string): Promise<ShoppingLinks | null> => {
     try {
       const res = await fetch('/api/tavily/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, colors }),
+        body: JSON.stringify({ query, colors, gender: genderParam }),
       });
       const data = await res.json();
       return data?.links as ShoppingLinks | null;
@@ -279,6 +406,104 @@ export function StyleAdvisorResults({
       return null;
     }
   };
+
+  // Automatically fetch shopping links for all outfits on mount
+  useEffect(() => {
+    const generateSearchUrls = (query: string, genderParam?: string) => {
+      const encodedQuery = encodeURIComponent(query);
+      const genderPath = genderParam === 'male' ? 'men' : genderParam === 'female' ? 'women' : 'shop';
+      return {
+        amazon: `https://www.amazon.in/s?k=${encodedQuery}${genderParam ? `+${genderParam}` : ''}&rh=n:1968024031`,
+        tatacliq: genderParam && genderParam !== 'neutral'
+          ? `https://www.tatacliq.com/search/?searchCategory=${genderParam === 'male' ? 'men' : 'women'}&text=${encodedQuery}`
+          : `https://www.tatacliq.com/search/?text=${encodedQuery}`,
+        myntra: `https://www.myntra.com/${genderPath}?rawQuery=${encodedQuery}`
+      };
+    };
+
+    const fetchShoppingLinks = async () => {
+      try {
+        console.log('🛍️ Checking shopping links for outfits...');
+        setLoadingLinks(true);
+        
+        const updatedOutfits = await Promise.all(
+          analysisResult.outfitRecommendations.map(async (outfit, index) => {
+            // Check if outfit already has valid shopping links from API
+            const hasValidLinks = outfit.shoppingLinks && (
+              outfit.shoppingLinks.amazon || 
+              outfit.shoppingLinks.tatacliq || 
+              outfit.shoppingLinks.myntra
+            );
+
+            if (hasValidLinks) {
+              console.log(`✅ Outfit ${index} already has shopping links from API:`, {
+                amazon: !!outfit.shoppingLinks?.amazon,
+                tatacliq: !!outfit.shoppingLinks?.tatacliq,
+                myntra: !!outfit.shoppingLinks?.myntra,
+              });
+              return outfit;
+            }
+
+            // No links from API - fetch them now as fallback
+            console.log(`⚠️ Outfit ${index} missing shopping links, fetching now...`);
+            
+            // Create comprehensive search query using ALL outfit items
+            // This ensures the search includes all pieces mentioned in the description
+            const allItems = outfit.items || [];
+            const searchQuery = allItems.length > 0 
+              ? allItems.join(' ') // Use all items for better search coverage
+              : outfit.title;
+            
+            console.log(`🔍 Searching with all items: "${searchQuery}" (${allItems.length} items)`);
+            console.log(`   Items: ${allItems.join(', ')}`);
+            console.log(`   Gender: ${gender || 'not specified'}`);
+            
+            const links = await findSimilar(searchQuery, outfit.colorPalette, gender);
+            
+            // If Tavily returns links, use them
+            if (links && (links.amazon || links.tatacliq || links.myntra)) {
+              console.log(`✅ Found Tavily links for outfit ${index}:`, links);
+              return {
+                ...outfit,
+                shoppingLinks: {
+                  amazon: links.amazon ?? null,
+                  tatacliq: links.tatacliq ?? null,
+                  myntra: links.myntra ?? null,
+                }
+              };
+            }
+            
+            // Fallback: Generate direct search URLs using the first item
+            console.log(`⚠️ No Tavily links found for outfit ${index}, generating search URLs`);
+            const searchUrls = generateSearchUrls(searchQuery, gender);
+            console.log(`🔗 Generated search URLs:`, searchUrls);
+            
+            return {
+              ...outfit,
+              shoppingLinks: {
+                amazon: searchUrls.amazon,
+                tatacliq: searchUrls.tatacliq,
+                myntra: searchUrls.myntra,
+              }
+            };
+          })
+        );
+
+        setEnrichedOutfits(updatedOutfits);
+        console.log('✅ All shopping links ready');
+      } catch (error) {
+        console.error('❌ Error fetching shopping links:', error);
+        // Keep original outfits on error
+      } finally {
+        setLoadingLinks(false);
+      }
+    };
+
+    if (analysisResult.outfitRecommendations.length > 0) {
+      fetchShoppingLinks();
+    }
+  }, [analysisResult.outfitRecommendations, gender]);
+
   return (
     <motion.div
       variants={containerVariants}
@@ -291,26 +516,7 @@ export function StyleAdvisorResults({
           <Sparkles className="w-8 h-8 text-accent" /> Your Style Analysis
         </h2>
         
-        {/* AI Provider Badge */}
-        {analysisResult.provider && (
-          <div className="mt-3 flex items-center justify-center">
-            <Badge variant="secondary" className="text-sm px-4 py-1.5 gap-2">
-              {analysisResult.provider === 'gemini' ? (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>🤖 Powered by Gemini AI</span>
-                </>
-              ) : (
-                <>
-                  <Wand2 className="w-4 h-4" />
-                  <span>⚡ Powered by Groq AI (Llama 3.3 70B)</span>
-                </>
-              )}
-            </Badge>
-          </div>
-        )}
-        
-        <p className="mt-2 text-muted-foreground">{analysisResult.feedback}</p>
+        <p className="mt-4 text-muted-foreground">{analysisResult.feedback}</p>
       </header>
       
       <Separator />
@@ -325,25 +531,6 @@ export function StyleAdvisorResults({
                 <li key={i}>{highlight}</li>
               ))}
             </ul>
-          </div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className={cardClasses}>
-          <div className="p-6">
-            <h3 className="font-bold text-xl mb-4 text-foreground flex items-center gap-2"><Palette className="text-accent" /> Color Suggestions</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              {analysisResult.colorSuggestions.map((color, i) => (
-                <div key={i} className="text-center">
-                  <div 
-                    className="w-16 h-16 rounded-full mx-auto mb-2 shadow-inner border-2 border-white/20"
-                    style={{ backgroundColor: color.hex }}
-                    title={color.reason}
-                  />
-                  <p className="text-sm font-medium">{color.name}</p>
-                  <p className="text-xs text-muted-foreground">{color.hex}</p>
-                </div>
-              ))}
-            </div>
           </div>
         </motion.div>
       </div>
@@ -385,7 +572,7 @@ export function StyleAdvisorResults({
           </Alert>
         )}
 
-        {analysisResult.outfitRecommendations.map((outfit, index) => {
+        {enrichedOutfits.map((outfit, index) => {
           const outfitId = `outfit${index + 1}` as 'outfit1' | 'outfit2' | 'outfit3';
           const isSelected = selectedOutfit === outfitId;
           const isLoading = isUsing === index;
@@ -407,38 +594,6 @@ export function StyleAdvisorResults({
                       </Badge>
                     )}
                   </div>
-                  
-                  {/* Use This Outfit Button */}
-                  <button
-                    onClick={() => handleUseOutfit(index, outfit.title)}
-                    disabled={isSelected || isLoading || isAnonymous || !isImageLoaded}
-                    className={`px-6 py-3 rounded-lg font-semibold transition-all duration-200 flex items-center gap-2 whitespace-nowrap ${
-                      isSelected
-                        ? 'bg-green-500/20 text-green-600 cursor-not-allowed'
-                        : isAnonymous || !isImageLoaded
-                        ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                        : isLoading
-                        ? 'bg-accent/50 text-white cursor-wait'
-                        : 'bg-gradient-to-r from-accent to-accent/80 hover:from-accent/90 hover:to-accent/70 text-white shadow-lg hover:shadow-xl hover:scale-105'
-                    }`}
-                  >
-                    {isSelected ? (
-                      <>
-                        <Check className="w-5 h-5" />
-                        Selected
-                      </>
-                    ) : isLoading ? (
-                      <>
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Heart className="w-5 h-5" />
-                        Use This Outfit
-                      </>
-                    )}
-                  </button>
                 </div>
 
                 {/* Image and Description Side by Side */}
@@ -495,28 +650,54 @@ export function StyleAdvisorResults({
                       </div>
                     )}
 
-                    {/* Color Palette */}
+                    {/* Color Palette - Visual only, no text */}
                     {outfit.colorPalette && outfit.colorPalette.length > 0 && (
                       <div>
                         <h5 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                           Color Palette
                         </h5>
                         <div className="flex gap-2 flex-wrap">
-                          {outfit.colorPalette.map((colorValue, idx) => {
-                            // Convert color name to hex if needed
-                            const hex = convertColorNameToHex(colorValue);
+                          {outfit.colorPalette.map((colorValue: ColorValue, idx) => {
+                            let hex: string;
+                            let colorName: string;
+                            
+                            // Handle both object format (from Gemini) and string format (legacy)
+                            if (typeof colorValue === 'object' && colorValue !== null && 'hex' in colorValue) {
+                              // Gemini format: {name: "Navy", hex: "#000080", percentage: 40}
+                              hex = colorValue.hex || '#808080';
+                              colorName = colorValue.name || hex;
+                            } else if (typeof colorValue === 'string') {
+                              // Legacy string format: "Navy #000080" or "#000080" or "Navy"
+                              const cleanValue = colorValue.trim();
+                              
+                              // Check if it's a mixed format like "Navy #000080"
+                              const hexMatch = cleanValue.match(/#[0-9A-Fa-f]{6}/);
+                              if (hexMatch) {
+                                hex = hexMatch[0].toUpperCase();
+                                colorName = cleanValue.replace(hexMatch[0], '').trim() || hex;
+                              } else if (cleanValue.startsWith('#')) {
+                                hex = cleanValue.toUpperCase();
+                                colorName = hex;
+                              } else {
+                                // It's a color name, convert it
+                                hex = convertColorNameToHex(cleanValue);
+                                colorName = cleanValue;
+                              }
+                            } else {
+                              // Fallback for unexpected formats
+                              hex = '#808080';
+                              colorName = 'Unknown';
+                            }
+                            
                             const isValidHex = /^#[0-9A-F]{6}$/i.test(hex);
                             
                             return (
                               <div key={idx} className="group relative">
                                 <div 
-                                  className="w-10 h-10 rounded-full border-2 border-white/20 shadow-md hover:scale-110 transition-transform"
+                                  className="w-12 h-12 rounded-full border-2 border-white/20 shadow-md transition-transform duration-200"
                                   style={{ backgroundColor: isValidHex ? hex : '#808080' }}
-                                  title={`${colorValue}${hex !== colorValue ? ` (${hex})` : ''}`}
+                                  title={`${colorName} ${hex}`}
                                 />
-                                <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-xs text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                                  {colorValue}
-                                </span>
                               </div>
                             );
                           })}
@@ -551,7 +732,7 @@ export function StyleAdvisorResults({
                   </h5>
                   
                   {/* Show helpful message if no links available */}
-                  {!(outfit.shoppingLinks?.amazon || outfit.shoppingLinks?.flipkart || outfit.shoppingLinks?.myntra) && (
+                  {!(outfit.shoppingLinks?.amazon || outfit.shoppingLinks?.tatacliq || outfit.shoppingLinks?.myntra) && (
                     <Alert className="mb-3">
                       <Info className="w-4 h-4" />
                       <AlertTitle className="text-sm">Shopping links not available</AlertTitle>
@@ -583,25 +764,25 @@ export function StyleAdvisorResults({
                       {outfit.shoppingLinks?.amazon && <ExternalLink className="w-3 h-3 ml-1 text-muted-foreground" />}
                     </a>
 
-                    {/* Flipkart */}
+                    {/* TATA CLiQ */}
                     <a
-                      href={outfit.shoppingLinks?.flipkart ?? '#'}
+                      href={outfit.shoppingLinks?.tatacliq ?? '#'}
                       target="_blank"
                       rel="noopener noreferrer"
                       className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium border ${
-                        outfit.shoppingLinks?.flipkart 
+                        outfit.shoppingLinks?.tatacliq 
                           ? 'hover:translate-y-[-2px] transition-all duration-150 hover:shadow-md cursor-pointer' 
                           : 'opacity-40 cursor-not-allowed'
-                      } text-blue-500 border-blue-200 bg-transparent`}
-                      aria-disabled={!outfit.shoppingLinks?.flipkart}
-                      onClick={(e) => { if (!outfit.shoppingLinks?.flipkart) e.preventDefault(); }}
-                      style={{ backgroundColor: outfit.shoppingLinks?.flipkart ? 'rgba(40,116,240,0.04)' : undefined }}
-                      title={outfit.shoppingLinks?.flipkart ? 'View on Flipkart' : 'Link not available'}
+                      } text-blue-600 border-blue-200 bg-transparent`}
+                      aria-disabled={!outfit.shoppingLinks?.tatacliq}
+                      onClick={(e) => { if (!outfit.shoppingLinks?.tatacliq) e.preventDefault(); }}
+                      style={{ backgroundColor: outfit.shoppingLinks?.tatacliq ? 'rgba(37,99,235,0.04)' : undefined }}
+                      title={outfit.shoppingLinks?.tatacliq ? 'View on TATA CLiQ' : 'Link not available'}
                     >
-                      <ShoppingCart className="w-4 h-4 text-blue-500" />
-                      <span className="sr-only">View on Flipkart</span>
-                      <span className="hidden sm:inline">Flipkart</span>
-                      {outfit.shoppingLinks?.flipkart && <ExternalLink className="w-3 h-3 ml-1 text-muted-foreground" />}
+                      <ShoppingCart className="w-4 h-4 text-blue-600" />
+                      <span className="sr-only">View on TATA CLiQ</span>
+                      <span className="hidden sm:inline">TATA CLiQ</span>
+                      {outfit.shoppingLinks?.tatacliq && <ExternalLink className="w-3 h-3 ml-1 text-muted-foreground" />}
                     </a>
 
                     {/* Myntra */}
@@ -625,9 +806,64 @@ export function StyleAdvisorResults({
                       {outfit.shoppingLinks?.myntra && <ExternalLink className="w-3 h-3 ml-1 text-muted-foreground" />}
                     </a>
                   </div>
+                  
+                  {/* Individual Item Shopping Links */}
+                  {outfit.items && outfit.items.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-border/10">
+                      <h6 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">
+                        Shop Individual Items
+                      </h6>
+                      <div className="space-y-2">
+                        {outfit.items.map((item, itemIndex) => {
+                          const itemQuery = `${gender || ''} ${item}`.trim();
+                          const genderPath = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'shop';
+                          const genderCategory = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'all';
+                          const encodedItem = encodeURIComponent(itemQuery);
+                          
+                          return (
+                            <div key={itemIndex} className="flex items-center gap-2 text-xs">
+                              <span className="text-foreground/70 flex-1 truncate">{item}</span>
+                              <div className="flex gap-1">
+                                <a
+                                  href={`https://www.amazon.in/s?k=${encodedItem}&rh=n:1968024031`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1 rounded bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 transition-colors"
+                                  title={`Search "${item}" on Amazon`}
+                                >
+                                  <ShoppingBag className="w-3 h-3" />
+                                </a>
+                                <a
+                                  href={`https://www.tatacliq.com/search/?searchCategory=${genderCategory}&text=${encodedItem}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1 rounded bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors"
+                                  title={`Search "${item}" on TATA CLiQ`}
+                                >
+                                  <ShoppingCart className="w-3 h-3" />
+                                </a>
+                                <a
+                                  href={`https://www.myntra.com/${genderPath}?rawQuery=${encodedItem}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2 py-1 rounded bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 transition-colors"
+                                  title={`Search "${item}" on Myntra`}
+                                >
+                                  <ShoppingBag className="w-3 h-3" />
+                                </a>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-2 italic">
+                        Click any icon to search for that specific item on your preferred store
+                      </p>
+                    </div>
+                  )}
                 </div>
 
-                {/* Use This Outfit Button - Always visible */}
+                {/* Like Button - Save to favorites */}
                 <div className="pt-6 border-t border-border/20">
                   {!userId || !recommendationId || isAnonymous ? (
                     <div className="space-y-3">
@@ -650,10 +886,10 @@ export function StyleAdvisorResults({
                         className="w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-3 bg-gradient-to-r from-accent/70 to-accent/50 hover:from-accent/80 hover:to-accent/60 text-white shadow-lg hover:shadow-xl transform hover:scale-105"
                       >
                         <Heart className="w-6 h-6" />
-                        <span>Save This Outfit</span>
+                        <span>Like This Outfit</span>
                       </button>
                       <p className="text-xs text-muted-foreground text-center">
-                        Sign in to save outfits and get personalized recommendations
+                        Sign in to like outfits and get personalized recommendations
                       </p>
                     </div>
                   ) : (
@@ -672,40 +908,30 @@ export function StyleAdvisorResults({
                         {isUsing === index ? (
                           <>
                             <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>Saving...</span>
+                            <span>Liking...</span>
                           </>
                         ) : selectedOutfit === `outfit${index + 1}` ? (
                           <>
                             <Check className="w-6 h-6" />
-                            <span>Selected as Favorite ✓</span>
+                            <span>Liked ✓</span>
                           </>
                         ) : (
                           <>
                             <Heart className="w-6 h-6" />
-                            <span>Use This Outfit</span>
+                            <span>Like</span>
                           </>
                         )}
                       </button>
                       <p className="text-xs text-muted-foreground text-center mt-2">
                         {selectedOutfit === `outfit${index + 1}` 
                           ? "This outfit will help improve future recommendations" 
-                          : "Click to save this as your preferred style"}
+                          : "Click to save this outfit to your favorites"}
                       </p>
                     </div>
                   )}
                 </div>
 
-                {/* Feedback Component */}
-                {userId && recommendationId && (
-                  <div className="pt-4 border-t border-border/20">
-                    <RecommendationFeedback
-                      recommendationId={recommendationId}
-                      userId={userId}
-                      outfitId={`outfit${index + 1}`}
-                      outfitDescription={outfit.title}
-                    />
-                  </div>
-                )}
+                {/* Removed RecommendationFeedback component - feedback now handled by main Like button above */}
               </div>
             </motion.div>
           );

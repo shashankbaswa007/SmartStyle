@@ -11,9 +11,11 @@ interface CacheEntry<T> {
 class ResponseCache<T> {
   private cache: Map<string, CacheEntry<T>> = new Map();
   private defaultTTL: number; // Time to live in milliseconds
+  private maxSize: number; // Maximum number of entries
 
-  constructor(ttlMinutes: number = 30) {
+  constructor(ttlMinutes: number = 30, maxSize: number = 1000) {
     this.defaultTTL = ttlMinutes * 60 * 1000;
+    this.maxSize = maxSize;
   }
 
   /**
@@ -57,9 +59,23 @@ class ResponseCache<T> {
   }
 
   /**
-   * Set a value in cache
+   * Set a value in cache with automatic cleanup if max size exceeded
    */
   set(params: Record<string, any>, data: T, ttlMinutes?: number): void {
+    // Enforce max cache size to prevent memory leaks
+    if (this.cache.size >= this.maxSize) {
+      // Remove oldest entries first (FIFO)
+      const entriesToRemove = Math.floor(this.maxSize * 0.2); // Remove 20% of oldest
+      const sortedEntries = Array.from(this.cache.entries())
+        .sort(([, a], [, b]) => a.timestamp - b.timestamp);
+      
+      for (let i = 0; i < entriesToRemove; i++) {
+        this.cache.delete(sortedEntries[i][0]);
+      }
+      
+      console.warn(`⚠️ Cache size limit reached. Removed ${entriesToRemove} oldest entries.`);
+    }
+
     const key = this.generateKey(params);
     const ttl = ttlMinutes ? ttlMinutes * 60 * 1000 : this.defaultTTL;
     
@@ -77,10 +93,15 @@ class ResponseCache<T> {
    */
   cleanup(): void {
     const now = Date.now();
+    let removed = 0;
     for (const [key, entry] of this.cache.entries()) {
       if (now > entry.expiresAt) {
         this.cache.delete(key);
+        removed++;
       }
+    }
+    if (removed > 0) {
+      console.log(`🧹 Cache cleanup: Removed ${removed} expired entries`);
     }
   }
 
@@ -88,7 +109,9 @@ class ResponseCache<T> {
    * Clear all cache
    */
   clear(): void {
+    const size = this.cache.size;
     this.cache.clear();
+    console.log(`🗑️ Cache cleared: ${size} entries removed`);
   }
 
   /**

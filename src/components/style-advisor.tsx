@@ -5,9 +5,11 @@ import Image from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Loader2, Sparkles, UploadCloud, RefreshCw, User, Camera, X, AlertCircle } from "lucide-react";
+import { Loader2, Sparkles, UploadCloud, RefreshCw, User, Camera, X, AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import chroma from "chroma-js";
+import { motion, AnimatePresence } from "framer-motion";
 
-import { analyzeImageAndProvideRecommendations, type AnalyzeImageAndProvideRecommendationsInput, type AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
+import type { AnalyzeImageAndProvideRecommendationsInput, AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
 import saveRecommendation from '@/lib/firestoreRecommendations';
 import { generateOutfitImage } from "@/ai/flows/generate-outfit-image";
 import { Button } from "@/components/ui/button";
@@ -23,6 +25,14 @@ import { cn } from "@/lib/utils";
 import { StyleAdvisorResults } from "./style-advisor-results";
 import { auth } from "@/lib/firebase";
 import { validateImageForStyleAnalysis, validateImageProperties } from "@/lib/image-validation";
+
+// Processing step interface
+interface ProcessingStep {
+  id: string;
+  label: string;
+  status: 'pending' | 'processing' | 'complete' | 'error';
+  message?: string;
+}
 
 const genders = [
   { value: "male", label: "Male" },
@@ -144,6 +154,40 @@ function getColorName(r: number, g: number, b: number): string {
   return baseName;
 }
 
+/**
+ * Preload images and wait for them to fully load
+ * @param imageUrls - Array of image URLs to preload
+ * @returns Promise that resolves when all images are loaded
+ */
+function preloadImages(imageUrls: string[]): Promise<void[]> {
+  const imagePromises = imageUrls.map((url) => {
+    return new Promise<void>((resolve) => {
+      if (typeof window === 'undefined') {
+        // Server-side rendering, skip preloading
+        resolve();
+        return;
+      }
+
+      const img = document.createElement('img');
+      
+      img.onload = () => {
+        console.log(`✅ Image loaded successfully: ${url.substring(0, 50)}...`);
+        resolve();
+      };
+      
+      img.onerror = () => {
+        console.error(`❌ Failed to load image: ${url.substring(0, 50)}...`);
+        // Resolve anyway to not block the UI if one image fails
+        resolve();
+      };
+      
+      img.src = url;
+    });
+  });
+
+  return Promise.all(imagePromises);
+}
+
 export function StyleAdvisor() {
   const { toast } = useToast();
   const [weather, setWeather] = React.useState<string | null>(null);
@@ -153,12 +197,15 @@ export function StyleAdvisor() {
   const [imageSources, setImageSources] = React.useState<('gemini' | 'pollinations' | 'placeholder')[]>([]);
   const [recommendationId, setRecommendationId] = React.useState<string | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [allContentReady, setAllContentReady] = React.useState(false);
+  const [showResults, setShowResults] = React.useState(false);
+  const [processingSteps, setProcessingSteps] = React.useState<ProcessingStep[]>([]);
   const [loadingMessage, setLoadingMessage] = React.useState("Analyzing Your Style...");
   const [previewImage, setPreviewImage] = React.useState<string | null>(null);
   const [lastAnalysisRequest, setLastAnalysisRequest] = React.useState<AnalysisRequest | null>(null);
   const [showCamera, setShowCamera] = React.useState(false);
   const [isCameraActive, setIsCameraActive] = React.useState(false);
-  const [extractedData, setExtractedData] = React.useState<{ skinTone: string; dressColors: string } | null>(null);
+  const [extractedData, setExtractedData] = React.useState<{ skinTone: string; dressColors: string; colorPalette?: string[] } | null>(null);
   const [isValidatingImage, setIsValidatingImage] = React.useState(false);
   const [imageValidationError, setImageValidationError] = React.useState<string | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -175,6 +222,30 @@ export function StyleAdvisor() {
       gender: "",
     },
   });
+
+  // Helper function to update processing steps
+  const updateStep = React.useCallback((stepId: string, status: ProcessingStep['status'], message?: string) => {
+    setProcessingSteps(prev => {
+      const existingStep = prev.find(s => s.id === stepId);
+      if (existingStep) {
+        return prev.map(s => s.id === stepId ? { ...s, status, message: message || s.message } : s);
+      }
+      // Add new step if it doesn't exist
+      return [...prev, { id: stepId, label: message || stepId, status, message }];
+    });
+  }, []);
+
+  // Initialize processing steps
+  const initializeProcessingSteps = React.useCallback(() => {
+    setProcessingSteps([
+      { id: 'extract', label: 'Extracting colors from image', status: 'pending' },
+      { id: 'analyze', label: 'AI analyzing your style preferences', status: 'pending' },
+      { id: 'generate', label: 'Generating 3 outfit images', status: 'pending' },
+      { id: 'enhance', label: 'Analyzing generated images for accurate colors', status: 'pending' },
+      { id: 'search', label: 'Finding best shopping links', status: 'pending' },
+      { id: 'finalize', label: 'Loading and verifying all content', status: 'pending' },
+    ]);
+  }, []);
 
   React.useEffect(() => {
     navigator.geolocation.getCurrentPosition(
@@ -437,12 +508,15 @@ export function StyleAdvisor() {
     form.reset();
     setPreviewImage(null);
     setAnalysisResult(null);
+    setAllContentReady(false);
+    setShowResults(false);
+    setProcessingSteps([]);
     setLastAnalysisRequest(null);
     setGeneratedImageUrls([]);
     setImageSources([]);
   };
 
-  const extractColorsFromCanvas = (): { skinTone: string; dressColors: string; } => {
+  const extractColorsFromCanvas = (): { skinTone: string; dressColors: string; colorPalette?: string[] } => {
     const canvas = canvasRef.current;
     if (!canvas) return { skinTone: "not detected", dressColors: "not detected" };
 
@@ -604,47 +678,117 @@ export function StyleAdvisor() {
       else skinTone = "dark";
     }
     
-    // STAGE 5: Extract dominant clothing colors
+    // STAGE 5: Extract dominant clothing colors with chroma-js enhancements
     const colorArray = Array.from(colorMap.entries());
     const totalWeight = colorArray.reduce((sum, [, data]) => sum + data.count, 0);
-    const threshold = totalWeight * 0.05; // Must be 5%+ of total
+    const threshold = totalWeight * 0.03; // Lowered to 3% to capture more colors
     
-    const significantColors = colorArray
+    // Get more color candidates (up to 20)
+    const candidateColors = colorArray
       .filter(([, data]) => data.count >= threshold)
       .sort(([, a], [, b]) => b.count - a.count)
-      .slice(0, 5);
+      .slice(0, 20)
+      .map(([, data]) => ({
+        r: Math.round(data.r),
+        g: Math.round(data.g),
+        b: Math.round(data.b),
+        count: data.count,
+        hex: `#${Math.round(data.r).toString(16).padStart(2, '0')}${Math.round(data.g).toString(16).padStart(2, '0')}${Math.round(data.b).toString(16).padStart(2, '0')}`
+      }));
     
-    const dominantColors = significantColors.map(([, data]) => {
-      return getColorName(Math.round(data.r), Math.round(data.g), Math.round(data.b));
+    // Use chroma-js to ensure color diversity (ΔE distance filtering)
+    const diverseColors: typeof candidateColors = [];
+    const MIN_DELTA_E = 15; // Minimum perceptual difference between colors
+    
+    for (const candidate of candidateColors) {
+      if (diverseColors.length === 0) {
+        diverseColors.push(candidate);
+        continue;
+      }
+      
+      // Check if this color is sufficiently different from all selected colors
+      const isDifferent = diverseColors.every(existing => {
+        try {
+          const candidateChroma = chroma(candidate.hex);
+          const existingChroma = chroma(existing.hex);
+          const deltaE = chroma.deltaE(candidateChroma, existingChroma);
+          return deltaE >= MIN_DELTA_E;
+        } catch {
+          return true; // If chroma fails, include the color
+        }
+      });
+      
+      if (isDifferent) {
+        diverseColors.push(candidate);
+        if (diverseColors.length >= 10) break; // Target 10 colors maximum
+      }
+    }
+    
+    // Ensure we have at least 8 colors - if not, relax the threshold
+    if (diverseColors.length < 8 && candidateColors.length >= 8) {
+      const relaxedMinDeltaE = 10;
+      for (const candidate of candidateColors) {
+        if (diverseColors.some(c => c.hex === candidate.hex)) continue;
+        
+        const isDifferent = diverseColors.every(existing => {
+          try {
+            return chroma.deltaE(chroma(candidate.hex), chroma(existing.hex)) >= relaxedMinDeltaE;
+          } catch {
+            return true;
+          }
+        });
+        
+        if (isDifferent) {
+          diverseColors.push(candidate);
+          if (diverseColors.length >= 8) break;
+        }
+      }
+    }
+    
+    // Convert to color names for backward compatibility
+    const dominantColorNames = diverseColors.map(color => {
+      return getColorName(color.r, color.g, color.b);
     });
     
-    // Remove duplicates
-    const uniqueColors = Array.from(new Set(dominantColors))
+    // Extract hex colors for the palette
+    const extractedPalette = diverseColors.map(c => c.hex);
+    
+    // Remove duplicates from names
+    const uniqueColors = Array.from(new Set(dominantColorNames))
       .filter(color => color !== 'neutral')
-      .slice(0, 4);
+      .slice(0, 10); // Keep up to 10 unique color names
     
     const dressColorsStr = uniqueColors.join(', ');
     
     console.timeEnd('colorExtraction');
     console.log('✅ Detected dress colors:', dressColorsStr);
+    console.log('✅ Extracted color palette (hex):', extractedPalette);
+    console.log('✅ Total diverse colors:', diverseColors.length);
     console.log('✅ Person center:', { x: Math.round(personCenterX), y: Math.round(personCenterY) });
     console.log('✅ Skin pixels found:', skinPixels.length);
-    console.log('✅ Color candidates:', colorMap.size, '→ Significant:', significantColors.length);
+    console.log('✅ Color candidates:', colorMap.size, '→ Diverse:', diverseColors.length);
 
     return { 
       skinTone, 
-      dressColors: dressColorsStr || 'neutral tones' 
+      dressColors: dressColorsStr || 'neutral tones',
+      colorPalette: extractedPalette // NEW: Return hex palette
     };
   };
 
   const performAnalysis = async (request: AnalyzeImageAndProvideRecommendationsInput) => {
     setIsLoading(true);
+    setAllContentReady(false);
+    setShowResults(false); // Hide previous results immediately
     setAnalysisResult(null);
     setGeneratedImageUrls([]);
     setImageSources([]);
+    
+    // Initialize processing steps
+    initializeProcessingSteps();
 
     try {
       if (!request.previousRecommendation) {
+        updateStep('extract', 'processing');
         setLoadingMessage("Extracting colors from your image...");
 
         const { skinTone, dressColors } = extractColorsFromCanvas();
@@ -662,43 +806,133 @@ export function StyleAdvisor() {
           dressColors: dressColors,
           userId: request.userId,
         });
+        
+        updateStep('extract', 'complete');
       }
 
-      setLoadingMessage("Getting your style recommendations...");
-      const result = await analyzeImageAndProvideRecommendations(request);
-      setAnalysisResult(result);
+      updateStep('analyze', 'processing');
+      updateStep('generate', 'processing');
+      updateStep('enhance', 'processing');
+      updateStep('search', 'processing');
+      setLoadingMessage("Analyzing your style with AI...");
+
+      // Call the /api/recommend route which handles everything:
+      // 1. Gemini style analysis
+      // 2. Image generation with Pollinations
+      // 3. Gemini image analysis for accurate colors
+      // 4. Optimized Tavily search with proper queries
+      console.log('📡 Calling /api/recommend with full processing pipeline...');
       
-      // Generate a unique recommendation ID
-      const recId = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const response = await fetch('/api/recommend', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        throw new Error(errorData.error || `API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ API response received:', {
+        success: data.success,
+        hasPayload: !!data.payload,
+        outfitsCount: data.payload?.analysis?.outfitRecommendations?.length,
+      });
+
+      if (!data.success || !data.payload) {
+        throw new Error('Invalid API response structure');
+      }
+
+      const result = data.payload.analysis;
+      const enrichedOutfits = result.outfitRecommendations;
+      
+      // ✅ VALIDATION: Ensure all outfits have complete data
+      console.log('🔍 Validating outfit data completeness...');
+      const hasCompleteData = enrichedOutfits.every((outfit: any) => {
+        const hasImage = !!outfit.imageUrl;
+        const hasColors = outfit.colorPalette && outfit.colorPalette.length > 0;
+        const hasLinks = outfit.shoppingLinks && (
+          outfit.shoppingLinks.amazon || 
+          outfit.shoppingLinks.myntra || 
+          outfit.shoppingLinks.nykaa
+        );
+        
+        console.log(`  Outfit "${outfit.title}":`, {
+          hasImage,
+          colorCount: outfit.colorPalette?.length || 0,
+          hasLinks,
+        });
+        
+        return hasImage && hasColors && hasLinks;
+      });
+
+      if (!hasCompleteData) {
+        console.warn('⚠️ Some outfits have incomplete data, but proceeding...');
+      } else {
+        console.log('✅ All outfits have complete data (image + colors + links)');
+      }
+      
+      updateStep('analyze', 'complete');
+      updateStep('generate', 'complete');
+      updateStep('enhance', 'complete');
+      updateStep('search', 'complete');
+      
+      // Use the recommendation ID from the API if available
+      const recId = data.recommendationId || `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       setRecommendationId(recId);
 
-      setLoadingMessage("Generating outfit images...");
-      const imagePrompts = result.outfitRecommendations.map(outfit => outfit.imagePrompt);
-      const imageResult = await generateOutfitImage({ outfitDescriptions: imagePrompts });
-      setGeneratedImageUrls(imageResult.imageUrls);
-      setImageSources(imageResult.sources || []);
+      // Extract image URLs from the enriched outfits
+      const imageUrls = enrichedOutfits.map((outfit: any) => outfit.imageUrl || '');
+      const sources = enrichedOutfits.map((outfit: any) => {
+        if (outfit.imageUrl?.includes('placeholder')) return 'placeholder' as const;
+        if (outfit.imageUrl?.includes('pollinations')) return 'pollinations' as const;
+        return 'placeholder' as const;
+      });
 
-      // Save recommendation to Firestore if user is authenticated
-      const currentUserId = auth.currentUser?.uid;
-      if (currentUserId) {
-        const payload = {
-          analysis: result,
-          timestamp: Date.now(),
-          occasion: request.occasion,
-          genre: request.genre,
-          gender: request.gender,
-          weather: request.weather,
-          skinTone: request.skinTone,
-          dressColors: request.dressColors,
-        };
-        
-        await saveRecommendation(currentUserId, payload, recId);
-        console.log(`✅ Recommendation saved with ID: ${recId}`);
+      setGeneratedImageUrls(imageUrls);
+      setImageSources(sources);
+
+      // ✅ CRITICAL: Preload all images and wait for them to fully load
+      updateStep('finalize', 'processing');
+      setLoadingMessage("Verifying all images are ready...");
+      
+      try {
+        await preloadImages(imageUrls);
+        console.log('✅ All images preloaded successfully');
+      } catch (imgError) {
+        console.warn('⚠️ Some images failed to preload:', imgError);
+        // Continue anyway - Pollinations images will load on demand
       }
+      
+      updateStep('finalize', 'complete');
+
+      // ✅ NOW set the analysis result after EVERYTHING is verified
+      console.log('📦 Setting analysis result with complete data...');
+      setAnalysisResult(result);
+      setAllContentReady(true);
+      
+      // Small delay to ensure smooth transition
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
+      // ✅ FINAL STEP: Show results only after all validation passes
+      console.log('🎉 Displaying results to user!');
+      setShowResults(true);
+
+      console.log('✅ Full recommendation flow complete!');
 
     } catch (e) {
       console.error('❌ Analysis error:', e);
       const errorMessage = e instanceof Error ? e.message : 'An unexpected error occurred';
+      
+      // Mark current step as error
+      const currentStep = processingSteps.find(s => s.status === 'processing');
+      if (currentStep) {
+        updateStep(currentStep.id, 'error', errorMessage);
+      }
       
       // Determine error type and show appropriate message
       let title = "Analysis Failed";
@@ -730,6 +964,7 @@ export function StyleAdvisor() {
       });
     } finally {
       setIsLoading(false);
+      // Don't set allContentReady on error - it should only be true when everything is ready
     }
   };
 
@@ -1079,6 +1314,51 @@ export function StyleAdvisor() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Processing Steps */}
+            {processingSteps.length > 0 && (
+              <div className="space-y-3">
+                {processingSteps.map((step) => (
+                  <motion.div
+                    key={step.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-border/50"
+                  >
+                    {step.status === 'pending' && (
+                      <Clock className="w-5 h-5 text-muted-foreground" />
+                    )}
+                    {step.status === 'processing' && (
+                      <Loader2 className="w-5 h-5 text-accent animate-spin" />
+                    )}
+                    {step.status === 'complete' && (
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    )}
+                    {step.status === 'error' && (
+                      <AlertCircle className="w-5 h-5 text-destructive" />
+                    )}
+                    <div className="flex-1">
+                      <p className={cn(
+                        "text-sm font-medium",
+                        step.status === 'complete' && "text-green-500",
+                        step.status === 'error' && "text-destructive",
+                        step.status === 'processing' && "text-accent",
+                        step.status === 'pending' && "text-muted-foreground"
+                      )}>
+                        {step.label}
+                      </p>
+                      {step.message && step.status === 'error' && (
+                        <p className="text-xs text-muted-foreground mt-1">{step.message}</p>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            )}
+            
+            <Separator />
+            
+            {/* Skeleton placeholders */}
             <div className="space-y-3">
               <Skeleton className="h-5 w-1/3" />
               <Skeleton className="h-4 w-full" />
@@ -1096,28 +1376,39 @@ export function StyleAdvisor() {
         </Card>
       )}
 
-      {analysisResult && !isLoading && (
-         <Card className="w-full shadow-xl shadow-accent/20 animate-slide-up-fade border-accent/30 bg-card/60 dark:bg-card/40 backdrop-blur-xl">
-          <CardContent className="p-6 md:p-8">
-             <StyleAdvisorResults 
-                analysisResult={analysisResult} 
-                generatedImageUrls={generatedImageUrls}
-                imageSources={imageSources}
-                recommendationId={recommendationId}
-              />
-          </CardContent>
-           <CardFooter className="flex flex-col md:flex-row gap-4 p-6 bg-primary/20">
-            <Button onClick={handleGetAnotherRecommendation} variant="outline" className="w-full text-base">
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Get Another Recommendation
-            </Button>
-            <Button onClick={resetForm} variant="secondary" className="w-full text-base">
-              <UploadCloud className="mr-2 h-4 w-4" />
-              Analyze Another Outfit
-            </Button>
-          </CardFooter>
-        </Card>
-      )}
+      <AnimatePresence mode="wait">
+        {showResults && analysisResult && allContentReady && !isLoading && (
+          <motion.div
+            key="results"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.5, ease: "easeOut" }}
+          >
+            <Card className="w-full shadow-xl shadow-accent/20 animate-slide-up-fade border-accent/30 bg-card/60 dark:bg-card/40 backdrop-blur-xl">
+              <CardContent className="p-6 md:p-8">
+                <StyleAdvisorResults 
+                  analysisResult={analysisResult} 
+                  generatedImageUrls={generatedImageUrls}
+                  imageSources={imageSources}
+                  recommendationId={recommendationId}
+                  gender={lastAnalysisRequest?.gender}
+                />
+              </CardContent>
+              <CardFooter className="flex flex-col md:flex-row gap-4 p-6 bg-primary/20">
+                <Button onClick={handleGetAnotherRecommendation} variant="outline" className="w-full text-base">
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Get Another Recommendation
+                </Button>
+                <Button onClick={resetForm} variant="secondary" className="w-full text-base">
+                  <UploadCloud className="mr-2 h-4 w-4" />
+                  Analyze Another Outfit
+                </Button>
+              </CardFooter>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

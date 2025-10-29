@@ -1,0 +1,65 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules for SmartStyle
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check file size (max 20MB)
+    function isValidSize() {
+      return request.resource.size < 20 * 1024 * 1024;
+    }
+    
+    // Helper function to check if file is an image
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    // User uploads - authenticated users can upload their own images
+    match /users/{userId}/{allPaths=**} {
+      // Allow authenticated users to read/write their own files
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isImage() 
+                   && isValidSize();
+    }
+    
+    // Outfit images - authenticated users can upload outfit images
+    match /outfits/{userId}/{allPaths=**} {
+      allow read: if true; // Allow public read for outfit images
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isImage() 
+                   && isValidSize();
+    }
+    
+    // Recommendation images - store AI-generated outfit recommendations
+    match /recommendations/{userId}/{allPaths=**} {
+      allow read: if true; // Allow public read for recommendations
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isImage() 
+                   && isValidSize();
+    }
+    
+    // Temporary uploads - allow authenticated users to upload temp files
+    match /temp/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isImage() 
+                   && isValidSize();
+      // Note: Set up Cloud Functions to auto-delete temp files after 24 hours
+    }
+    
+    // Default deny all access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

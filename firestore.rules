@@ -15,7 +15,7 @@ service cloud.firestore {
     
     // Helper function to allow anonymous read for graceful degradation
     function canReadAnonymously() {
-      return true; // Allow read for better UX, but enforce auth for writes
+      return isAuthenticated(); // Require authentication for reads
     }
     
     // User Preferences - Users can only read/write their own preferences
@@ -56,12 +56,19 @@ service cloud.firestore {
         allow read: if canReadAnonymously() || isOwner(userId);
         allow write: if isOwner(userId);
       }
+      
+      // User's liked outfits (nested under users)
+      match /likedOutfits/{outfitId} {
+        allow read: if canReadAnonymously() || isOwner(userId);
+        allow write: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
     }
     
-    // Default deny write, allow read for graceful degradation
+    // Default deny all access for security
     match /{document=**} {
-      allow read: if canReadAnonymously();
-      allow write: if false;
+      allow read, write: if false;
     }
   }
 }

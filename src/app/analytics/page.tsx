@@ -23,13 +23,17 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { getCurrentUser } from '@/lib/auth';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { useAuth } from '@/components/auth/AuthProvider';
 import { 
   getUserPreferences, 
   getRecommendationHistory,
   getStyleInsights
 } from '@/lib/personalization';
 import type { UserPreferences, RecommendationHistory } from '@/lib/personalization';
+import Link from 'next/link';
 
 interface StyleInsights {
   topColors: { color: string; count: number }[];
@@ -63,39 +67,51 @@ const itemVariants = {
 };
 
 export default function AnalyticsPage() {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [history, setHistory] = useState<RecommendationHistory[]>([]);
   const [insights, setInsights] = useState<StyleInsights | null>(null);
 
   useEffect(() => {
-    loadAnalytics();
+    if (user) {
+      loadAnalytics();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [user]);
 
   const loadAnalytics = async () => {
     try {
       setLoading(true);
-      const user = await getCurrentUser();
+      setError(null);
       
       if (!user) {
+        console.log('⚠️ No user found for analytics');
+        setLoading(false);
         return;
       }
 
+      console.log('🔍 Loading analytics for user:', user.uid);
+
       // Fetch user preferences
       const prefs = await getUserPreferences(user.uid);
+      console.log('📊 User preferences:', prefs);
       setPreferences(prefs);
 
       // Fetch recommendation history
       const recs = await getRecommendationHistory(user.uid, 50);
+      console.log('📊 Recommendation history:', recs.length, 'items');
       setHistory(recs);
 
       // Calculate insights
       const calculatedInsights = calculateInsights(recs);
+      console.log('📊 Calculated insights:', calculatedInsights);
       setInsights(calculatedInsights);
 
     } catch (error) {
-      console.error('Error loading analytics:', error);
+      console.error('❌ Error loading analytics:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load analytics data');
     } finally {
       setLoading(false);
     }
@@ -163,44 +179,71 @@ export default function AnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-12 px-4">
-        <div className="space-y-8">
-          <Skeleton className="h-12 w-64" />
-          <div className="grid md:grid-cols-3 gap-6">
-            <Skeleton className="h-32" />
-            <Skeleton className="h-32" />
-            <Skeleton className="h-32" />
+      <ProtectedRoute>
+        <div className="container mx-auto py-12 px-4">
+          <div className="space-y-8">
+            <Skeleton className="h-12 w-64" />
+            <div className="grid md:grid-cols-3 gap-6">
+              <Skeleton className="h-32" />
+              <Skeleton className="h-32" />
+              <Skeleton className="h-32" />
+            </div>
+            <Skeleton className="h-96" />
           </div>
-          <Skeleton className="h-96" />
         </div>
-      </div>
+      </ProtectedRoute>
+    );
+  }
+
+  if (error) {
+    return (
+      <ProtectedRoute>
+        <div className="container mx-auto py-12 px-4">
+          <Alert variant="destructive" className="max-w-2xl mx-auto">
+            <BarChart3 className="h-4 w-4" />
+            <AlertTitle>Error Loading Analytics</AlertTitle>
+            <AlertDescription>
+              <p className="mb-4">{error}</p>
+              <Button onClick={loadAnalytics} variant="outline">
+                Try Again
+              </Button>
+            </AlertDescription>
+          </Alert>
+        </div>
+      </ProtectedRoute>
     );
   }
 
   if (!preferences || history.length === 0) {
     return (
-      <div className="container mx-auto py-12 px-4">
-        <Card className="max-w-2xl mx-auto">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="w-6 h-6" />
-              No Analytics Yet
-            </CardTitle>
-            <CardDescription>
-              Start using the Style Advisor to build your personalized analytics!
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              Upload outfits, get recommendations, and provide feedback to see your style insights here.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      <ProtectedRoute>
+        <div className="container mx-auto py-12 px-4">
+          <Card className="max-w-2xl mx-auto">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="w-6 h-6" />
+                No Analytics Yet
+              </CardTitle>
+              <CardDescription>
+                Start using the Style Advisor to build your personalized analytics!
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-muted-foreground">
+                Upload outfits, get recommendations, and provide feedback to see your style insights here.
+              </p>
+              <Button asChild>
+                <Link href="/style-check">Get Started</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </ProtectedRoute>
     );
   }
 
   return (
+    <ProtectedRoute>
     <div className="container mx-auto py-12 px-4">
       <motion.div
         variants={containerVariants}
@@ -210,13 +253,41 @@ export default function AnalyticsPage() {
       >
         {/* Header */}
         <motion.div variants={itemVariants}>
-          <h1 className="text-4xl font-bold flex items-center gap-3">
-            <BarChart3 className="w-10 h-10 text-accent" />
-            Your Style Analytics
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            Insights into your fashion preferences and style evolution
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold flex items-center gap-3">
+                <BarChart3 className="w-10 h-10 text-accent" />
+                Your Style Analytics
+              </h1>
+              <p className="text-muted-foreground mt-2">
+                Insights into your fashion preferences and style evolution
+              </p>
+            </div>
+            <Button 
+              onClick={loadAnalytics}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width="16" 
+                height="16" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                strokeWidth="2" 
+                strokeLinecap="round" 
+                strokeLinejoin="round"
+              >
+                <path d="M21 2v6h-6" />
+                <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+                <path d="M3 22v-6h6" />
+                <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+              </svg>
+              Refresh
+            </Button>
+          </div>
         </motion.div>
 
         {/* Key Metrics */}
@@ -426,5 +497,6 @@ export default function AnalyticsPage() {
         )}
       </motion.div>
     </div>
+    </ProtectedRoute>
   );
 }

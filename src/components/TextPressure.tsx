@@ -90,6 +90,13 @@ const TextPressure: React.FC<TextPressureProps> = ({
 
     const { width: containerW, height: containerH } = containerRef.current.getBoundingClientRect();
 
+    // Ensure we have valid dimensions
+    if (containerW === 0 || containerH === 0) {
+      // Retry after a short delay if container hasn't rendered yet
+      setTimeout(() => setSize(), 100);
+      return;
+    }
+
     let newFontSize = containerW / (chars.length / 2);
     newFontSize = Math.max(newFontSize, minFontSize);
 
@@ -144,9 +151,12 @@ const TextPressure: React.FC<TextPressureProps> = ({
           const wdth = width ? Math.floor(getAttr(d, 5, 200)) : 100;
           const wght = weight ? Math.floor(getAttr(d, 100, 900)) : 400;
           const italVal = italic ? getAttr(d, 0, 1).toFixed(2) : '0';
-          const alphaVal = alpha ? getAttr(d, 0, 1).toFixed(2) : '1';
+          
+          // Keep opacity at 1 when alpha is disabled to prevent disappearing text
+          const alphaVal = alpha ? getAttr(d, 0.5, 1).toFixed(2) : '1';
 
           span.style.opacity = alphaVal;
+          span.style.visibility = 'visible';
           span.style.fontVariationSettings = `'wght' ${wght}, 'wdth' ${wdth}, 'ital' ${italVal}`;
         });
       }
@@ -159,7 +169,7 @@ const TextPressure: React.FC<TextPressureProps> = ({
   }, [width, weight, italic, alpha, chars.length]);
 
   return (
-    <div ref={containerRef} className="relative w-full h-full overflow-hidden bg-transparent">
+    <div ref={containerRef} className={`relative w-full h-full overflow-visible ${className}`}>
       <style>{`
         @font-face {
           font-family: '${fontFamily}';
@@ -184,18 +194,25 @@ const TextPressure: React.FC<TextPressureProps> = ({
 
       <h1
         ref={titleRef}
-        className={`text-pressure-title ${className} ${
+        className={`text-pressure-title ${
           flex ? 'flex justify-between' : ''
-        } ${stroke ? 'stroke' : ''} uppercase text-center`}
+        } ${stroke ? 'stroke' : ''} uppercase text-center w-full`}
         style={{
           fontFamily,
           fontSize: fontSize,
-          lineHeight,
+          lineHeight: Math.max(lineHeight, 1.2),
           transform: `scale(1, ${scaleY})`,
-          transformOrigin: 'center top',
+          transformOrigin: 'center center',
           margin: 0,
+          padding: 0,
           fontWeight: 100,
-          color: stroke ? undefined : textColor
+          letterSpacing: '0.05em',
+          color: stroke ? undefined : textColor,
+          wordSpacing: '0.1em',
+          visibility: 'visible',
+          opacity: 1,
+          display: flex ? 'flex' : 'block',
+          whiteSpace: 'nowrap'
         }}
       >
         {chars.map((char, i) => (
@@ -205,9 +222,14 @@ const TextPressure: React.FC<TextPressureProps> = ({
               spansRef.current[i] = el;
             }}
             data-char={char}
-            className="inline-block"
+            style={{
+              display: 'inline-block',
+              opacity: 1,
+              visibility: 'visible',
+              transition: 'none'
+            }}
           >
-            {char}
+            {char === ' ' ? '\u00A0' : char}
           </span>
         ))}
       </h1>

@@ -1,85 +1,60 @@
 /**
- * Pollinations.ai - FREE AI image generation (no API key needed!)
- * Uses Stable Diffusion via simple URL-based API
- * Perfect fallback for outfit visualization when Gemini quota is exceeded
+ * Pollinations.ai image generation client
+ * NOTE: Currently disabled as the API is not generating images reliably
  */
 
-export interface PollinationsImage {
-  url: string;
-  source: 'pollinations';
+export interface PollinationsImageOptions {
+  prompt: string;
+  width?: number;
+  height?: number;
+  seed?: number;
+  model?: string;
+  nologo?: boolean;
+  private?: boolean;
+  enhance?: boolean;
 }
 
 /**
- * Generate outfit image using Pollinations.ai
- * No API key required - works via URL parameters
+ * Generate an image using Pollinations.ai
+ * @deprecated Currently not working - returns placeholder instead
  */
-export async function generateImageWithPollinations(
-  description: string
-): Promise<PollinationsImage | null> {
-  try {
-    console.log('🎨 Generating image with Pollinations.ai (FREE, no key needed)...');
-
-    // Extract fashion keywords for better prompts
-    const fashionPrompt = buildFashionPrompt(description);
-    
-    // Generate unique seed for variety
-    const seed = Math.floor(Math.random() * 1000000);
-    
-    // Pollinations.ai URL - no API key, just URL parameters!
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fashionPrompt)}?width=768&height=1024&seed=${seed}&nologo=true&enhance=true&model=flux`;
-
-    console.log('✅ Generated Pollinations.ai image URL');
-    
-    return {
-      url: imageUrl,
-      source: 'pollinations',
-    };
-  } catch (error) {
-    console.error('❌ Pollinations.ai error:', error);
-    return null;
-  }
+export async function generatePollinationsImage(
+  options: PollinationsImageOptions
+): Promise<string> {
+  console.log('⚠️ Pollinations.ai image generation is currently disabled');
+  console.log('📝 Prompt:', options.prompt);
+  
+  // Return a placeholder image instead
+  const placeholderUrl = `https://via.placeholder.com/${options.width || 800}x${options.height || 1000}/6366f1/ffffff?text=Fashion+Outfit`;
+  
+  console.log('🖼️ Using placeholder image:', placeholderUrl);
+  
+  return placeholderUrl;
 }
 
 /**
- * Build optimized prompt for fashion image generation
+ * Build the Pollinations.ai image URL
+ * @deprecated Currently not in use
  */
-function buildFashionPrompt(description: string): string {
-  // Remove generic phrases
-  let cleanPrompt = description
-    .replace(/a photorealistic image of/gi, '')
-    .replace(/photorealistic/gi, '')
-    .replace(/image of/gi, '')
-    .replace(/mannequin wearing/gi, 'person wearing')
-    .replace(/on a mannequin/gi, '')
-    .trim();
-
-  // Enhance with fashion photography keywords
-  const enhancedPrompt = `professional fashion photography, full body shot, ${cleanPrompt}, studio lighting, high quality, detailed, sharp focus, 8K, fashion magazine style, clean background`;
-
-  return enhancedPrompt;
-}
-
-/**
- * Generate multiple variations with different seeds
- */
-export function generatePollinationsVariations(
-  description: string,
-  count: number = 3
-): PollinationsImage[] {
-  const fashionPrompt = buildFashionPrompt(description);
-  const images: PollinationsImage[] = [];
-
-  for (let i = 0; i < count; i++) {
-    const seed = Math.floor(Math.random() * 1000000);
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(fashionPrompt)}?width=768&height=1024&seed=${seed}&nologo=true&enhance=true&model=flux`;
-    
-    images.push({
-      url: imageUrl,
-      source: 'pollinations',
-    });
-  }
-
-  return images;
+export function buildPollinationsUrl(options: PollinationsImageOptions): string {
+  const baseUrl = 'https://image.pollinations.ai/prompt';
+  const encodedPrompt = encodeURIComponent(options.prompt);
+  
+  const params = new URLSearchParams();
+  if (options.width) params.append('width', options.width.toString());
+  if (options.height) params.append('height', options.height.toString());
+  if (options.seed) params.append('seed', options.seed.toString());
+  if (options.model) params.append('model', options.model);
+  if (options.nologo) params.append('nologo', 'true');
+  if (options.private) params.append('private', 'true');
+  if (options.enhance) params.append('enhance', 'true');
+  
+  const queryString = params.toString();
+  const url = queryString 
+    ? `${baseUrl}/${encodedPrompt}?${queryString}`
+    : `${baseUrl}/${encodedPrompt}`;
+  
+  return url;
 }
 
 /**

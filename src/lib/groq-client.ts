@@ -28,7 +28,7 @@ export interface GroqOutfitRecommendation {
   imagePrompt: string;
   shoppingLinks?: {
     amazon?: string;
-    flipkart?: string;
+    tatacliq?: string;
     myntra?: string;
   };
   isExistingMatch?: boolean;

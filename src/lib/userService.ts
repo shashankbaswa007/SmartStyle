@@ -38,6 +38,15 @@ export async function createUserDocument(
   userData: UserProfile
 ): Promise<void> {
   try {
+    // Validate inputs
+    if (!userId || userId.trim() === '') {
+      throw new Error('User ID is required');
+    }
+
+    if (!userData || !userData.email) {
+      throw new Error('User data with email is required');
+    }
+
     const userRef = doc(db, 'users', userId);
     const userSnap = await getDoc(userRef);
 
@@ -46,11 +55,11 @@ export async function createUserDocument(
       await updateDoc(userRef, {
         lastLoginAt: new Date().toISOString(),
         // Update profile data in case it changed (e.g., user updated their Google profile)
-        displayName: userData.displayName,
-        photoURL: userData.photoURL,
+        displayName: userData.displayName || userSnap.data().displayName,
+        photoURL: userData.photoURL || userSnap.data().photoURL,
       });
       
-      console.log('User document updated:', userId);
+      console.log('✅ User document updated:', userId);
     } else {
       // New user, create document with full profile data
       await setDoc(userRef, {
@@ -59,10 +68,10 @@ export async function createUserDocument(
         lastLoginAt: new Date().toISOString(),
       });
       
-      console.log('User document created:', userId);
+      console.log('✅ User document created:', userId);
     }
   } catch (error) {
-    console.error('Error creating/updating user document:', error);
+    console.error('❌ Error creating/updating user document:', error);
     throw error;
   }
 }

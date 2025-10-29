@@ -1,0 +1,16 @@
+# Ensure environment files with secrets are never committed
+.env filter=git-crypt diff=git-crypt
+.env.local filter=git-crypt diff=git-crypt
+.env.*.local filter=git-crypt diff=git-crypt
+
+# Service account keys should never be committed
+*service-account*.json filter=git-crypt diff=git-crypt
+*-adminsdk-*.json filter=git-crypt diff=git-crypt
+
+# Line endings
+* text=auto
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf

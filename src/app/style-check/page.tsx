@@ -3,19 +3,22 @@
 
 import { StyleAdvisor } from '@/components/style-advisor';
 import ShinyText from '@/components/ShinyText';
-import { DynamicTextPressure, DynamicSplashCursor } from '@/components/DynamicImports';
+import TextPressure from '@/components/TextPressure';
+import SplashCursor from '@/components/SplashCursor';
 import { useMounted } from '@/hooks/useMounted';
 import Particles from '@/components/Particles';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 export default function StyleCheckPage() {
   const isMounted = useMounted();
 
   return (
-    <main className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
+    <ProtectedRoute>
+      <main className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
       <div className="absolute inset-0 -z-10">
         {isMounted && (
           <>
-            <DynamicSplashCursor />
+            <SplashCursor />
             <Particles
               className="absolute inset-0"
               particleColors={['#7B68EE', '#EEBB68']}
@@ -34,16 +37,14 @@ export default function StyleCheckPage() {
         <header className="text-center mb-16">
           <div style={{ position: 'relative', height: '300px' }}>
             {isMounted && (
-              <DynamicTextPressure
+              <TextPressure
                 text="Style-Check"
-                flex={false}
-                alpha={false}
                 stroke={true}
                 width={false}
                 weight={true}
                 textColor="#C4B5FD"
                 strokeColor="#5B21B6"
-                minFontSize={36}
+                minFontSize={32}
               />
             )}
           </div>
@@ -56,5 +57,6 @@ export default function StyleCheckPage() {
         <StyleAdvisor />
       </div>
     </main>
+    </ProtectedRoute>
   );
 }

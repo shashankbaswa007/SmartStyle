@@ -4,8 +4,11 @@ import React, { useState, useEffect } from 'react';
 
 export function InteractiveBackground() {
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+    
     const handleMouseMove = (event: MouseEvent) => {
       setMousePosition({ x: event.clientX, y: event.clientY });
     };
@@ -16,6 +19,13 @@ export function InteractiveBackground() {
       window.removeEventListener('mousemove', handleMouseMove);
     };
   }, []);
+
+  // Don't render until mounted to prevent hydration mismatch
+  if (!mounted) {
+    return (
+      <div className="pointer-events-none fixed inset-0 z-0" />
+    );
+  }
 
   return (
     <div
