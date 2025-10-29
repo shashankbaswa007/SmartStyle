@@ -121,3 +121,4 @@ test-*.js
 # ❌ Any files with "private-key" in the name
 # ❌ Any files with actual API tokens/secrets
 #
+.env*
