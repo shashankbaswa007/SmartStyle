@@ -24,8 +24,8 @@
 
 ```javascript
 // These are embedded in the browser JavaScript bundle
-NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSy...  
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=smartstyle-c8276
+NEXT_PUBLIC_FIREBASE_API_KEY=your_firebase_api_key_here
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=your-project-id
 ```
 
 **Why is this safe?**
@@ -92,9 +92,9 @@ firebase deploy
 ### **Client Config (Public):**
 Your Firebase client configuration IS public and safe to expose:
 ```javascript
-apiKey: "AIzaSyC-KNQ-SAOopVkPKA89PThgaDlDJ35vUos"
-authDomain: "smartstyle-c8276.firebaseapp.com"
-projectId: "smartstyle-c8276"
+apiKey: "your_firebase_api_key_here"
+authDomain: "your-project-id.firebaseapp.com"
+projectId: "your-project-id"
 ```
 
 ### **Security is Enforced By:**
@@ -140,7 +140,7 @@ firebase-service-account*.json
 ### **❌ NEVER hardcode in source code:**
 ```javascript
 // ❌ BAD - Don't do this!
-const apiKey = "AIzaSyC-KNQ-SAOopVkPKA89PThgaDlDJ35vUos";
+const apiKey = "your_actual_key_here";
 
 // ✅ GOOD - Use environment variables
 const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;

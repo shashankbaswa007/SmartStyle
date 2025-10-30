@@ -99,10 +99,10 @@ Total: 15 results
 
 ### ✅ Configured (Working)
 ```env
-GOOGLE_GENAI_API_KEY=AIzaSyCVur...jAd8 ✅
-GOOGLE_GENAI_API_KEY_BACKUP=AIzaSyAIb4...TAYY ✅
-TAVILY_API_KEY=tvly-dev-t...SFdg ✅
-HUGGINGFACE_API_KEY=hf_kMZDkUg...wsMA ✅ (optional)
+GOOGLE_GENAI_API_KEY=<redacted> ✅
+GOOGLE_GENAI_API_KEY_BACKUP=<redacted> ✅
+TAVILY_API_KEY=<redacted> ✅
+HUGGINGFACE_API_KEY=<redacted> ✅ (optional)
 ```
 
 ### 📝 Notes

@@ -28,17 +28,18 @@ yarn-error.log*
 # SENSITIVE FILES - API KEYS & SECRETS
 # ========================================
 
-# Environment files with ACTUAL API keys
+# Environment files with ACTUAL API keys (block these)
 .env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+.env*.local
 
-# Keep template files (these are safe - no real keys)
-# .env.example (SAFE - can be committed)
-# .env.template (SAFE - can be committed)
-# .env.local.example (SAFE - can be committed)
+# IMPORTANT: Allow template files (these are safe - no real keys)
+!.env.example
+!.env.template
+!.env*.example
 
 # Firebase service account keys (CRITICAL - NEVER COMMIT)
 **/firebase-service-account*.json
@@ -120,5 +121,3 @@ test-*.js
 # ❌ Any *-service-account*.json files
 # ❌ Any files with "private-key" in the name
 # ❌ Any files with actual API tokens/secrets
-#
-.env*
