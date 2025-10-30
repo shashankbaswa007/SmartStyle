@@ -31,6 +31,12 @@ interface LikedOutfit {
     tatacliq: string | null;
     myntra: string | null;
   };
+  itemShoppingLinks?: Array<{
+    item: string;
+    amazon: string;
+    tatacliq: string;
+    myntra: string;
+  }>;
   likedAt: number;
 }
 
@@ -401,29 +407,77 @@ export default function LikesPage() {
                       </div>
                     )}
 
-                    {/* Outfit Items */}
+                    {/* Outfit Items with Shopping Links */}
                     {outfit.items && outfit.items.length > 0 && (
                       <div className="mb-4">
                         <h5 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                           Items
                         </h5>
-                        <ul className="space-y-1 text-sm text-foreground/80">
-                          {outfit.items.slice(0, 3).map((item, idx) => (
-                            <li key={idx} className="flex items-start gap-2">
-                              <span className="text-accent mt-0.5">•</span>
-                              <span>{item}</span>
-                            </li>
-                          ))}
+                        <ul className="space-y-2 text-sm text-foreground/80">
+                          {outfit.items.slice(0, 3).map((item, idx) => {
+                            // Find shopping links for this specific item
+                            const itemLinks = outfit.itemShoppingLinks?.find(link => link.item === item);
+                            
+                            return (
+                              <li key={idx} className="flex flex-col gap-1">
+                                <div className="flex items-start gap-2">
+                                  <span className="text-accent mt-0.5">•</span>
+                                  <span>{item}</span>
+                                </div>
+                                {/* Individual item shopping links */}
+                                {itemLinks && (
+                                  <div className="ml-4 flex flex-wrap gap-1">
+                                    {itemLinks.amazon && (
+                                      <a
+                                        href={itemLinks.amazon}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+                                        title={`Shop ${item} on Amazon`}
+                                      >
+                                        <ShoppingCart className="w-2.5 h-2.5" />
+                                        Amazon
+                                      </a>
+                                    )}
+                                    {itemLinks.tatacliq && (
+                                      <a
+                                        href={itemLinks.tatacliq}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
+                                        title={`Shop ${item} on TATA CLiQ`}
+                                      >
+                                        <ShoppingCart className="w-2.5 h-2.5" />
+                                        CLiQ
+                                      </a>
+                                    )}
+                                    {itemLinks.myntra && (
+                                      <a
+                                        href={itemLinks.myntra}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-pink-500/30 bg-pink-500/10 text-pink-600 dark:text-pink-400 hover:bg-pink-500/20 transition-colors"
+                                        title={`Shop ${item} on Myntra`}
+                                      >
+                                        <ShoppingCart className="w-2.5 h-2.5" />
+                                        Myntra
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     )}
 
-                    {/* Shopping Links */}
-                    {outfit.shoppingLinks && (
+                    {/* Overall Shopping Links */}
+                    {outfit.shoppingLinks && (outfit.shoppingLinks.amazon || outfit.shoppingLinks.tatacliq || outfit.shoppingLinks.myntra) && (
                       <div className="pt-4 border-t border-border/20">
                         <h5 className="text-xs font-semibold mb-2 text-foreground/90 flex items-center gap-1">
                           <ShoppingCart className="w-3 h-3" />
-                          Shop This Look
+                          Shop Complete Look
                         </h5>
                         <div className="flex flex-wrap gap-2">
                           {outfit.shoppingLinks.amazon && (
