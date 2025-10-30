@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { motion } from 'framer-motion';
-import { Heart, ShoppingCart, ExternalLink, Sparkles } from 'lucide-react';
+import { Heart, ShoppingCart, ExternalLink, Sparkles, Trash2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,8 @@ import TextPressure from '@/components/TextPressure';
 import SplashCursor from '@/components/SplashCursor';
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { getLikedOutfits } from '@/lib/likedOutfits';
+import { getLikedOutfits, removeLikedOutfit } from '@/lib/likedOutfits';
+import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
 interface LikedOutfit {
@@ -85,6 +86,37 @@ export default function LikesPage() {
       setError(null);
       setLoading(true);
       fetchLikedOutfits(userId);
+    }
+  };
+
+  const handleRemoveLike = async (outfitId: string, outfitTitle: string) => {
+    if (!userId) return;
+
+    try {
+      const result = await removeLikedOutfit(userId, outfitId);
+      
+      if (result.success) {
+        // Remove from local state immediately for better UX
+        setLikedOutfits(prev => prev.filter(outfit => outfit.id !== outfitId));
+        
+        toast({
+          title: 'Removed from likes',
+          description: `"${outfitTitle}" has been removed from your favorites.`,
+        });
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Failed to remove',
+          description: result.message,
+        });
+      }
+    } catch (error) {
+      console.error('Error removing like:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to remove outfit from likes',
+      });
     }
   };
 
@@ -198,15 +230,6 @@ export default function LikesPage() {
                 strokeColor="#5B21B6"
                 minFontSize={56}
               />
-            )}
-            {/* Debug info - only show in development */}
-            {process.env.NODE_ENV === 'development' && userId && (
-              <div className="absolute top-4 left-4 text-xs bg-black/50 text-white p-2 rounded">
-                <div>User: {userId.substring(0, 8)}...</div>
-                <div>Outfits: {likedOutfits.length}</div>
-                <div>Loading: {loading ? 'Yes' : 'No'}</div>
-                <div>Auth: {isAuthenticated ? 'Yes' : 'No'}</div>
-              </div>
             )}
             {/* Refresh button - only show when there are liked outfits */}
             {likedOutfits.length > 0 && (
@@ -327,7 +350,17 @@ export default function LikesPage() {
                       alt={outfit.title}
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute top-3 right-3">
+                    {/* Like indicator and Remove button */}
+                    <div className="absolute top-3 right-3 flex gap-2">
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        className="rounded-full shadow-lg hover:scale-110 transition-transform"
+                        onClick={() => handleRemoveLike(outfit.id!, outfit.title)}
+                        title="Remove from likes"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
                       <div className="bg-red-500 rounded-full p-2 shadow-lg">
                         <Heart className="w-5 h-5 text-white fill-white" />
                       </div>

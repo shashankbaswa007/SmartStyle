@@ -24,6 +24,8 @@ export interface GroqOutfitRecommendation {
   description: string;
   items: string[];
   colorPalette: string[];
+  styleType?: string;
+  occasion?: string;
   stylingTips: string[];
   imagePrompt: string;
   shoppingLinks?: {
@@ -144,6 +146,8 @@ Please provide your response in the following JSON format:
         "Key accessories"
       ],
       "colorPalette": ["primary color", "secondary color", "accent color"],
+      "styleType": "The fashion style category (e.g., casual, formal, streetwear, bohemian, minimalist, vintage, sporty)",
+      "occasion": "Specific occasion where this outfit would be appropriate (e.g., office, date night, casual brunch, night out, business meeting)",
       "stylingTips": [
         "Practical tip 1 on how to wear this outfit",
         "Practical tip 2",

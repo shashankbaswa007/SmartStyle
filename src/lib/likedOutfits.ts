@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { collection, addDoc, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
 
 export interface LikedOutfitData {
   id?: string; // Add optional id field for document ID
@@ -8,11 +8,19 @@ export interface LikedOutfitData {
   description: string;
   items: string[];
   colorPalette: string[];
+  styleType?: string; // Fashion style category
+  occasion?: string; // Suitable occasion
   shoppingLinks: {
     amazon: string | null;
     tatacliq: string | null; // Replaced Nykaa with TATA CLiQ
     myntra: string | null;
   };
+  itemShoppingLinks?: Array<{
+    item: string;
+    amazon: string;
+    tatacliq: string;
+    myntra: string;
+  }>; // Individual item shopping links
   likedAt: number;
   recommendationId: string;
 }
@@ -194,5 +202,72 @@ export async function getLikedOutfits(userId: string): Promise<LikedOutfitData[]
     
     // Return empty array instead of throwing
     return [];
+  }
+}
+
+/**
+ * Remove a liked outfit from the user's collection
+ * @param userId - The user's ID
+ * @param outfitId - The document ID of the outfit to remove
+ * @returns Success status
+ */
+export async function removeLikedOutfit(
+  userId: string,
+  outfitId: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    console.log('🗑️ Removing liked outfit:', { userId, outfitId });
+
+    // Validate inputs
+    if (!userId || userId.trim() === '' || userId === 'anonymous') {
+      console.error('❌ Invalid userId:', userId);
+      return {
+        success: false,
+        message: 'Invalid user ID',
+      };
+    }
+
+    if (!outfitId || outfitId.trim() === '') {
+      console.error('❌ Invalid outfitId:', outfitId);
+      return {
+        success: false,
+        message: 'Invalid outfit ID',
+      };
+    }
+
+    // Delete the document
+    const outfitRef = doc(db, 'users', userId, 'likedOutfits', outfitId);
+    await deleteDoc(outfitRef);
+    
+    console.log('✅ Outfit removed successfully:', outfitId);
+    
+    return {
+      success: true,
+      message: 'Outfit removed from likes',
+    };
+  } catch (error) {
+    console.error('❌ Error removing liked outfit:', error);
+    console.error('Error details:', {
+      name: error instanceof Error ? error.name : 'Unknown',
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as any)?.code,
+    });
+    
+    // Provide user-friendly error messages
+    let userMessage = 'Failed to remove outfit';
+    if ((error as any)?.code === 'permission-denied') {
+      userMessage = 'Permission denied. Please sign in again.';
+    } else if ((error as any)?.code === 'not-found') {
+      userMessage = 'Outfit not found';
+    } else if ((error as any)?.code === 'unavailable') {
+      userMessage = 'Database temporarily unavailable. Please try again.';
+    } else if (error instanceof Error) {
+      userMessage = error.message;
+    }
+    
+    return {
+      success: false,
+      message: userMessage,
+    };
   }
 }

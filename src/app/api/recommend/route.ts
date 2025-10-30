@@ -96,7 +96,14 @@ export async function POST(req: Request) {
             const outfitDescription = outfit.description || outfit.title;
             const [geminiResult, initialLinksResult] = await Promise.allSettled([
               analyzeGeneratedImage(imageUrl, outfit.title, outfitDescription, outfit.items, gender),
-              tavilySearch(initialQuery, outfit.colorPalette || [], gender, occasion)
+              tavilySearch(
+                initialQuery, 
+                outfit.colorPalette || [], 
+                gender, 
+                occasion,
+                outfit.styleType,
+                outfit.items[0] // First item as clothing type
+              )
             ]);
 
             // Extract Gemini analysis if successful
@@ -116,7 +123,9 @@ export async function POST(req: Request) {
                   geminiAnalysis.shoppingQuery, 
                   colorHexStrings,
                   gender,
-                  occasion
+                  occasion,
+                  outfit.styleType,
+                  outfit.items[0] // First item as clothing type
                 );
                 console.log(`✅ Optimized Tavily search complete for outfit ${outfitNumber}`);
 
@@ -158,7 +167,14 @@ export async function POST(req: Request) {
             console.log(`⚠️ Outfit ${outfitNumber} is placeholder, skipping Gemini analysis`);
             try {
               const query = `${outfit.title} ${outfit.items.join(' ')}`;
-              const links = await tavilySearch(query, outfit.colorPalette || [], gender, occasion);
+              const links = await tavilySearch(
+                query, 
+                outfit.colorPalette || [], 
+                gender, 
+                occasion,
+                outfit.styleType,
+                outfit.items[0] // First item as clothing type
+              );
               return {
                 ...outfit,
                 imageUrl,

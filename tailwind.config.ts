@@ -111,6 +111,22 @@ export default {
           '50%': { backgroundPosition: '100% 50%' },
           '100%': { backgroundPosition: '0% 50%' },
         },
+        'star-movement-bottom': {
+          '0%': { transform: 'translate(0%, 0%)', opacity: '1' },
+          '100%': { transform: 'translate(-100%, 0%)', opacity: '0' },
+        },
+        'star-movement-top': {
+          '0%': { transform: 'translate(0%, 0%)', opacity: '1' },
+          '100%': { transform: 'translate(100%, 0%)', opacity: '0' },
+        },
+        shimmer: {
+          '0%': { backgroundPosition: '-200% 0' },
+          '100%': { backgroundPosition: '200% 0' },
+        },
+        glow: {
+          '0%, 100%': { boxShadow: '0 0 20px rgba(var(--glow-color), 0.5)' },
+          '50%': { boxShadow: '0 0 40px rgba(var(--glow-color), 0.8)' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -118,7 +134,11 @@ export default {
         'fade-in': 'fade-in 0.5s ease-out forwards',
         'slide-up-fade': 'slide-up-fade 0.6s ease-out forwards',
         'fade-in-up': 'fade-in-up 0.8s ease-out forwards',
-        gradient: 'gradient 8s linear infinite'
+        gradient: 'gradient 8s linear infinite',
+        'star-movement-bottom': 'star-movement-bottom linear infinite alternate',
+        'star-movement-top': 'star-movement-top linear infinite alternate',
+        shimmer: 'shimmer 2s linear infinite',
+        glow: 'glow 2s ease-in-out infinite',
       },
     },
   },

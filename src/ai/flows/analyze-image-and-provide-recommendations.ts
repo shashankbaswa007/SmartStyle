@@ -44,6 +44,8 @@ const AnalyzeImageAndProvideRecommendationsOutputSchema = z.object({
       .min(100, 'Description must be at least 100 characters - write 3 complete sentences')
       .describe('MUST be AT LEAST 3 COMPLETE SENTENCES describing the outfit in detail. Include information about styling, versatility, and why it works for the occasion.'),
     colorPalette: z.array(z.string()).describe('3-4 key colors for this outfit in hex.'),
+    styleType: z.string().describe('The fashion style category (e.g., casual, formal, streetwear, bohemian, minimalist, vintage, sporty).'),
+    occasion: z.string().describe('The specific occasion or event where this outfit would be appropriate (e.g., office, date night, casual brunch, night out, business meeting).'),
     imagePrompt: z.string().describe('Prompt to use with Imagen/Gemini image models to generate an outfit image.'),
     shoppingLinks: z.object({
       amazon: z.string().nullable(),
@@ -284,6 +286,12 @@ const prompt = ai.definePrompt({
     * **colorPalette** (array): EXACTLY 3-4 hex codes ONLY in format ["#RRGGBB", "#RRGGBB", ...]
       - NO color names allowed in this array, ONLY hex codes
       - Must match colors used in imagePrompt
+    * **styleType** (string): The fashion style category (e.g., casual, formal, streetwear, bohemian, minimalist, vintage, sporty)
+      - Should match the overall aesthetic of the outfit
+      - Be specific and descriptive
+    * **occasion** (string): Specific occasion where this outfit would be appropriate
+      - Examples: "office", "date night", "casual brunch", "night out", "business meeting", "weekend shopping", "cocktail party"
+      - Should align with the user's input occasion but can be more specific
     * **imagePrompt** (string): Hyper-detailed description for image generation (100-150 words)
       - Include specific garments, colors (using hex from colorPalette), textures, accessories
       - Describe pose, setting, lighting
@@ -564,6 +572,8 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
             title: rec.title,
             description: rec.description,
             colorPalette: (rec.colorPalette || []).map(c => ensureHexColor(c)),
+            styleType: rec.styleType || input.genre || 'casual',
+            occasion: rec.occasion || input.occasion,
             imagePrompt: rec.imagePrompt || `${rec.title}: ${rec.description}. Items: ${rec.items.join(', ')}`,
             shoppingLinks: {
               amazon: rec.shoppingLinks?.amazon || null,

@@ -17,6 +17,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { Wand2, Heart, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
+import StarBorder from '@/components/StarBorder';
 
 export function Header() {
   const { user } = useAuth();
@@ -51,39 +52,48 @@ export function Header() {
           <div className="flex items-center gap-6">
             {/* Desktop Navigation - Only show if authenticated */}
             {user ? (
-              <nav className="hidden md:flex items-center gap-4">
-                <Button
-                  asChild
-                  variant="ghost"
-                  className="hover:bg-accent/10 transition-colors"
+              <nav className="hidden md:flex items-center gap-3">
+                <StarBorder
+                  as={Link}
+                  href="/style-check"
+                  className="cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/50"
+                  color="#10b981"
+                  speed="3s"
+                  thickness={10}
                 >
-                  <Link href="/style-check">
-                    <Wand2 className="w-4 h-4 mr-2" />
-                    Style Check
-                  </Link>
-                </Button>
+                  <div className="flex items-center gap-2 group">
+                    <Wand2 className="w-4 h-4 group-hover:rotate-12 transition-transform duration-300" />
+                    <span className="font-medium">Style Check</span>
+                  </div>
+                </StarBorder>
                 
-                <Button
-                  asChild
-                  variant="ghost"
-                  className="hover:bg-purple-500/10 transition-colors"
+                <StarBorder
+                  as={Link}
+                  href="/color-match"
+                  className="cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/50"
+                  color="#a855f7"
+                  speed="3s"
+                  thickness={10}
                 >
-                  <Link href="/color-match">
-                    <Palette className="w-4 h-4 mr-2" />
-                    Color Match
-                  </Link>
-                </Button>
+                  <div className="flex items-center gap-2 group">
+                    <Palette className="w-4 h-4 group-hover:rotate-12 group-hover:fill-purple-500 transition-transform duration-300" />
+                    <span className="font-medium">Color Match</span>
+                  </div>
+                </StarBorder>
                 
-                <Button
-                  asChild
-                  variant="ghost"
-                  className="hover:bg-red-500/10 transition-colors"
+                <StarBorder
+                  as={Link}
+                  href="/likes"
+                  className="cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-red-500/50"
+                  color="#ef4444"
+                  speed="3s"
+                  thickness={10}
                 >
-                  <Link href="/likes">
-                    <Heart className="w-4 h-4 mr-2" />
-                    Likes
-                  </Link>
-                </Button>
+                  <div className="flex items-center gap-2 group">
+                    <Heart className="w-4 h-4 group-hover:scale-110 group-hover:fill-red-500 transition-all duration-300" />
+                    <span className="font-medium">Likes</span>
+                  </div>
+                </StarBorder>
               </nav>
             ) : (
               <div className="hidden md:block">

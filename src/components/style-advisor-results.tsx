@@ -31,6 +31,16 @@ type ShoppingLinks = { amazon?: string | null; tatacliq?: string | null; myntra?
 // Type for color palette - can be either Gemini object format or legacy string format
 type ColorValue = string | { name?: string; hex?: string; percentage?: number };
 
+// Extended outfit type that includes itemShoppingLinks for liked outfits
+type OutfitWithLinks = AnalyzeImageAndProvideRecommendationsOutput['outfitRecommendations'][0] & {
+  itemShoppingLinks?: Array<{
+    item: string;
+    amazon: string;
+    tatacliq: string;
+    myntra: string;
+  }>;
+};
+
 
 // Helper function to convert color names to hex codes
 const convertColorNameToHex = (colorName: string): string => {
@@ -300,17 +310,35 @@ export function StyleAdvisorResults({
             return colorObj.hex || convertColorNameToHex(colorObj.name || 'gray');
           });
           
+          // Generate individual item shopping links to save with the outfit
+          const itemShoppingLinks = (outfit.items || []).map(item => {
+            const itemQuery = `${gender || ''} ${item}`.trim();
+            const genderPath = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'shop';
+            const genderCategory = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'all';
+            const encodedItem = encodeURIComponent(itemQuery);
+            
+            return {
+              item,
+              amazon: `https://www.amazon.in/s?k=${encodedItem}&rh=n:1968024031`,
+              tatacliq: `https://www.tatacliq.com/search?q=${encodeURIComponent(itemQuery + ':relevance:inStockFlag:true')}`,
+              myntra: `https://www.myntra.com/${genderPath}?rawQuery=${encodedItem}`,
+            };
+          });
+          
           const likedOutfitResult = await saveLikedOutfit(userId, {
             imageUrl,
             title: outfit.title || 'Untitled Outfit',
             description: outfit.description || outfit.title || 'No description',
             items: Array.isArray(outfit.items) ? outfit.items : [],
             colorPalette,
+            styleType: outfit.styleType,
+            occasion: outfit.occasion,
             shoppingLinks: {
               amazon: outfit.shoppingLinks?.amazon || null,
               tatacliq: outfit.shoppingLinks?.tatacliq || null,
               myntra: outfit.shoppingLinks?.myntra || null,
             },
+            itemShoppingLinks, // Save individual item links
             likedAt: Date.now(),
             recommendationId: recommendationId || `rec_${Date.now()}`,
           });
@@ -573,6 +601,8 @@ export function StyleAdvisorResults({
         )}
 
         {enrichedOutfits.map((outfit, index) => {
+          // Cast to extended type to support itemShoppingLinks from liked outfits
+          const outfitWithLinks = outfit as OutfitWithLinks;
           const outfitId = `outfit${index + 1}` as 'outfit1' | 'outfit2' | 'outfit3';
           const isSelected = selectedOutfit === outfitId;
           const isLoading = isUsing === index;
@@ -724,144 +754,81 @@ export function StyleAdvisorResults({
                   </div>
                 </div>
 
-                {/* Shopping Links */}
-                <div className="pt-4 border-t border-border/20">
-                  <h5 className="text-sm font-semibold mb-3 text-foreground/90 flex items-center gap-2">
-                    <ShoppingCart className="w-4 h-4" />
-                    Shop This Look
-                  </h5>
-                  
-                  {/* Show helpful message if no links available */}
-                  {!(outfit.shoppingLinks?.amazon || outfit.shoppingLinks?.tatacliq || outfit.shoppingLinks?.myntra) && (
-                    <Alert className="mb-3">
-                      <Info className="w-4 h-4" />
-                      <AlertTitle className="text-sm">Shopping links not available</AlertTitle>
-                      <AlertDescription className="text-xs">
-                        Try searching for &ldquo;{outfit.title}&rdquo; on your favorite shopping site, or use the items list above to shop manually.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  
-                  <div className="flex flex-wrap gap-2">
-                    {/* Amazon */}
-                    <a
-                      href={outfit.shoppingLinks?.amazon ?? '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium border ${
-                        outfit.shoppingLinks?.amazon 
-                          ? 'hover:translate-y-[-2px] transition-all duration-150 hover:shadow-md cursor-pointer' 
-                          : 'opacity-40 cursor-not-allowed'
-                      } text-orange-500 border-orange-200 bg-transparent`}
-                      aria-disabled={!outfit.shoppingLinks?.amazon}
-                      onClick={(e) => { if (!outfit.shoppingLinks?.amazon) e.preventDefault(); }}
-                      style={{ backgroundColor: outfit.shoppingLinks?.amazon ? 'rgba(255,153,0,0.04)' : undefined }}
-                      title={outfit.shoppingLinks?.amazon ? 'View on Amazon' : 'Link not available'}
-                    >
-                      <ShoppingBag className="w-4 h-4 text-orange-500" />
-                      <span className="sr-only">View on Amazon</span>
-                      <span className="hidden sm:inline">Amazon</span>
-                      {outfit.shoppingLinks?.amazon && <ExternalLink className="w-3 h-3 ml-1 text-muted-foreground" />}
-                    </a>
-
-                    {/* TATA CLiQ */}
-                    <a
-                      href={outfit.shoppingLinks?.tatacliq ?? '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium border ${
-                        outfit.shoppingLinks?.tatacliq 
-                          ? 'hover:translate-y-[-2px] transition-all duration-150 hover:shadow-md cursor-pointer' 
-                          : 'opacity-40 cursor-not-allowed'
-                      } text-blue-600 border-blue-200 bg-transparent`}
-                      aria-disabled={!outfit.shoppingLinks?.tatacliq}
-                      onClick={(e) => { if (!outfit.shoppingLinks?.tatacliq) e.preventDefault(); }}
-                      style={{ backgroundColor: outfit.shoppingLinks?.tatacliq ? 'rgba(37,99,235,0.04)' : undefined }}
-                      title={outfit.shoppingLinks?.tatacliq ? 'View on TATA CLiQ' : 'Link not available'}
-                    >
-                      <ShoppingCart className="w-4 h-4 text-blue-600" />
-                      <span className="sr-only">View on TATA CLiQ</span>
-                      <span className="hidden sm:inline">TATA CLiQ</span>
-                      {outfit.shoppingLinks?.tatacliq && <ExternalLink className="w-3 h-3 ml-1 text-muted-foreground" />}
-                    </a>
-
-                    {/* Myntra */}
-                    <a
-                      href={outfit.shoppingLinks?.myntra ?? '#'}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium border ${
-                        outfit.shoppingLinks?.myntra 
-                          ? 'hover:translate-y-[-2px] transition-all duration-150 hover:shadow-md cursor-pointer' 
-                          : 'opacity-40 cursor-not-allowed'
-                      } text-pink-500 border-pink-200 bg-transparent`}
-                      aria-disabled={!outfit.shoppingLinks?.myntra}
-                      onClick={(e) => { if (!outfit.shoppingLinks?.myntra) e.preventDefault(); }}
-                      style={{ backgroundColor: outfit.shoppingLinks?.myntra ? 'rgba(233,30,99,0.04)' : undefined }}
-                      title={outfit.shoppingLinks?.myntra ? 'View on Myntra' : 'Link not available'}
-                    >
-                      <ShoppingBag className="w-4 h-4 text-pink-500" />
-                      <span className="sr-only">View on Myntra</span>
-                      <span className="hidden sm:inline">Myntra</span>
-                      {outfit.shoppingLinks?.myntra && <ExternalLink className="w-3 h-3 ml-1 text-muted-foreground" />}
-                    </a>
-                  </div>
-                  
-                  {/* Individual Item Shopping Links */}
-                  {outfit.items && outfit.items.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-border/10">
-                      <h6 className="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wide">
-                        Shop Individual Items
-                      </h6>
-                      <div className="space-y-2">
-                        {outfit.items.map((item, itemIndex) => {
+                {/* Individual Item Shopping Links */}
+                {outfitWithLinks.items && outfitWithLinks.items.length > 0 && (
+                  <div className="pt-6 border-t border-border/20">
+                    <h5 className="text-base font-bold mb-4 text-foreground flex items-center gap-2">
+                      <ShoppingCart className="w-5 h-5 text-accent" />
+                      Shop Individual Items
+                    </h5>
+                    <div className="space-y-3">
+                      {outfitWithLinks.items.map((item, itemIndex) => {
+                        // Use saved links if available (from liked outfit), otherwise generate fresh links
+                        let itemLinks;
+                        if (outfitWithLinks.itemShoppingLinks && outfitWithLinks.itemShoppingLinks[itemIndex]) {
+                          itemLinks = outfitWithLinks.itemShoppingLinks[itemIndex];
+                        } else {
+                          // Generate links on-the-fly for new recommendations
                           const itemQuery = `${gender || ''} ${item}`.trim();
                           const genderPath = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'shop';
                           const genderCategory = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'all';
                           const encodedItem = encodeURIComponent(itemQuery);
                           
-                          return (
-                            <div key={itemIndex} className="flex items-center gap-2 text-xs">
-                              <span className="text-foreground/70 flex-1 truncate">{item}</span>
-                              <div className="flex gap-1">
-                                <a
-                                  href={`https://www.amazon.in/s?k=${encodedItem}&rh=n:1968024031`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-2 py-1 rounded bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 transition-colors"
-                                  title={`Search "${item}" on Amazon`}
-                                >
-                                  <ShoppingBag className="w-3 h-3" />
-                                </a>
-                                <a
-                                  href={`https://www.tatacliq.com/search/?searchCategory=${genderCategory}&text=${encodedItem}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-2 py-1 rounded bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-colors"
-                                  title={`Search "${item}" on TATA CLiQ`}
-                                >
-                                  <ShoppingCart className="w-3 h-3" />
-                                </a>
-                                <a
-                                  href={`https://www.myntra.com/${genderPath}?rawQuery=${encodedItem}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-2 py-1 rounded bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 transition-colors"
-                                  title={`Search "${item}" on Myntra`}
-                                >
-                                  <ShoppingBag className="w-3 h-3" />
-                                </a>
-                              </div>
+                          itemLinks = {
+                            item,
+                            amazon: `https://www.amazon.in/s?k=${encodedItem}&rh=n:1968024031`,
+                            tatacliq: `https://www.tatacliq.com/search?q=${encodeURIComponent(itemQuery + ':relevance:inStockFlag:true')}`,
+                            myntra: `https://www.myntra.com/${genderPath}?rawQuery=${encodedItem}`,
+                          };
+                        }
+                        
+                        return (
+                          <div 
+                            key={itemIndex} 
+                            className="flex items-center justify-between gap-4 p-3 rounded-lg bg-accent/5 hover:bg-accent/10 transition-all duration-200 border border-border/10 hover:border-accent/30 hover:shadow-md group"
+                          >
+                            <span className="text-sm font-medium text-foreground flex-1">{item}</span>
+                            <div className="flex gap-2">
+                              <a
+                                href={itemLinks.amazon}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 hover:scale-105 transition-all duration-200 border border-orange-200/50 hover:border-orange-300 shadow-sm hover:shadow-orange-500/30"
+                                title={`Search "${item}" on Amazon`}
+                              >
+                                <ShoppingBag className="w-4 h-4" />
+                                <span className="text-xs font-semibold hidden sm:inline">Amazon</span>
+                              </a>
+                              <a
+                                href={itemLinks.tatacliq}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 hover:scale-105 transition-all duration-200 border border-blue-200/50 hover:border-blue-300 shadow-sm hover:shadow-blue-500/30"
+                                title={`Search "${item}" on TATA CLiQ`}
+                              >
+                                <ShoppingCart className="w-4 h-4" />
+                                <span className="text-xs font-semibold hidden sm:inline">CLiQ</span>
+                              </a>
+                              <a
+                                href={itemLinks.myntra}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 hover:scale-105 transition-all duration-200 border border-pink-200/50 hover:border-pink-300 shadow-sm hover:shadow-pink-500/30"
+                                title={`Search "${item}" on Myntra`}
+                              >
+                                <ShoppingBag className="w-4 h-4" />
+                                <span className="text-xs font-semibold hidden sm:inline">Myntra</span>
+                              </a>
                             </div>
-                          );
-                        })}
-                      </div>
-                      <p className="text-xs text-muted-foreground mt-2 italic">
-                        Click any icon to search for that specific item on your preferred store
-                      </p>
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-                </div>
+                    <p className="text-xs text-muted-foreground mt-3 italic text-center">
+                      Click any button to search for that specific item on your preferred store
+                    </p>
+                  </div>
+                )}
 
                 {/* Like Button - Save to favorites */}
                 <div className="pt-6 border-t border-border/20">
