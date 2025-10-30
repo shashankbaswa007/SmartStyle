@@ -18,6 +18,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { getLikedOutfits, removeLikedOutfit } from '@/lib/likedOutfits';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface LikedOutfit {
   id: string;
@@ -351,10 +352,13 @@ export default function LikesPage() {
                 <Card className="overflow-hidden bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg hover:shadow-xl transition-shadow duration-300">
                   {/* Outfit Image */}
                   <div className="relative aspect-square">
-                    <img
+                    <Image
                       src={outfit.imageUrl}
                       alt={outfit.title}
-                      className="w-full h-full object-cover"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      priority={true}
                     />
                     {/* Like indicator and Remove button */}
                     <div className="absolute top-3 right-3 flex gap-2">

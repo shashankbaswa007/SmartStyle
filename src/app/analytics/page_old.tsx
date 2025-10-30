@@ -34,9 +34,9 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { 
   getUserPreferences, 
   getRecommendationHistory,
-  getStyleInsights,
-  getLikedOutfits
+  getStyleInsights
 } from '@/lib/personalization';
+import { getLikedOutfits } from '@/lib/likedOutfits';
 import type { UserPreferences, RecommendationHistory } from '@/lib/personalization';
 import Link from 'next/link';
 import Particles from '@/components/Particles';
