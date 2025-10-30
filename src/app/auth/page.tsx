@@ -123,73 +123,74 @@ export default function AuthPage() {
         transition={{ duration: 0.5 }}
         className="relative z-10 w-full max-w-md"
       >
-        <Card className="relative overflow-hidden backdrop-blur-2xl bg-black/40 border-2 border-white/20 shadow-2xl shadow-purple-500/20">
-          {/* Corner Gradient Effects */}
-          <div className="absolute top-0 left-0 w-32 h-32 bg-gradient-to-br from-purple-500/30 via-pink-500/20 to-transparent blur-2xl -translate-x-8 -translate-y-8" />
-          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-blue-500/30 via-cyan-500/20 to-transparent blur-2xl translate-x-8 -translate-y-8" />
-          <div className="absolute bottom-0 left-0 w-32 h-32 bg-gradient-to-tr from-pink-500/30 via-purple-500/20 to-transparent blur-2xl -translate-x-8 translate-y-8" />
-          <div className="absolute bottom-0 right-0 w-32 h-32 bg-gradient-to-tl from-cyan-500/30 via-blue-500/20 to-transparent blur-2xl translate-x-8 translate-y-8" />
-                  
-          <div className="absolute top-0 left-0 w-48 h-48 bg-gradient-to-br from-purple-500/50 via-pink-500/40 to-transparent blur-3xl -translate-x-10 -translate-y-10 z-0" />
-          <div className="absolute top-0 right-0 w-48 h-48 bg-gradient-to-bl from-blue-500/50 via-cyan-500/40 to-transparent blur-3xl translate-x-10 -translate-y-10 z-0" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-gradient-to-tr from-pink-500/50 via-purple-500/40 to-transparent blur-3xl -translate-x-10 translate-y-10 z-0" />
-          <div className="absolute bottom-0 right-0 w-48 h-48 bg-gradient-to-tl from-cyan-500/50 via-blue-500/40 to-transparent blur-3xl translate-x-10 translate-y-10 z-0" />
-          <CardHeader className="relative z-10 space-y-4 text-center">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              className="mx-auto w-20 h-20 bg-gradient-to-br from-purple-400 via-pink-400 to-blue-400 rounded-2xl flex items-center justify-center shadow-lg shadow-purple-500/50"
-            >
-              <Sparkles className="w-10 h-10 text-white drop-shadow-lg" />
-            </motion.div>
-            
-            <CardTitle className="text-4xl font-bold bg-gradient-to-r from-purple-300 via-lavender-300 to-blue-300 bg-clip-text text-transparent drop-shadow-lg">
-              Sign in to SmartStyle
-            </CardTitle>
-          </CardHeader>
-
-          <CardContent className="relative z-10 space-y-6">
-            {/* Google Sign-In Button */}
-            <motion.div
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Button
-                onClick={handleGoogleSignIn}
-                disabled={googleLoading}
-                className="w-full h-14 text-base font-semibold bg-gradient-to-r from-purple-500 via-pink-500 to-blue-500 hover:from-purple-400 hover:via-pink-400 hover:to-blue-400 transition-all shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-pink-500/50 text-white"
-                size="lg"
+        {/* Animated Glowing Gradient Border Container */}
+        <div className="relative rounded-3xl shadow-xl flex justify-center">
+          {/* Uniform border: use a thin wrapper for the border effect */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="w-full max-w-xs h-full rounded-3xl border-[2.5px] border-transparent bg-border-gradient animate-gradient-move-soft" />
+          </div>
+          <div className="relative rounded-3xl bg-black p-5 min-w-[260px] max-w-xs mx-auto flex flex-col items-center shadow-lg shadow-blue-900/40">
+            <CardHeader className="relative z-10 space-y-2 text-center p-0 mb-2">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+                className="mx-auto w-11 h-11 bg-gradient-to-br from-purple-600 via-blue-500 to-blue-400 rounded-xl flex items-center justify-center shadow-md shadow-blue-500/40"
               >
-                {googleLoading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    Signing you in...
-                  </>
-                ) : (
-                  <>
-                    <Chrome className="h-5 w-5 mr-2" />
-                    Continue with Google
-                  </>
-                )}
-              </Button>
-            </motion.div>
-
-            
-
-            {/* Privacy Notice */}
-            <motion.p
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="text-xs text-center text-gray-300"
-            >
-              By signing in, you agree to our Terms of Service and Privacy Policy. 
-              Your data is encrypted and secure.
-            </motion.p>
-          </CardContent>
-        </Card>
+                <Sparkles className="w-6 h-6 text-white drop-shadow" />
+              </motion.div>
+              <CardTitle className="text-lg font-bold bg-gradient-to-r from-purple-200 via-blue-200 to-blue-400 bg-clip-text text-transparent drop-shadow">
+                Sign in to SmartStyle
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="relative z-10 space-y-3 p-0 w-full">
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <Button
+                  onClick={handleGoogleSignIn}
+                  disabled={googleLoading}
+                  className="w-full h-10 text-sm font-semibold bg-gradient-to-r from-purple-500 via-blue-400 to-blue-500 hover:from-purple-400 hover:via-blue-300 hover:to-blue-400 transition-all shadow-md shadow-blue-500/30 hover:shadow-lg hover:shadow-purple-500/30 text-white"
+                  size="lg"
+                >
+                  {googleLoading ? (
+                    <>
+                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+                      Signing you in...
+                    </>
+                  ) : (
+                    <>
+                      <Chrome className="h-5 w-5 mr-2" />
+                      Continue with Google
+                    </>
+                  )}
+                </Button>
+              </motion.div>
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.5 }}
+                className="text-xs text-center text-gray-400"
+              >
+                By signing in, you agree to our Terms of Service and Privacy Policy.<br />Your data is encrypted and secure.
+              </motion.p>
+            </CardContent>
+          </div>
+          <style jsx global>{`
+            .bg-border-gradient {
+              background: linear-gradient(90deg, #7B68EE 0%, #6EC3F4 50%, #7B68EE 100%);
+              background-size: 250% 250%;
+              filter: blur(0.2px) brightness(1.1) drop-shadow(0 0 8px #7B68EE) drop-shadow(0 0 12px #6EC3F4);
+              animation: gradient-move-soft 3s linear infinite;
+            }
+            @keyframes gradient-move-soft {
+              0% { background-position: 0% 50%; }
+              100% { background-position: 100% 50%; }
+            }
+          `}</style>
+        </div>
 
         {/* Trust Indicators */}
         <motion.div

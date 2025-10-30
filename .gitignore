@@ -121,3 +121,4 @@ test-*.js
 # ❌ Any *-service-account*.json files
 # ❌ Any files with "private-key" in the name
 # ❌ Any files with actual API tokens/secrets
+*.tsbuildinfo

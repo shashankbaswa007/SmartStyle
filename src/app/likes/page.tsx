@@ -476,6 +476,7 @@ export default function LikesPage() {
                       </div>
                     )}
 
+                    
                     {/* Overall Shopping Links */}
                     {outfit.shoppingLinks && (outfit.shoppingLinks.amazon || outfit.shoppingLinks.tatacliq || outfit.shoppingLinks.myntra) && (
                       <div className="pt-4 border-t border-border/20">
