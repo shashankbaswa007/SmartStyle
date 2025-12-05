@@ -335,9 +335,9 @@ type GeminiModelCandidate = {
 };
 
 // Only using models confirmed to work with Genkit v1.20.0
-// gemini-2.0-flash-exp is the only model consistently available in v1beta
+// Avoid experimental "-exp" variants to reduce heavy/slow compute and quota pressure
 const GEMINI_MODEL_SEQUENCE: GeminiModelCandidate[] = [
-  { name: 'googleai/gemini-2.0-flash-preview-image-generation', retries: 5 },  // Increased retries for overload handling
+  { name: 'googleai/gemini-2.0-flash', retries: 3 },
 ];
 
 const GEMINI_MODEL_CONFIG = {

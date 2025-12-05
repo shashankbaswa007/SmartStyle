@@ -1,7 +1,92 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+// NOTE: node-vibrant is imported dynamically at runtime if available. Do NOT use a static import
 
 // Use GOOGLE_GENAI_API_KEY to match the rest of the codebase
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY!);
+
+// Simple in-memory cache for discovered models to avoid calling ListModels frequently
+let _modelDiscoveryCache: { models: string[]; expiresAt: number } | null = null;
+
+// small helper to fetch with timeout
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit & { timeoutMs?: number }) {
+  const timeout = init?.timeoutMs ?? 6000; // default 6s
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const resp = await fetch(input, { ...(init || {}), signal: controller.signal });
+    return resp;
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+// Helper: sleep for ms
+const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+/**
+ * Attempt Gemini generateContent with retries and exponential backoff.
+ * Honors retryDelay from Google error when available.
+ */
+async function callGeminiWithRetry(modelName: string, payload: any, maxRetries = 3) {
+  let attempt = 0;
+  let lastError: any = null;
+
+  // The generative-ai client expects a single prompt or properly shaped input.
+  // Avoid passing an array containing generationConfig/inlineData directly as that
+  // can cause "Unknown name 'generationConfig'" errors in some client versions.
+  const promptToSend = Array.isArray(payload) ? payload[0] : payload;
+
+  while (attempt < maxRetries) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent(promptToSend);
+      return result;
+    } catch (err: any) {
+      lastError = err;
+
+      // If error has retry info from Google, honor it
+      const retryInfo = err?.errorDetails?.find((d: any) => d['@type'] && d['@type'].includes('RetryInfo'));
+
+      // Parse retryDelay robustly. It might be an object { seconds, nanos }, a string like '37s', or a number
+      let retryDelaySec: number | null = null;
+      try {
+        const rd = retryInfo?.retryDelay || retryInfo;
+        if (rd) {
+          if (typeof rd === 'object') {
+            retryDelaySec = Number(rd.seconds || rd.secs || 0) || null;
+          } else if (typeof rd === 'string') {
+            const m = rd.match(/(\d+)(?:s)?/);
+            retryDelaySec = m ? Number(m[1]) : null;
+          } else if (typeof rd === 'number') {
+            retryDelaySec = Number(rd);
+          }
+        }
+      } catch (parseErr) {
+        retryDelaySec = null;
+      }
+
+      // If 429, wait and retry with exponential backoff
+      const isRateLimit = err?.status === 429 || (err?.message && /Too Many Requests/i.test(err.message));
+
+      attempt += 1;
+      if (attempt >= maxRetries || !isRateLimit) {
+        // No more retries or not rate-limited -> throw
+        throw err;
+      }
+
+  // Use a slightly more conservative minimum backoff when server retryDelay is missing or zero.
+  // Cap the backoff to 60s to avoid excessively long waits.
+  const minBackoff = 2000; // 2s
+  const computedBackoff = Math.min(minBackoff * 2 ** Math.max(0, attempt - 1), 60000);
+  const backoffMs = typeof retryDelaySec === 'number' && retryDelaySec > 0 ? Number(retryDelaySec) * 1000 : computedBackoff;
+      console.warn(`⚠️ Gemini ${modelName} rate-limited, retrying attempt ${attempt}/${maxRetries} in ${backoffMs}ms`);
+      await sleep(backoffMs);
+      continue;
+    }
+  }
+
+  throw lastError;
+}
 
 export interface GeneratedImageAnalysis {
   dominantColors: Array<{
@@ -22,224 +107,251 @@ export async function analyzeGeneratedImage(
   outfitTitle: string,
   outfitDescription: string,
   outfitItems: string[],
-  gender: string
+  gender: string,
+  imageBuffer?: Buffer
 ): Promise<GeneratedImageAnalysis> {
   console.log('🔍 Analyzing generated image for accurate colors and shopping query...');
 
-  const prompt = `You are an expert fashion color analyst and e-commerce search specialist with deep knowledge of Indian fashion terminology and color theory.
+  // NOTE: we no longer ask Gemini to produce color palettes. Gemini is used only to
+  // generate an optimized shopping query and a detailed description. Color extraction
+  // is handled locally via node-vibrant (or other local fallbacks) to avoid depending
+  // on remote model color analysis.
+  const prompt = `You are an e-commerce search specialist with deep knowledge of Indian fashion.
 
-Analyze this outfit image with EXTREME PRECISION and provide:
+Given the following context, generate two outputs in JSON (no markdown):
+1) "shoppingQuery": a concise 8-12 word search query optimized for Indian e-commerce product titles (start with gender, include primary item and main visible color/attributes).
+2) "detailedDescription": 2-3 sentences describing visible fabrics, textures, patterns, and occasion/vibe.
 
-1. **DOMINANT COLORS ANALYSIS** (CRITICAL - Extract from the ACTUAL IMAGE):
-   - Identify the 3-5 most dominant colors you SEE in the outfit
-   - Use fashion-specific color names (e.g., "Midnight Navy", "Champagne Gold", "Dusty Rose", "Emerald Green")
-   - Provide ACCURATE hex codes that match the colors in the image
-   - Estimate the percentage each color occupies in the outfit
-   - Order by prominence (most dominant first)
-   - IMPORTANT: Analyze the ACTUAL image, not the description
+Context:
+- Title: "${outfitTitle}"
+- Description: "${outfitDescription}"
+- Gender: "${gender}"
+- Item types: ${outfitItems.join(', ')}
 
-2. **OPTIMIZED SHOPPING QUERY** (Create the PERFECT search for Indian e-commerce):
-   Context provided:
-   - Title: "${outfitTitle}"
-   - Description: "${outfitDescription}"
-   - Gender: "${gender}"
-   - Item types: ${outfitItems.join(', ')}
-   
-   Create a search query that is HIGHLY OPTIMIZED for e-commerce product searches:
-   
-   **STRUCTURE YOUR QUERY EXACTLY LIKE THIS:**
-   [Gender] [Primary Item Type] [Dominant Color] [Secondary Details] [Fabric/Pattern] [Occasion]
-   
-   **EXAMPLES OF PERFECT QUERIES:**
-   - "women blue silk kurta set with embroidery festive wear"
-   - "men black cotton casual shirt long sleeve"
-   - "women red georgette saree with golden border wedding"
-   - "men navy blue slim fit blazer formal office wear"
-   - "women white chiffon dress floral print party wear"
-   
-   **CRITICAL RULES:**
-   ✓ Start with gender (male/female/women/men)
-   ✓ Use the PRIMARY clothing item next (shirt, kurta, saree, dress, blazer, etc.)
-   ✓ Include the MAIN color from your analysis
-   ✓ Add fabric type if visible (silk, cotton, chiffon, georgette, velvet, linen)
-   ✓ Add pattern if visible (printed, embroidered, plain, striped, floral)
-   ✓ End with occasion/style (wedding, festive, casual, formal, party, office)
-   ✓ Keep it 8-12 words maximum - BE CONCISE but SPECIFIC
-   ✓ Use terms that appear in product titles on Myntra, TATA CLiQ, and Amazon India
-   ✓ NO generic terms like "outfit" or "ensemble" - use SPECIFIC item names
-   ✓ Focus on the UPPER HALF clothing item (shirt, kurta, top, blouse, blazer, jacket)
-   
-   Make it PERFECTLY OPTIMIZED for product search algorithms on Indian e-commerce platforms.
-
-3. **DETAILED VISUAL DESCRIPTION** (2-3 sentences):
-   - Describe EXACTLY what you see in the image
-   - Mention specific colors, fabrics, patterns, textures, or embellishments visible
-   - Note the styling, silhouette, and overall aesthetic
-   - Specify the occasion/vibe this outfit is suitable for
-
-RESPONSE FORMAT (JSON only, no markdown):
+RESPONSE FORMAT (JSON only):
 {
-  "dominantColors": [
-    { "name": "Midnight Navy", "hex": "#191970", "percentage": 45 },
-    { "name": "Ivory White", "hex": "#fffff0", "percentage": 30 },
-    { "name": "Champagne Gold", "hex": "#f7e7ce", "percentage": 15 },
-    { "name": "Dusty Rose", "hex": "#dcae96", "percentage": 10 }
-  ],
-  "shoppingQuery": "women navy silk kurta embroidered festive wear",
-  "detailedDescription": "This elegant ensemble features a rich midnight navy silk kurta with intricate champagne gold embroidery along the neckline and sleeves, paired with an ivory dupatta. The luxurious fabric combination and detailed embellishment work create a sophisticated look perfect for weddings and festive celebrations."
-}
+  "shoppingQuery": "...",
+  "detailedDescription": "..."
+}`;
 
-CRITICAL REQUIREMENTS:
-✓ Extract colors FROM THE IMAGE using your vision capabilities
-✓ Use precise hex codes that accurately match what you see
-✓ The shopping query MUST be concise (8-12 words), specific, and optimized for product search
-✓ Focus on the PRIMARY upper-half clothing item in the query
-✓ Use search terms that match actual product titles on e-commerce sites
-✓ Include ALL relevant details: gender, colors, items, fabric, pattern, style, occasion
-✓ Use Indian fashion terminology (kurta, dupatta, saree, lehenga, anarkali, etc.)
-✓ Make sure the description reflects what is ACTUALLY VISIBLE in the image`;
+  // PERFORMANCE: We'll perform a local color extraction first and produce a fast heuristic
+  // shoppingQuery/detailedDescription. By default we SKIP Gemini to keep latency low.
+  // Set SMARTSTYLE_USE_GEMINI=true to enable Gemini analysis (may be slower / quota-bound).
 
-  // Fetch the image once
-  let base64Image: string;
+  let tryModels: string[] = [];
   try {
-    const imageResponse = await fetch(imageUrl);
-    const imageBuffer = await imageResponse.arrayBuffer();
-    base64Image = Buffer.from(imageBuffer).toString('base64');
-  } catch (error) {
-    console.error('❌ Failed to fetch image:', error);
-    throw error;
+    console.log('🔎 Discovering available models via REST ListModels endpoint...');
+    const apiKey = process.env.GOOGLE_GENAI_API_KEY;
+    // Use cached models when recent
+    if (_modelDiscoveryCache && _modelDiscoveryCache.expiresAt > Date.now()) {
+      tryModels = _modelDiscoveryCache.models;
+      console.log('ℹ️ Using cached Gemini model list', tryModels);
+    } else if (apiKey) {
+      const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`, { timeoutMs: 4000 });
+      if (res.ok) {
+        const json = await res.json();
+        const modelsList = Array.isArray(json) ? json : (json?.models || []);
+        const geminiModels = (modelsList as any[])
+          .filter((m) => (m.name || m.model || m.modelId || '').toLowerCase().includes('gemini'))
+          .filter((m) => {
+            const methods = m.supportedMethods || m.methods || m.supportedOperations || [];
+            if (!methods) return true;
+            return methods.includes('generateContent') || methods.includes('generate');
+          })
+          .map((m) => m.name || m.model || m.modelId || m.id)
+          .filter(Boolean);
+
+        if (geminiModels.length > 0) {
+          geminiModels.sort((a: string, b: string) => (a.includes('2.0') ? -1 : 1) - (b.includes('2.0') ? -1 : 1));
+          tryModels = geminiModels;
+          // cache for 10 minutes
+          _modelDiscoveryCache = { models: tryModels, expiresAt: Date.now() + 1000 * 60 * 10 };
+          console.log('✅ Discovered Gemini models via REST:', tryModels);
+        }
+      } else {
+        console.warn('⚠️ ListModels REST request failed with status', res.status);
+      }
+    } else {
+      console.warn('⚠️ GOOGLE_GENAI_API_KEY missing; cannot call ListModels REST endpoint');
+    }
+  } catch (discErr) {
+    console.warn('⚠️ Model discovery via REST failed, will fall back to default list', (discErr as any)?.message || discErr);
   }
 
-  // Try Gemini 2.0 Flash first (primary model)
+  if (!tryModels || tryModels.length === 0) {
+    tryModels = ['gemini-2.0-flash-exp', 'gemini-2.0', 'gemini-1.5-flash', 'gemini-1.5'];
+  }
+
+  // PERFORMANCE: exclude heavy flash-exp models (gemini-*-flash-exp) to avoid slow/expensive compute.
+  // This skips gemini-2.0-flash-exp and similar experimental flash-exp variants.
+  tryModels = tryModels.filter((m) => !/flash-exp/i.test(String(m)));
+
+  // First: attempt local Vibrant extraction (fast, no network to Gemini)
+  let dominantColors: Array<{ name: string; hex: string; percentage: number }> = [];
   try {
-    console.log('🚀 Attempting analysis with Gemini 2.0 Flash (primary model)...');
-    
-    const flashModel = genAI.getGenerativeModel({ 
-      model: 'gemini-2.0-flash-exp',
-      generationConfig: {
-        temperature: 0.4, // Lower temperature for more accurate color analysis
-        topP: 0.8,
-        topK: 40,
-      }
-    });
+    console.log('🛠️ Attempting local color extraction fallback using Vibrant (dynamic import if available)...');
 
-    const flashResult = await flashModel.generateContent([
-      prompt,
-      {
-        inlineData: {
-          mimeType: 'image/jpeg',
-          data: base64Image,
-        },
-      },
-    ]);
-
-    const responseText = flashResult.response.text();
-    console.log('📊 Gemini 2.0 Flash analysis response:', responseText.substring(0, 200) + '...');
-
-    // Extract JSON from the response (handle markdown code blocks)
-    let jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    
-    // If wrapped in markdown code blocks, extract from there
-    if (!jsonMatch) {
-      const codeBlockMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
-      if (codeBlockMatch) {
-        jsonMatch = codeBlockMatch[1].match(/\{[\s\S]*\}/);
-      }
-    }
-    
-    if (!jsonMatch) {
-      throw new Error('Failed to extract JSON from Gemini 2.0 Flash response');
-    }
-
-    const analysis: GeneratedImageAnalysis = JSON.parse(jsonMatch[0]);
-
-    // Validate the response
-    if (!analysis.dominantColors || analysis.dominantColors.length === 0) {
-      throw new Error('No colors extracted from image by Gemini 2.0 Flash');
-    }
-
-    console.log('✅ Gemini 2.0 Flash analysis successful:', {
-      colorsFound: analysis.dominantColors.length,
-      colors: analysis.dominantColors.map(c => `${c.name} (${c.hex})`).join(', '),
-      query: analysis.shoppingQuery,
-    });
-
-    return analysis;
-
-  } catch (flash2Error) {
-    console.warn('⚠️ Gemini 2.0 Flash failed, falling back to Gemini 1.5 Flash:', flash2Error);
-
-    // Fallback to Gemini 1.5 Flash (more stable than 1.5 Pro)
+    // Dynamically import node-vibrant only when needed so builds without the package succeed
+    let Vibrant: any = null;
     try {
-      console.log('🔄 Attempting analysis with Gemini 1.5 Flash (fallback model)...');
-      
-      const flashModel = genAI.getGenerativeModel({ 
-        model: 'gemini-1.5-flash',
-        generationConfig: {
-          temperature: 0.4,
-          topP: 0.8,
-          topK: 40,
-        }
-      });
-
-      const flashResult = await flashModel.generateContent([
-        prompt,
-        {
-          inlineData: {
-            mimeType: 'image/jpeg',
-            data: base64Image,
-          },
-        },
-      ]);
-
-      const responseText = flashResult.response.text();
-      console.log('📊 Gemini 1.5 Flash analysis response:', responseText.substring(0, 200) + '...');
-
-      // Extract JSON from the response
-      let jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      
-      if (!jsonMatch) {
-        const codeBlockMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
-        if (codeBlockMatch) {
-          jsonMatch = codeBlockMatch[1].match(/\{[\s\S]*\}/);
-        }
-      }
-      
-      if (!jsonMatch) {
-        throw new Error('Failed to extract JSON from Gemini 1.5 Flash response');
-      }
-
-      const analysis: GeneratedImageAnalysis = JSON.parse(jsonMatch[0]);
-
-      // Validate the response
-      if (!analysis.dominantColors || analysis.dominantColors.length === 0) {
-        throw new Error('No colors extracted from image by Gemini 1.5 Flash');
-      }
-
-      console.log('✅ Gemini 1.5 Flash analysis successful (fallback):', {
-        colorsFound: analysis.dominantColors.length,
-        colors: analysis.dominantColors.map(c => `${c.name} (${c.hex})`).join(', '),
-        query: analysis.shoppingQuery,
-      });
-
-      return analysis;
-
-    } catch (flashError) {
-      console.error('❌ Both Gemini 2.0 Flash and 1.5 Flash failed:', {
-        flash2Error,
-        flashError,
-      });
-      
-      // Final fallback: create a basic query from the provided data
-      const fallbackQuery = `${gender} ${outfitItems.join(' ')} ${outfitTitle} buy online India fashion`;
-      
-      console.log('⚠️ Using fallback query (no AI analysis):', fallbackQuery);
-      
-      return {
-        dominantColors: [],
-        shoppingQuery: fallbackQuery,
-        detailedDescription: outfitDescription,
-      };
+      // Use eval('require') to avoid bundlers attempting to statically resolve this optional dependency
+      // @ts-ignore
+      const req: any = eval('require');
+      const mod = req('node-vibrant');
+      Vibrant = mod?.default || mod;
+    } catch (impErr) {
+      console.warn('⚠️ node-vibrant not available (optional dependency missing) - skipping local color extraction', (impErr as any)?.message || impErr);
     }
+
+    if (Vibrant) {
+      // Use provided imageBuffer if available (route persists image and passes buffer). Otherwise fetch image bytes for local extraction (with timeout)
+      let buf: Buffer | undefined = imageBuffer;
+      if (!buf) {
+        const imageResp = await fetchWithTimeout(imageUrl, { timeoutMs: 5000 });
+        if (imageResp.ok) {
+          buf = Buffer.from(await imageResp.arrayBuffer());
+        } else {
+          throw new Error(`Failed to fetch image for local extraction: ${imageResp.status}`);
+        }
+      }
+
+      const palette = await Vibrant.from(buf).getPalette();
+      const swatches = Object.values(palette).filter(Boolean) as any[];
+      const totalPopulation = swatches.reduce((sum, s) => sum + (s.getPopulation ? s.getPopulation() : (s.population || 0)), 0) || 1;
+
+      const normalizeHex = (raw: string) => {
+        if (!raw) return '#808080';
+        let hex = raw.trim();
+        if (!hex.startsWith('#')) hex = `#${hex}`;
+        if (/^#[0-9A-Fa-f]{3}$/.test(hex)) {
+          hex = '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+        }
+        if (/^#[0-9A-Fa-f]{6}$/.test(hex)) return hex.toUpperCase();
+        return '#808080';
+      };
+
+      dominantColors = swatches
+        .map((s) => {
+          const rawHex = s.getHex ? s.getHex() : (s.hex || '#808080');
+          const hex = normalizeHex(rawHex);
+          const population = s.getPopulation ? s.getPopulation() : (s.population || 0);
+          return {
+            name: '',
+            hex,
+            percentage: Math.round((population / totalPopulation) * 100),
+          };
+        })
+        .slice(0, 5);
+
+      console.log('✅ Local color extraction complete, colors:', dominantColors.map((c) => c.hex).join(', '));
+    }
+  } catch (vibrantErr) {
+    console.warn('⚠️ Local color extraction failed or not available:', (vibrantErr as any)?.message || vibrantErr);
+  }
+
+  // Fast heuristic generator for shoppingQuery and detailedDescription (no Gemini). This is low-latency.
+  const generateLocalQuery = () => {
+    const primaryItem = outfitItems && outfitItems.length ? outfitItems[0] : outfitTitle.split(' ')[0] || 'shirt';
+    const primaryColor = dominantColors && dominantColors.length ? dominantColors[0].hex : '';
+    const colorPhrase = primaryColor ? primaryColor : '';
+    const basicQuery = `${gender} ${primaryItem} ${colorPhrase}`.trim();
+    const shoppingQuery = basicQuery.split(' ').slice(0, 8).join(' ');
+    const detailedDescription = `${outfitDescription || outfitTitle}. ${primaryColor ? `Dominant color: ${primaryColor}.` : ''}`;
+    return { shoppingQuery, detailedDescription };
+  };
+
+  // By default, skip Gemini to keep latency low. Use SMARTSTYLE_USE_GEMINI=true to enable Gemini.
+  const useGemini = String(process.env.SMARTSTYLE_USE_GEMINI || 'false').toLowerCase() === 'true';
+
+  let geminiShoppingQuery: string | null = null;
+  let geminiDetailedDescription: string | null = null;
+
+  if (!useGemini) {
+    const local = generateLocalQuery();
+    return {
+      dominantColors,
+      shoppingQuery: local.shoppingQuery,
+      detailedDescription: local.detailedDescription,
+    };
+  }
+
+  // If we reach here, the caller explicitly wants Gemini — fall through to discovery + call flow
+
+  // At this point Gemini didn't provide usable colors. Try local Vibrant fallback if available.
+    try {
+      console.log('🛠️ Attempting local color extraction fallback using Vibrant (dynamic import if available)...');
+
+      // Dynamically import node-vibrant only when needed so builds without the package succeed
+      let Vibrant: any = null;
+      try {
+        // Use eval('require') to avoid bundlers attempting to statically resolve this optional dependency
+        // @ts-ignore
+        const req: any = eval('require');
+        const mod = req('node-vibrant');
+        Vibrant = mod?.default || mod;
+      } catch (impErr) {
+        console.warn('⚠️ node-vibrant not available (optional dependency missing) - skipping local color extraction', (impErr as any)?.message || impErr);
+      }
+
+      if (!Vibrant) {
+        throw new Error('node-vibrant not available');
+      }
+
+      // Use provided imageBuffer if available (route persists image and passes buffer). Otherwise fetch image bytes for local extraction (with timeout)
+      let buf: Buffer | undefined = imageBuffer;
+      if (!buf) {
+        const imageResp = await fetchWithTimeout(imageUrl, { timeoutMs: 5000 });
+        if (!imageResp.ok) throw new Error(`Failed to fetch image for local extraction: ${imageResp.status}`);
+        buf = Buffer.from(await imageResp.arrayBuffer());
+      }
+
+      const palette = await Vibrant.from(buf).getPalette();
+    // Convert Vibrant palette to desired shape and estimate percentages by population
+    const swatches = Object.values(palette).filter(Boolean) as any[];
+    const totalPopulation = swatches.reduce((sum, s) => sum + (s.getPopulation ? s.getPopulation() : (s.population || 0)), 0) || 1;
+
+    // Helper: normalize hex to full #RRGGBB uppercase
+    const normalizeHex = (raw: string) => {
+      if (!raw) return '#808080';
+      let hex = raw.trim();
+      if (!hex.startsWith('#')) hex = `#${hex}`;
+      // Expand shorthand #abc -> #aabbcc
+      if (/^#[0-9A-Fa-f]{3}$/.test(hex)) {
+        hex = '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+      }
+      if (/^#[0-9A-Fa-f]{6}$/.test(hex)) return hex.toUpperCase();
+      return '#808080';
+    };
+
+    const dominantColors = swatches
+      .map((s) => {
+        const rawHex = s.getHex ? s.getHex() : (s.hex || '#808080');
+        const hex = normalizeHex(rawHex);
+        const population = s.getPopulation ? s.getPopulation() : (s.population || 0);
+        return {
+          name: '', // keep name empty for local fallbacks (UI will show only swatch)
+          hex,
+          percentage: Math.round((population / totalPopulation) * 100),
+        };
+      })
+      .slice(0, 5);
+
+    const fallbackQuery = `${gender} ${outfitItems.join(' ')} ${outfitTitle} buy online India fashion`;
+
+    console.log('✅ Local color extraction complete, colors:', dominantColors.map((c) => c.hex).join(', '));
+
+    return {
+      dominantColors,
+      shoppingQuery: geminiShoppingQuery || fallbackQuery,
+      detailedDescription: geminiDetailedDescription || outfitDescription,
+    };
+  } catch (vibrantErr) {
+    console.error('⚠️ Local color extraction failed or not available:', (vibrantErr as any)?.message || vibrantErr);
+    const fallbackQuery = `${gender} ${outfitItems.join(' ')} ${outfitTitle} buy online India fashion`;
+    return {
+      dominantColors: [],
+      shoppingQuery: geminiShoppingQuery || fallbackQuery,
+      detailedDescription: geminiDetailedDescription || outfitDescription,
+    };
   }
 }

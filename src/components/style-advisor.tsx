@@ -340,21 +340,24 @@ export function StyleAdvisor() {
         
         try {
           const validation = await validateImageForStyleAnalysis(imageDataUrl);
-          
-          if (!validation.isValid) {
-            setImageValidationError(validation.message);
+
+          // Only accept images with confidence strictly greater than 80
+          const MIN_CONFIDENCE = 80;
+          if (!validation.confidence || validation.confidence <= MIN_CONFIDENCE) {
+            const msg = validation.message || `Image confidence too low (${validation.confidence ?? 0}%). Please upload a clearer photo.`;
+            setImageValidationError(msg);
             toast({
               variant: "destructive",
-              title: "Invalid Photo",
-              description: validation.message,
+              title: "Photo Validation Failed",
+              description: msg,
             });
             return;
           }
-          
-          // Image is valid - proceed
+
+          // Image passes the stricter confidence gate - proceed
           setPreviewImage(imageDataUrl);
           setImageValidationError(null);
-          
+
           toast({
             title: "Photo Captured ✓",
             description: `Ready for style analysis! (Confidence: ${validation.confidence}%)`,
@@ -430,13 +433,16 @@ export function StyleAdvisor() {
       try {
         const validation = await validateImageForStyleAnalysis(imgSrc);
 
-        if (!validation.isValid) {
-          setImageValidationError(validation.message);
+        // Only accept images with confidence strictly greater than 80
+        const MIN_CONFIDENCE = 80;
+        if (!validation.confidence || validation.confidence <= MIN_CONFIDENCE) {
+          const msg = validation.message || `Image confidence too low (${validation.confidence ?? 0}%). Please upload a clearer photo.`;
+          setImageValidationError(msg);
           setPreviewImage(null); // Clear the preview
           toast({
             variant: "destructive",
             title: "Image Validation Failed",
-            description: validation.message,
+            description: msg,
           });
           return;
         }

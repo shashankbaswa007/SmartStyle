@@ -197,7 +197,7 @@ export default function LikesPage() {
       <div className="absolute inset-0 -z-10" >
         {isMounted && (
           <>
-            <SplashCursor />
+            <SplashCursor SPLAT_RADIUS={0.12} SPLAT_FORCE={3000} COLOR_UPDATE_SPEED={5} />
             <Particles
               className="absolute inset-0"
               particleColors={['#7B68EE', '#E6E6FA']}
@@ -477,50 +477,7 @@ export default function LikesPage() {
                     )}
 
                     
-                    {/* Overall Shopping Links */}
-                    {outfit.shoppingLinks && (outfit.shoppingLinks.amazon || outfit.shoppingLinks.tatacliq || outfit.shoppingLinks.myntra) && (
-                      <div className="pt-4 border-t border-border/20">
-                        <h5 className="text-xs font-semibold mb-2 text-foreground/90 flex items-center gap-1">
-                          <ShoppingCart className="w-3 h-3" />
-                          Shop Complete Look
-                        </h5>
-                        <div className="flex flex-wrap gap-2">
-                          {outfit.shoppingLinks.amazon && (
-                            <a
-                              href={outfit.shoppingLinks.amazon}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
-                            >
-                              Amazon
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                          {outfit.shoppingLinks.tatacliq && (
-                            <a
-                              href={outfit.shoppingLinks.tatacliq}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
-                            >
-                              TATA CLiQ
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                          {outfit.shoppingLinks.myntra && (
-                            <a
-                              href={outfit.shoppingLinks.myntra}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border border-pink-500/30 bg-pink-500/10 text-pink-600 dark:text-pink-400 hover:bg-pink-500/20 transition-colors"
-                            >
-                              Myntra
-                              <ExternalLink className="w-3 h-3" />
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                    {/* Overall shopping links removed per request */}
                   </CardContent>
                 </Card>
               </motion.div>

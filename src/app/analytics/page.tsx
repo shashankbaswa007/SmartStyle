@@ -404,7 +404,7 @@ export default function AnalyticsPage() {
           <div className="fixed inset-0 -z-10">
             {isMounted && (
               <>
-                <SplashCursor />
+                {/* SplashCursor removed for analytics page */}
                 <Particles
                   className="absolute inset-0"
                   particleColors={['#8B5CF6', '#A78BFA', '#C4B5FD']}
@@ -470,7 +470,7 @@ export default function AnalyticsPage() {
         <div className="fixed inset-0 -z-10">
           {isMounted && (
             <>
-              <SplashCursor />
+              {/* SplashCursor removed for analytics page */}
               <Particles
                 className="absolute inset-0"
                 particleColors={['#8B5CF6', '#A78BFA', '#C4B5FD']}
@@ -794,94 +794,6 @@ export default function AnalyticsPage() {
                 </Card>
               </motion.div>
 
-              {/* Seasonal Activity - Area Chart */}
-              <motion.div variants={itemVariants}>
-                <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg h-full">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Activity className="w-5 h-5 text-accent" />
-                      Seasonal Trends
-                    </CardTitle>
-                    <CardDescription>
-                      Your fashion activity across seasons
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {insights && insights.seasonalDistribution.length > 0 ? (
-                      <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart 
-                            data={insights.seasonalDistribution.map(s => ({ 
-                              season: s.season.charAt(0).toUpperCase() + s.season.slice(1), 
-                              count: s.count 
-                            }))}
-                            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                          >
-                            <defs>
-                              <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor={CHART_COLORS.emerald[0]} stopOpacity={0.8}/>
-                                <stop offset="95%" stopColor={CHART_COLORS.emerald[2]} stopOpacity={0.1}/>
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
-                            <XAxis 
-                              dataKey="season" 
-                              stroke="hsl(var(--muted-foreground))"
-                              fontSize={12}
-                            />
-                            <YAxis 
-                              stroke="hsl(var(--muted-foreground))"
-                              fontSize={12}
-                            />
-                            <Tooltip 
-                              content={<CustomTooltip />}
-                              cursor={{ stroke: CHART_COLORS.emerald[0], strokeWidth: 2 }}
-                            />
-                            <Area 
-                              type="monotone" 
-                              dataKey="count" 
-                              name="Outfits"
-                              stroke={CHART_COLORS.emerald[0]}
-                              strokeWidth={3}
-                              fill="url(#colorCount)"
-                              animationDuration={1500}
-                              animationBegin={600}
-                              dot={{ fill: CHART_COLORS.emerald[0], r: 5 }}
-                              activeDot={{ r: 7, fill: CHART_COLORS.emerald[0] }}
-                            />
-                          </AreaChart>
-                        </ResponsiveContainer>
-                        <div className="mt-6 grid grid-cols-2 gap-4">
-                          <div className="flex items-center justify-between p-3 rounded-lg bg-accent/5 hover:bg-accent/10 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <TrendingUp className="w-5 h-5 text-emerald-500" />
-                              <span className="text-sm font-medium">Like Rate</span>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-lg font-bold">{insights?.likeRate || 0}%</div>
-                              <p className="text-xs text-muted-foreground">Satisfaction</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center justify-between p-3 rounded-lg bg-accent/5 hover:bg-accent/10 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <Star className="w-5 h-5 text-yellow-500" />
-                              <span className="text-sm font-medium">Most Active</span>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-lg font-bold">{insights?.mostActiveMonth || 'N/A'}</div>
-                              <p className="text-xs text-muted-foreground">Month</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-sm text-center py-20">
-                        No seasonal data yet. Start your fashion journey across seasons!
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
             </div>
 
             {/* Quick Actions */}

@@ -680,13 +680,35 @@ export function StyleAdvisorResults({
                       </div>
                     )}
 
-                    {/* Color Palette - Visual only, no text */}
-                    {outfit.colorPalette && outfit.colorPalette.length > 0 && (
+                    {/* Color Palette - Prefer rich Gemini colorDetails (name + hex + percentage). Fallback to colorPalette strings if needed. */}
+                    {(outfit as any).colorDetails && (outfit as any).colorDetails.length > 0 ? (
                       <div>
                         <h5 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
                           Color Palette
                         </h5>
-                        <div className="flex gap-2 flex-wrap">
+                        <div className="flex gap-3 items-center flex-nowrap overflow-x-auto">
+                          {/* Render only swatches for colorDetails (no hex or percentage) */}
+                          {(outfit as any).colorDetails.map((c: any, idx: number) => {
+                            const hex = c.hex || (typeof c === 'string' ? c : '#808080');
+                            const isValidHex = /^#[0-9A-F]{6}$/i.test(hex);
+                            return (
+                              <div key={idx} className="group relative">
+                                <div 
+                                  className="w-10 h-10 rounded-full border-2 border-white/10 shadow-sm" 
+                                  style={{ backgroundColor: isValidHex ? hex : '#808080' }}
+                                  aria-hidden="true"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : outfit.colorPalette && outfit.colorPalette.length > 0 ? (
+                      <div>
+                        <h5 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+                          Color Palette
+                        </h5>
+                        <div className="flex gap-2 flex-nowrap overflow-x-auto">
                           {outfit.colorPalette.map((colorValue: ColorValue, idx) => {
                             let hex: string;
                             let colorName: string;
@@ -726,14 +748,14 @@ export function StyleAdvisorResults({
                                 <div 
                                   className="w-12 h-12 rounded-full border-2 border-white/20 shadow-md transition-transform duration-200"
                                   style={{ backgroundColor: isValidHex ? hex : '#808080' }}
-                                  title={`${colorName} ${hex}`}
+                                  aria-hidden="true"
                                 />
                               </div>
                             );
                           })}
                         </div>
                       </div>
-                    )}
+                    ) : null}
 
                     {/* Outfit Items */}
                     {outfit.items && outfit.items.length > 0 && (

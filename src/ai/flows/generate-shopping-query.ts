@@ -63,7 +63,8 @@ For "Blue formal blazer for men":
 Return the optimized search queries.`;
 
     const { output } = await ai.generate({
-      model: 'googleai/gemini-2.0-flash-exp',
+      // Use non-experimental flash variant to avoid experimental "-exp" compute path
+      model: 'googleai/gemini-2.0-flash',
       prompt,
       output: {
         schema: ShoppingQuerySchema,
