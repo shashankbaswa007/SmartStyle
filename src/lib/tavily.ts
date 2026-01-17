@@ -1,10 +1,51 @@
 import { generateShoppingQuery } from '@/ai/flows/generate-shopping-query';
+import type { StructuredAnalysis, ClothingItem } from '@/ai/flows/analyze-generated-image';
+import { buildShoppingQueries, calculateColorMatchScore } from './shopping-query-builder';
 
 type TavilyResult = {
   amazon?: string | null;
   myntra?: string | null;
   tatacliq?: string | null;
 };
+
+// NEW: Enhanced shopping link result with per-item breakdown
+interface ShoppingLinkResult {
+  byItem: ItemShoppingLinks[];
+  byPlatform: {
+    amazon: ProductLink[];
+    myntra: ProductLink[];
+    tatacliq: ProductLink[];
+  };
+  metadata: {
+    analyzedAt: string;
+    itemsDetected: number;
+    totalLinksFound: number;
+    averageRelevanceScore: number;
+  };
+}
+
+interface ItemShoppingLinks {
+  itemNumber: number;
+  itemName: string; // e.g., "Navy Blue Cotton Shirt"
+  category: string;
+  links: {
+    amazon: ProductLink[];
+    myntra: ProductLink[];
+    tatacliq: ProductLink[];
+  };
+}
+
+interface ProductLink {
+  url: string;
+  title: string;
+  price?: string; // Extracted from title/content if available
+  relevanceScore: number; // 0-1, how well it matches the item
+  matchReasons: string[]; // ["color match", "exact type", "gender match"]
+}
+
+// In-memory cache for shopping searches (6-hour TTL)
+const searchCache = new Map<string, { result: ShoppingLinkResult; expiresAt: number }>();
+const CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
 
 interface TavilySearchResult {
   title: string;
@@ -92,6 +133,298 @@ function extractUpperHalfItem(text: string): boolean {
 function extractLink(results: TavilySearchResult[], platform: string): string | null {
   const result = results.find(r => r.url.includes(platform));
   return result?.url || null;
+}
+
+// Helper to extract price from product title or content
+function extractPrice(text: string): string | undefined {
+  // Match Indian currency patterns: ₹1,234 or Rs.1234 or INR 1234
+  const pricePatterns = [
+    /₹\s*([0-9,]+(?:\.[0-9]{2})?)/,
+    /Rs\.?\s*([0-9,]+(?:\.[0-9]{2})?)/i,
+    /INR\s*([0-9,]+(?:\.[0-9]{2})?)/i,
+  ];
+  
+  for (const pattern of pricePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return `₹${match[1]}`;
+    }
+  }
+  return undefined;
+}
+
+// NEW: Enhanced multi-level filtering for product relevance
+function calculateProductRelevance(
+  result: any,
+  item: ClothingItem,
+  queryUsed: string
+): { score: number; reasons: string[] } {
+  const text = `${result.title} ${result.content}`.toLowerCase();
+  const reasons: string[] = [];
+  let score = result.score || 0.5; // Start with Tavily's base score
+
+  // Level 1: Item type matching (CRITICAL)
+  const itemTypeVariants = [
+    item.type.toLowerCase(),
+    ...item.type.toLowerCase().split(/[\s-]+/), // Handle "t-shirt" -> ["t", "shirt"]
+  ];
+  const hasExactType = itemTypeVariants.some(variant => 
+    text.includes(variant) || result.url.toLowerCase().includes(variant)
+  );
+  if (hasExactType) {
+    score += 0.3;
+    reasons.push('exact type match');
+  } else {
+    score -= 0.2; // Penalize wrong item type
+  }
+
+  // Level 2: Domain verification (ensure correct platform)
+  const urlLower = result.url.toLowerCase();
+  if (urlLower.includes('amazon.in') || urlLower.includes('myntra.com') || urlLower.includes('tatacliq.com')) {
+    score += 0.1;
+    reasons.push('trusted domain');
+  }
+
+  // Level 3: Color matching with fuzzy logic
+  const colorScore = calculateColorMatchScore(item.color, text);
+  if (colorScore > 0.7) {
+    score += 0.25;
+    reasons.push('strong color match');
+  } else if (colorScore > 0.4) {
+    score += 0.15;
+    reasons.push('partial color match');
+  }
+
+  // Level 4: Gender indication
+  const genderKeywords = item.gender === 'men' 
+    ? ['men', 'male', 'mens', "men's"]
+    : item.gender === 'women'
+    ? ['women', 'female', 'womens', "women's", 'ladies']
+    : [];
+  
+  if (genderKeywords.some(kw => text.includes(kw) || urlLower.includes(kw))) {
+    score += 0.15;
+    reasons.push('gender match');
+  }
+
+  // Level 5: Additional attributes (fabric, style, fit)
+  let attributeMatches = 0;
+  if (item.fabric && text.includes(item.fabric.toLowerCase())) {
+    attributeMatches++;
+    reasons.push(`fabric: ${item.fabric}`);
+  }
+  if (item.fit && text.includes(item.fit.toLowerCase())) {
+    attributeMatches++;
+    reasons.push(`fit: ${item.fit}`);
+  }
+  if (item.style && item.style.some(s => text.includes(s.toLowerCase()))) {
+    attributeMatches++;
+    reasons.push('style match');
+  }
+  if (item.pattern && text.includes(item.pattern.toLowerCase())) {
+    attributeMatches++;
+    reasons.push(`pattern: ${item.pattern}`);
+  }
+  
+  score += attributeMatches * 0.1;
+
+  // Level 6: Product page bonus (direct product links are better than category pages)
+  if (urlLower.includes('/p/') || urlLower.includes('/product/') || urlLower.includes('/dp/')) {
+    score += 0.2;
+    reasons.push('direct product page');
+  }
+
+  // Normalize score to 0-1 range
+  score = Math.max(0, Math.min(1, score));
+
+  return { score, reasons };
+}
+
+// NEW: Search shopping links with structured item-by-item analysis
+export async function searchShoppingLinksStructured(
+  structuredAnalysis: StructuredAnalysis
+): Promise<ShoppingLinkResult> {
+  console.log(`🛍️ [STRUCTURED SEARCH] Starting search for ${structuredAnalysis.items.length} items...`);
+
+  // Check cache
+  const cacheKey = JSON.stringify(structuredAnalysis.items.map(i => ({
+    type: i.type,
+    color: i.color,
+    gender: i.gender,
+  })));
+  
+  const cached = searchCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    console.log('✅ Returning cached shopping links');
+    return cached.result;
+  }
+
+  // Generate platform-specific queries for each item
+  const platformQueries = buildShoppingQueries(structuredAnalysis);
+  
+  const byItem: ItemShoppingLinks[] = [];
+  const byPlatform: ShoppingLinkResult['byPlatform'] = {
+    amazon: [],
+    myntra: [],
+    tatacliq: [],
+  };
+  
+  let totalLinksFound = 0;
+  let totalRelevanceScore = 0;
+  let relevanceCount = 0;
+
+  // Search each item across all platforms
+  for (let i = 0; i < structuredAnalysis.items.length; i++) {
+    const item = structuredAnalysis.items[i];
+    const amazonQuery = platformQueries.amazon[i];
+    const myntraQuery = platformQueries.myntra[i];
+    const cliqQuery = platformQueries.tatacliq[i];
+    
+    console.log(`\n🔍 Item ${item.itemNumber}: ${item.type} (${item.color})`);
+    
+    const itemLinks: ItemShoppingLinks = {
+      itemNumber: item.itemNumber,
+      itemName: `${item.color} ${item.fabric || ''} ${item.type}`.trim(),
+      category: item.category,
+      links: {
+        amazon: [],
+        myntra: [],
+        tatacliq: [],
+      },
+    };
+
+    // Search Amazon
+    try {
+      const amazonResults = await searchSinglePlatform(
+        amazonQuery,
+        ['amazon.in'],
+        item
+      );
+      itemLinks.links.amazon = amazonResults.slice(0, 2); // Top 2 results
+      byPlatform.amazon.push(...amazonResults.slice(0, 2));
+      totalLinksFound += amazonResults.length;
+      amazonResults.forEach(r => {
+        totalRelevanceScore += r.relevanceScore;
+        relevanceCount++;
+      });
+      console.log(`  Amazon: ${amazonResults.length} results`);
+    } catch (err) {
+      console.error(`  Amazon search failed:`, (err as Error).message);
+    }
+
+    // Search Myntra
+    try {
+      const myntraResults = await searchSinglePlatform(
+        myntraQuery,
+        ['myntra.com'],
+        item
+      );
+      itemLinks.links.myntra = myntraResults.slice(0, 2);
+      byPlatform.myntra.push(...myntraResults.slice(0, 2));
+      totalLinksFound += myntraResults.length;
+      myntraResults.forEach(r => {
+        totalRelevanceScore += r.relevanceScore;
+        relevanceCount++;
+      });
+      console.log(`  Myntra: ${myntraResults.length} results`);
+    } catch (err) {
+      console.error(`  Myntra search failed:`, (err as Error).message);
+    }
+
+    // Search Tata CLiQ
+    try {
+      const cliqResults = await searchSinglePlatform(
+        cliqQuery,
+        ['tatacliq.com'],
+        item
+      );
+      itemLinks.links.tatacliq = cliqResults.slice(0, 2);
+      byPlatform.tatacliq.push(...cliqResults.slice(0, 2));
+      totalLinksFound += cliqResults.length;
+      cliqResults.forEach(r => {
+        totalRelevanceScore += r.relevanceScore;
+        relevanceCount++;
+      });
+      console.log(`  Tata CLiQ: ${cliqResults.length} results`);
+    } catch (err) {
+      console.error(`  Tata CLiQ search failed:`, (err as Error).message);
+    }
+
+    byItem.push(itemLinks);
+  }
+
+  const result: ShoppingLinkResult = {
+    byItem,
+    byPlatform,
+    metadata: {
+      analyzedAt: new Date().toISOString(),
+      itemsDetected: structuredAnalysis.items.length,
+      totalLinksFound,
+      averageRelevanceScore: relevanceCount > 0 ? totalRelevanceScore / relevanceCount : 0,
+    },
+  };
+
+  // Cache the result
+  searchCache.set(cacheKey, {
+    result,
+    expiresAt: Date.now() + CACHE_TTL_MS,
+  });
+
+  console.log(`\n✅ [STRUCTURED SEARCH] Complete: ${totalLinksFound} links, avg relevance: ${result.metadata.averageRelevanceScore.toFixed(2)}`);
+  return result;
+}
+
+// Helper: Search a single platform for a single item
+async function searchSinglePlatform(
+  query: string,
+  domains: string[],
+  item: ClothingItem
+): Promise<ProductLink[]> {
+  try {
+    const response = await fetch(TAVILY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        query,
+        search_depth: 'basic',
+        include_domains: domains,
+        max_results: 10,
+        include_answer: false,
+      }),
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Tavily API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    
+    if (!data.results || data.results.length === 0) {
+      return [];
+    }
+
+    // Filter, score, and rank results
+    const products: ProductLink[] = data.results
+      .map((result: any) => {
+        const relevance = calculateProductRelevance(result, item, query);
+        return {
+          url: result.url,
+          title: result.title,
+          price: extractPrice(`${result.title} ${result.content}`),
+          relevanceScore: relevance.score,
+          matchReasons: relevance.reasons,
+        };
+      })
+      .filter((p: ProductLink) => p.relevanceScore > 0.3) // Minimum threshold
+      .sort((a: ProductLink, b: ProductLink) => b.relevanceScore - a.relevanceScore);
+
+    return products;
+  } catch (err) {
+    console.error(`Platform search failed for ${domains[0]}:`, (err as Error).message);
+    return [];
+  }
 }
 
 // Helper to check if we have enough valid results
@@ -362,3 +695,10 @@ export async function tavilySearch(
 }
 
 export default tavilySearch;
+
+// Export new types for structured shopping
+export type {
+  ShoppingLinkResult,
+  ItemShoppingLinks,
+  ProductLink,
+};

@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Sparkles, Palette, Shirt, PenTool, Wand2, ShoppingCart, ShoppingBag, ExternalLink, Check, Heart, Info } from "lucide-react";
+import { Sparkles, Palette, Shirt, PenTool, Wand2, ShoppingCart, ShoppingBag, ExternalLink, Check, Heart, Info, ChevronDown, Star } from "lucide-react";
 import type { AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
+import type { ShoppingLinkResult, ItemShoppingLinks, ProductLink } from "@/lib/tavily";
 import { Separator } from "./ui/separator";
 import { RecommendationFeedback } from "./RecommendationFeedback";
 import { auth, db } from "@/lib/firebase";
@@ -17,6 +18,7 @@ import { Badge } from "./ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import { saveRecommendationUsage } from "@/app/actions";
+import { EnhancedColorPalette } from "./EnhancedColorPalette";
 
 interface StyleAdvisorResultsProps {
   analysisResult: AnalyzeImageAndProvideRecommendationsOutput;
@@ -24,6 +26,8 @@ interface StyleAdvisorResultsProps {
   imageSources?: ('gemini' | 'pollinations' | 'placeholder')[];
   recommendationId: string | null;
   gender?: string; // Add gender for better shopping link results
+  // NEW: Enhanced shopping links from structured analysis
+  enhancedShoppingLinks?: ShoppingLinkResult[];
 }
 
 type ShoppingLinks = { amazon?: string | null; tatacliq?: string | null; myntra?: string | null };
@@ -111,6 +115,223 @@ const convertColorNameToHex = (colorName: string): string => {
   return hexValue;
 };
 
+// NEW: Enhanced Shopping Links Display Component
+const EnhancedShoppingSection = ({ 
+  shoppingLinks, 
+  outfitTitle 
+}: { 
+  shoppingLinks: ShoppingLinkResult;
+  outfitTitle: string;
+}) => {
+  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  
+  const toggleItem = (itemNumber: number) => {
+    setExpandedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(itemNumber)) {
+        next.delete(itemNumber);
+      } else {
+        next.add(itemNumber);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="pt-6 border-t border-border/20">
+      <div className="flex items-center justify-between mb-4">
+        <h5 className="text-base font-bold text-foreground flex items-center gap-2">
+          <ShoppingBag className="w-5 h-5 text-accent" />
+          🛍️ Shop This Look
+        </h5>
+        <Badge variant="secondary" className="text-xs">
+          {shoppingLinks.metadata.totalLinksFound} products found
+        </Badge>
+      </div>
+
+      {/* Shopping by Item */}
+      <div className="space-y-3">
+        {shoppingLinks.byItem.map((item) => {
+          const isExpanded = expandedItems.has(item.itemNumber);
+          const totalLinks = 
+            item.links.amazon.length + 
+            item.links.myntra.length + 
+            item.links.tatacliq.length;
+
+          return (
+            <div 
+              key={item.itemNumber}
+              className="rounded-lg bg-accent/5 border border-border/10 overflow-hidden"
+            >
+              {/* Item Header */}
+              <button
+                onClick={() => toggleItem(item.itemNumber)}
+                className="w-full flex items-center justify-between p-3 hover:bg-accent/10 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-semibold text-foreground">
+                    {item.itemName}
+                  </span>
+                  <Badge variant="outline" className="text-xs">
+                    {item.category}
+                  </Badge>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {totalLinks} {totalLinks === 1 ? 'option' : 'options'}
+                  </span>
+                  <ChevronDown 
+                    className={`w-4 h-4 text-muted-foreground transition-transform ${
+                      isExpanded ? 'rotate-180' : ''
+                    }`}
+                  />
+                </div>
+              </button>
+
+              {/* Expanded Links */}
+              {isExpanded && (
+                <div className="p-3 pt-0 space-y-2">
+                  {/* Amazon Links */}
+                  {item.links.amazon.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-orange-600 mb-1 flex items-center gap-1">
+                        <ShoppingBag className="w-3 h-3" />
+                        Amazon India
+                      </div>
+                      {item.links.amazon.map((link, idx) => (
+                        <a
+                          key={idx}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-2 rounded-md bg-orange-50 dark:bg-orange-950/20 hover:bg-orange-100 dark:hover:bg-orange-950/40 border border-orange-200/50 transition-colors group"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-foreground line-clamp-2 group-hover:text-orange-600">
+                                {link.title}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                {link.price && (
+                                  <span className="text-xs font-bold text-orange-600">
+                                    {link.price}
+                                  </span>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-3 h-3 fill-orange-400 text-orange-400" />
+                                  <span className="text-xs text-muted-foreground">
+                                    {(link.relevanceScore * 5).toFixed(1)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <ExternalLink className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-1" />
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Myntra Links */}
+                  {item.links.myntra.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-pink-600 mb-1 flex items-center gap-1">
+                        <ShoppingBag className="w-3 h-3" />
+                        Myntra
+                      </div>
+                      {item.links.myntra.map((link, idx) => (
+                        <a
+                          key={idx}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-2 rounded-md bg-pink-50 dark:bg-pink-950/20 hover:bg-pink-100 dark:hover:bg-pink-950/40 border border-pink-200/50 transition-colors group"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-foreground line-clamp-2 group-hover:text-pink-600">
+                                {link.title}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                {link.price && (
+                                  <span className="text-xs font-bold text-pink-600">
+                                    {link.price}
+                                  </span>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-3 h-3 fill-pink-400 text-pink-400" />
+                                  <span className="text-xs text-muted-foreground">
+                                    {(link.relevanceScore * 5).toFixed(1)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <ExternalLink className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-1" />
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Tata CLiQ Links */}
+                  {item.links.tatacliq.length > 0 && (
+                    <div>
+                      <div className="text-xs font-semibold text-blue-600 mb-1 flex items-center gap-1">
+                        <ShoppingCart className="w-3 h-3" />
+                        Tata CLiQ
+                      </div>
+                      {item.links.tatacliq.map((link, idx) => (
+                        <a
+                          key={idx}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block p-2 rounded-md bg-blue-50 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/40 border border-blue-200/50 transition-colors group"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-foreground line-clamp-2 group-hover:text-blue-600">
+                                {link.title}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                {link.price && (
+                                  <span className="text-xs font-bold text-blue-600">
+                                    {link.price}
+                                  </span>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-3 h-3 fill-blue-400 text-blue-400" />
+                                  <span className="text-xs text-muted-foreground">
+                                    {(link.relevanceScore * 5).toFixed(1)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <ExternalLink className="w-3 h-3 text-muted-foreground flex-shrink-0 mt-1" />
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Metadata footer */}
+      <div className="mt-3 pt-3 border-t border-border/10">
+        <p className="text-xs text-muted-foreground text-center">
+          Analyzed {shoppingLinks.metadata.itemsDetected} items • 
+          Avg. relevance: {(shoppingLinks.metadata.averageRelevanceScore * 100).toFixed(0)}% •
+          Click to view product details
+        </p>
+      </div>
+    </div>
+  );
+};
+
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -141,6 +362,7 @@ export function StyleAdvisorResults({
   imageSources = [],
   recommendationId,
   gender,
+  enhancedShoppingLinks,
 }: StyleAdvisorResultsProps) {
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedOutfit, setSelectedOutfit] = useState<string | null>(null);
@@ -709,80 +931,75 @@ export function StyleAdvisorResults({
                       </div>
                     )}
 
-                    {/* Color Palette - Prefer rich Gemini colorDetails (name + hex + percentage). Fallback to colorPalette strings if needed. */}
-                    {(outfit as any).colorDetails && (outfit as any).colorDetails.length > 0 ? (
-                      <div>
-                        <h5 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                          Color Palette
-                        </h5>
-                        <div className="flex gap-3 items-center flex-nowrap overflow-x-auto">
-                          {/* Render only swatches for colorDetails (no hex or percentage) */}
-                          {(outfit as any).colorDetails.map((c: any, idx: number) => {
-                            const hex = c.hex || (typeof c === 'string' ? c : '#808080');
-                            const isValidHex = /^#[0-9A-F]{6}$/i.test(hex);
-                            return (
-                              <div key={idx} className="group relative">
-                                <div 
-                                  className="w-10 h-10 rounded-full border-2 border-white/10 shadow-sm" 
-                                  style={{ backgroundColor: isValidHex ? hex : '#808080' }}
-                                  aria-hidden="true"
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : outfit.colorPalette && outfit.colorPalette.length > 0 ? (
-                      <div>
-                        <h5 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                          Color Palette
-                        </h5>
-                        <div className="flex gap-2 flex-nowrap overflow-x-auto">
-                          {outfit.colorPalette.map((colorValue: ColorValue, idx) => {
-                            let hex: string;
-                            let colorName: string;
-                            
-                            // Handle both object format (from Gemini) and string format (legacy)
-                            if (typeof colorValue === 'object' && colorValue !== null && 'hex' in colorValue) {
-                              // Gemini format: {name: "Navy", hex: "#000080", percentage: 40}
-                              hex = colorValue.hex || '#808080';
-                              colorName = colorValue.name || hex;
-                            } else if (typeof colorValue === 'string') {
-                              // Legacy string format: "Navy #000080" or "#000080" or "Navy"
-                              const cleanValue = colorValue.trim();
-                              
-                              // Check if it's a mixed format like "Navy #000080"
-                              const hexMatch = cleanValue.match(/#[0-9A-Fa-f]{6}/);
-                              if (hexMatch) {
-                                hex = hexMatch[0].toUpperCase();
-                                colorName = cleanValue.replace(hexMatch[0], '').trim() || hex;
-                              } else if (cleanValue.startsWith('#')) {
-                                hex = cleanValue.toUpperCase();
-                                colorName = hex;
-                              } else {
-                                // It's a color name, convert it
-                                hex = convertColorNameToHex(cleanValue);
-                                colorName = cleanValue;
-                              }
-                            } else {
-                              // Fallback for unexpected formats
-                              hex = '#808080';
-                              colorName = 'Unknown';
+                    {/* Enhanced Interactive Color Palette */}
+                    {((outfit as any).colorDetails && (outfit as any).colorDetails.length > 0) || 
+                     (outfit.colorPalette && outfit.colorPalette.length > 0) || 
+                     ((outfit as any).generatedImageColors && (outfit as any).generatedImageColors.length > 0) ? (
+                      <div className="space-y-3">
+                        {/* Generated Image Colors (Primary - Most Accurate) */}
+                        {(outfit as any).generatedImageColors && (outfit as any).generatedImageColors.length > 0 && (
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Sparkles className="w-4 h-4 text-accent" />
+                              <h5 className="text-sm font-semibold text-accent uppercase tracking-wide">
+                                Actual Outfit Colors
+                              </h5>
+                              <span className="text-xs text-muted-foreground">(from generated image)</span>
+                            </div>
+                            <EnhancedColorPalette
+                              colors={(outfit as any).generatedImageColors.map((c: any) => ({
+                                hex: c.hex || '#808080',
+                                name: c.name || '',
+                                percentage: Math.round((c.count / 1000) * 100), // Approximate percentage
+                              }))}
+                              outfitTitle={outfit.title + " - Actual Colors"}
+                              showHarmonyInfo={true}
+                            />
+                          </div>
+                        )}
+
+                        {/* AI Recommended Colors (Secondary) */}
+                        {((outfit as any).colorDetails || outfit.colorPalette) && (
+                          <EnhancedColorPalette
+                            colors={
+                              (outfit as any).colorDetails && (outfit as any).colorDetails.length > 0
+                                ? (outfit as any).colorDetails.map((c: any) => ({
+                                    hex: c.hex || (typeof c === 'string' ? convertColorNameToHex(c) : '#808080'),
+                                    name: c.name || '',
+                                    percentage: c.percentage,
+                                  }))
+                                : (outfit.colorPalette || []).map((colorValue: ColorValue) => {
+                                    let hex: string;
+                                    let colorName: string;
+                                    
+                                    if (typeof colorValue === 'object' && colorValue !== null && 'hex' in colorValue) {
+                                      hex = colorValue.hex || '#808080';
+                                      colorName = colorValue.name || hex;
+                                    } else if (typeof colorValue === 'string') {
+                                      const cleanValue = colorValue.trim();
+                                      const hexMatch = cleanValue.match(/#[0-9A-Fa-f]{6}/);
+                                      if (hexMatch) {
+                                        hex = hexMatch[0].toUpperCase();
+                                        colorName = cleanValue.replace(hexMatch[0], '').trim() || hex;
+                                      } else if (cleanValue.startsWith('#')) {
+                                        hex = cleanValue.toUpperCase();
+                                        colorName = hex;
+                                      } else {
+                                        hex = convertColorNameToHex(cleanValue);
+                                        colorName = cleanValue;
+                                      }
+                                    } else {
+                                      hex = '#808080';
+                                      colorName = 'Unknown';
+                                    }
+                                    
+                                    return { hex, name: colorName };
+                                  })
                             }
-                            
-                            const isValidHex = /^#[0-9A-F]{6}$/i.test(hex);
-                            
-                            return (
-                              <div key={idx} className="group relative">
-                                <div 
-                                  className="w-12 h-12 rounded-full border-2 border-white/20 shadow-md transition-transform duration-200"
-                                  style={{ backgroundColor: isValidHex ? hex : '#808080' }}
-                                  aria-hidden="true"
-                                />
-                              </div>
-                            );
-                          })}
-                        </div>
+                            outfitTitle={outfit.title}
+                            showHarmonyInfo={!(outfit as any).generatedImageColors}
+                          />
+                        )}
                       </div>
                     ) : null}
 
@@ -805,8 +1022,16 @@ export function StyleAdvisorResults({
                   </div>
                 </div>
 
-                {/* Individual Item Shopping Links */}
-                {outfitWithLinks.items && outfitWithLinks.items.length > 0 && (
+                {/* NEW: Enhanced Shopping Links (if available) */}
+                {enhancedShoppingLinks && enhancedShoppingLinks[index] && (
+                  <EnhancedShoppingSection
+                    shoppingLinks={enhancedShoppingLinks[index]}
+                    outfitTitle={outfit.title}
+                  />
+                )}
+
+                {/* Individual Item Shopping Links (Legacy fallback) */}
+                {(!enhancedShoppingLinks || !enhancedShoppingLinks[index]) && outfitWithLinks.items && outfitWithLinks.items.length > 0 && (
                   <div className="pt-6 border-t border-border/20">
                     <h5 className="text-base font-bold mb-4 text-foreground flex items-center gap-2">
                       <ShoppingCart className="w-5 h-5 text-accent" />

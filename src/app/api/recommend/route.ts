@@ -103,35 +103,57 @@ export async function POST(req: Request) {
             return colorObj.hex || '#000000';
           }) || [];
 
-          // PARALLEL: Generate image + search links simultaneously
-          // 10-second timeout per outfit to prevent hanging
-          const [imageUrl, initialLinks] = await withTimeout(
-            Promise.all([
-              generateOutfitImage(
-                outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`,
-                colorHexCodes
-              ),
-              tavilySearch(
-                `${outfit.title} ${outfit.items.join(' ')}`,
-                outfit.colorPalette || [],
-                gender,
-                occasion,
-                outfit.styleType,
-                outfit.items[0]
-              )
-            ]),
-            10000, // 10 second timeout per outfit
-            `Outfit ${outfitNumber} generation timed out`
-          ) as [string, any];
+          // STEP 1: Generate image first
+          const imageUrl = await withTimeout(
+            generateOutfitImage(
+              outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`,
+              colorHexCodes
+            ),
+            10000, // 10 second timeout
+            `Outfit ${outfitNumber} image generation timed out`
+          ) as string;
+
+          console.log(`✅ [OUTFIT ${outfitNumber}] Image generated`);
+
+          // STEP 2: Extract ACTUAL colors from generated image for accurate shopping
+          let extractedColors: any = null;
+          try {
+            extractedColors = await withTimeout(
+              extractColorsFromUrl(imageUrl),
+              5000, // 5 second timeout for color extraction
+              `Color extraction timeout`
+            );
+            console.log(`✅ [OUTFIT ${outfitNumber}] Extracted ${extractedColors.dominantColors.length} colors from generated image`);
+          } catch (colorError) {
+            console.warn(`⚠️ [OUTFIT ${outfitNumber}] Color extraction failed, using AI colors:`, (colorError as Error).message);
+          }
+
+          // Use extracted colors from image if available, otherwise fallback to AI colors
+          const accurateColorPalette = extractedColors?.dominantColors?.slice(0, 5) || outfit.colorPalette || [];
+          
+          // STEP 3: Search for shopping links using ACTUAL image colors
+          const shoppingLinks = await withTimeout(
+            tavilySearch(
+              `${outfit.title} ${outfit.items.join(' ')}`,
+              accurateColorPalette,
+              gender,
+              occasion,
+              outfit.styleType,
+              outfit.items[0]
+            ),
+            8000, // 8 second timeout for shopping
+            `Shopping search timeout`
+          );
 
           console.log(`⏱️ [PERF] Outfit ${outfitNumber} completed: ${Date.now() - outfitStart}ms`);
 
-          // Skip heavy color analysis - use AI-generated colors directly (saves 2-4s per outfit)
+          // Return outfit with accurate colors and matching shopping links
           return {
             ...outfit,
             imageUrl,
-            colorPalette: outfit.colorPalette || [],
-            shoppingLinks: initialLinks
+            colorPalette: accurateColorPalette,
+            generatedImageColors: extractedColors?.colorPalette?.slice(0, 6) || null,
+            shoppingLinks
           };
 
         } catch (error: any) {
@@ -142,6 +164,7 @@ export async function POST(req: Request) {
             ...outfit,
             imageUrl: `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
             colorPalette: outfit.colorPalette || [],
+            generatedImageColors: null,
             shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
             error: error.message || 'Generation failed'
           };
