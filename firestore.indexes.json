@@ -9,7 +9,53 @@
           "order": "ASCENDING"
         },
         {
-          "fieldPath": "timestamp",
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "likedOutfits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "likedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "likedOutfits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "occasion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "likedAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "usageHistory",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "occasion",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "wornAt",
           "order": "DESCENDING"
         }
       ]

@@ -119,12 +119,12 @@ async function searchMultiplePlatforms(
       body: JSON.stringify({
         api_key: TAVILY_API_KEY,
         query,
-        search_depth: 'advanced',
+        search_depth: 'basic', // Changed from 'advanced' for speed (2-3s faster)
         include_domains: domains,
-        max_results: maxResults,
+        max_results: Math.min(maxResults, 15), // Limit for speed
         include_answer: false,
       }),
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(5000), // Reduced from 10s to 5s
     });
 
     if (!response.ok) {
@@ -141,7 +141,7 @@ async function searchMultiplePlatforms(
 
     console.log(`✅ Tavily found ${data.results.length} results`);
 
-    // Filter and rank results
+    // Filter and rank results with SMART RELEVANCE SCORING
     const filteredResults: TavilySearchResult[] = data.results
       .filter((result: any) => {
         const text = `${result.title} ${result.content}`.toLowerCase();
@@ -163,12 +163,40 @@ async function searchMultiplePlatforms(
 
         return hasKeywords && extractUpperHalfItem(text);
       })
-      .map((result: any) => ({
-        title: result.title,
-        url: result.url,
-        content: result.content,
-        score: result.score || 0,
-      }))
+      .map((result: any) => {
+        const text = `${result.title} ${result.content}`.toLowerCase();
+        let relevanceScore = result.score || 0;
+        
+        // BOOST: Exact keyword matches in title (high relevance)
+        priorityKeywords.forEach(keyword => {
+          if (result.title.toLowerCase().includes(keyword.toLowerCase())) {
+            relevanceScore += 0.3;
+          }
+        });
+        
+        // BOOST: Multiple keyword matches (comprehensive results)
+        const matchCount = priorityKeywords.filter(kw => 
+          text.includes(kw.toLowerCase())
+        ).length;
+        relevanceScore += (matchCount * 0.1);
+        
+        // BOOST: Product pages (more likely to be relevant)
+        if (result.url.includes('/p/') || result.url.includes('/product/') || result.url.includes('/dp/')) {
+          relevanceScore += 0.2;
+        }
+        
+        // PENALTY: Generic category pages (less specific)
+        if (result.url.includes('/shop/') || result.url.includes('/category/')) {
+          relevanceScore -= 0.1;
+        }
+        
+        return {
+          title: result.title,
+          url: result.url,
+          content: result.content,
+          score: relevanceScore,
+        };
+      })
       .sort((a: TavilySearchResult, b: TavilySearchResult) => b.score - a.score);
 
     console.log(`   Filtered to ${filteredResults.length} relevant results`);

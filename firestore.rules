@@ -66,6 +66,50 @@ service cloud.firestore {
       }
     }
     
+    // System Logs - Allow write from anywhere (error logging), no reads
+    match /systemLogs/{logId} {
+      allow create: if true; // Allow all error logging
+      allow read: if false; // No reads (logs are for admin only)
+      allow update, delete: if false; // Logs are immutable
+    }
+    
+    // Audit Logs - Users can read their own logs, only Cloud Functions can write
+    match /auditLogs/{logId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow write: if false; // Only Cloud Functions can write
+    }
+    
+    // User Preferences History - Users can read their own history
+    match /userPreferencesHistory/{historyId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow write: if false; // Only created by transactions
+    }
+    
+    // Deleted Items - Users can read their own deleted items (for recovery)
+    match /deletedItems/{deletionId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow write: if false; // Only created by audit log system
+    }
+    
+    // Cleanup Jobs - Read-only for authenticated users, write-only for Cloud Functions
+    match /cleanupJobs/{jobId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Only Cloud Functions can write
+    }
+    
+    // Archive Collections - No direct access (admin only via Cloud Functions)
+    match /auditLogsArchive/{logId} {
+      allow read, write: if false;
+    }
+    
+    match /recommendationHistoryArchive/{recId} {
+      allow read, write: if false;
+    }
+    
+    match /deletedItemsArchive/{deletionId} {
+      allow read, write: if false;
+    }
+    
     // Default deny all access for security
     match /{document=**} {
       allow read, write: if false;

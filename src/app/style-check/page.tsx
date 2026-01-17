@@ -18,7 +18,7 @@ export default function StyleCheckPage() {
       <div className="absolute inset-0 -z-10">
         {isMounted && (
           <>
-            <SplashCursor SPLAT_RADIUS={0.12} SPLAT_FORCE={3000} COLOR_UPDATE_SPEED={5} />
+            <SplashCursor SPLAT_RADIUS={0.12} SPLAT_FORCE={2000} COLOR_UPDATE_SPEED={6} SIM_RESOLUTION={64} DYE_RESOLUTION={512} PRESSURE_ITERATIONS={8} />
             <Particles
               className="absolute inset-0"
               particleColors={['#7B68EE', '#EEBB68']}

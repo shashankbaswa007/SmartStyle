@@ -1,5 +1,6 @@
 import { db } from './firebase';
 import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { logDeletion } from './audit-log';
 
 export interface LikedOutfitData {
   id?: string; // Add optional id field for document ID
@@ -35,6 +36,10 @@ export async function saveLikedOutfit(
   userId: string,
   outfitData: LikedOutfitData
 ): Promise<{ success: boolean; message: string; isDuplicate?: boolean }> {
+  console.log('🔥🔥🔥 ===== SAVE LIKED OUTFIT FUNCTION CALLED =====');
+  console.log('🔥 UserId:', userId);
+  console.log('🔥 OutfitData:', outfitData);
+  
   try {
     console.log('🔍 saveLikedOutfit called with:', {
       userId,
@@ -102,14 +107,34 @@ export async function saveLikedOutfit(
       };
     }
 
-    console.log('💾 Saving outfit to Firestore...');
+    console.log('💾 Saving outfit to Firestore directly...');
     console.log('📦 Data to save:', {
       ...outfitData,
       imageUrl: outfitData.imageUrl.substring(0, 50) + '...',
     });
     
-    // Save the outfit
-    const docRef = await addDoc(likesRef, outfitData);
+    // Save directly to Firestore without complex validation
+    // This is simpler and avoids validation schema mismatches
+    const dataToSave = {
+      imageUrl: outfitData.imageUrl,
+      title: outfitData.title,
+      description: outfitData.description,
+      items: outfitData.items || [],
+      colorPalette: outfitData.colorPalette || [],
+      styleType: outfitData.styleType,
+      occasion: outfitData.occasion,
+      shoppingLinks: outfitData.shoppingLinks || {
+        amazon: null,
+        tatacliq: null,
+        myntra: null,
+      },
+      itemShoppingLinks: outfitData.itemShoppingLinks || [],
+      likedAt: Date.now(),
+      recommendationId: outfitData.recommendationId,
+    };
+    
+    console.log('💾 Attempting to save to Firestore...');
+    const docRef = await addDoc(likesRef, dataToSave);
     console.log('✅ Outfit saved successfully with ID:', docRef.id);
     console.log('🔗 Document path: users/' + userId + '/likedOutfits/' + docRef.id);
     

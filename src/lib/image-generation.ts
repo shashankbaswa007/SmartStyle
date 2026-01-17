@@ -14,22 +14,43 @@ interface ImageGenerationOptions {
  * Generate image using Pollinations AI (free, no API key required)
  * Uses Flux model for high-quality fashion images
  * Returns URL immediately - image generates on-demand when accessed
+ * Pollinations handles rate limiting internally via CDN caching
  */
 async function generateWithPollinations(options: ImageGenerationOptions): Promise<string> {
   const { prompt, width = 800, height = 1000 } = options;
+  
+  // OPTIMIZATION: Removed artificial delays - Pollinations CDN handles caching
+  // Old delays: 5s min between requests + 3s generation wait = 8s wasted per image!
+  // Parallel requests now work efficiently with unique seeds
   
   // Add seed for uniqueness and randomness for variety
   const seed = Date.now() + Math.floor(Math.random() * 10000);
   const encodedPrompt = encodeURIComponent(prompt);
   const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&nologo=true&enhance=true&model=flux&seed=${seed}`;
   
-  console.log('🎨 Pollinations AI - URL generated instantly');
+  console.log('🎨 [PERF] Pollinations AI - URL generated instantly');
   console.log('📝 Prompt:', prompt.substring(0, 100) + '...');
   console.log('🔗 Image URL:', url.substring(0, 100) + '...');
-  console.log('ℹ️  Image will generate on-demand when accessed by browser');
   
-  // Pollinations generates images on-demand, no need to validate
-  // The URL format is predictable and reliable
+  // Quick validation with shorter timeout
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+    
+    const response = await fetch(url, { 
+      method: 'HEAD',
+      signal: controller.signal 
+    });
+    clearTimeout(timeoutId);
+    
+    if (response.status === 429) {
+      console.warn('⚠️ Pollinations rate limit detected');
+    }
+  } catch (error: any) {
+    // Ignore validation errors - image will still work
+    console.log('ℹ️ [PERF] Skipping validation, returning URL immediately');
+  }
+  
   return url;
 }
 
@@ -114,6 +135,40 @@ async function generateWithHuggingFace(options: ImageGenerationOptions): Promise
 }
 
 /**
+ * Enhance prompt with professional photography and quality keywords
+ * Adds industry-standard terms to improve image quality and consistency
+ */
+function enhancePromptForProfessionalQuality(prompt: string): string {
+  // Check if prompt already has professional quality terms
+  const hasQualityTerms = /professional|editorial|high.?resolution|magazine|studio lighting/i.test(prompt);
+  
+  // Replace person/model references with mannequin for professional catalog look
+  let enhancedPrompt = prompt
+    .replace(/\b(person|woman|man|model|individual|people)\b/gi, 'mannequin')
+    .replace(/\b(he|she|they)\s+(wears?|stands?|poses?)/gi, 'displayed on mannequin')
+    .replace(/confident\s+pose/gi, 'professional display')
+    .replace(/standing/gi, 'displayed')
+    .replace(/hair\s+styled[^.]*\./gi, '')
+    .replace(/makeup[^.]*\./gi, '')
+    .replace(/Model/g, 'Mannequin')
+    .trim();
+  
+  if (hasQualityTerms) {
+    // Prompt already well-formatted, just apply mannequin changes
+    return enhancedPrompt;
+  }
+  
+  // Add professional quality enhancements to existing prompts
+  const qualityPrefix = 'Professional fashion catalog photography, outfit displayed on white mannequin, ';
+  const qualitySuffix = '. Studio lighting with soft diffused key light, clean white background, high resolution, sharp focus, professional fashion catalog aesthetic.';
+  
+  // Remove any existing trailing periods to avoid double periods
+  const cleanPrompt = enhancedPrompt.trim().replace(/\.$/, '');
+  
+  return `${qualityPrefix}${cleanPrompt}${qualitySuffix}`;
+}
+
+/**
  * Generate outfit image with multi-provider fallback strategy
  * 
  * Priority:
@@ -130,22 +185,26 @@ export async function generateOutfitImageWithFallback(
   colorHexCodes: string[]
 ): Promise<string> {
   const startTime = Date.now();
-  console.log('🎨 Starting image generation with fallback strategy');
-  console.log('📝 Prompt:', prompt.substring(0, 150) + '...');
+  console.log('🎨 [PERF] Starting image generation with fallback strategy');
+  console.log('📝 Original Prompt:', prompt.substring(0, 150) + '...');
+  
+  // Enhance prompt with professional quality keywords
+  const enhancedPrompt = enhancePromptForProfessionalQuality(prompt);
+  console.log('✨ Enhanced Prompt:', enhancedPrompt.substring(0, 150) + '...');
   console.log('🎨 Colors:', colorHexCodes);
 
   const options: ImageGenerationOptions = {
-    prompt,
+    prompt: enhancedPrompt,
     width: 800,
     height: 1000,
   };
 
   // Strategy 1: Try Pollinations (free, instant URL generation)
   try {
-    console.log('🔄 Strategy 1: Pollinations AI (instant URL generation)');
+    console.log('🔄 [PERF] Strategy 1: Pollinations AI (instant URL generation)');
     const imageUrl = await generateWithPollinations(options);
     const duration = ((Date.now() - startTime) / 1000).toFixed(3);
-    console.log(`✅ Pollinations URL generated in ${duration}s!`);
+    console.log(`✅ [PERF] Pollinations URL generated in ${duration}s!`);
     return imageUrl;
   } catch (pollinationsError) {
     console.warn('⚠️ Pollinations failed:', pollinationsError);

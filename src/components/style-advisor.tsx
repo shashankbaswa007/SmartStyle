@@ -25,6 +25,9 @@ import { cn } from "@/lib/utils";
 import { StyleAdvisorResults } from "./style-advisor-results";
 import { auth } from "@/lib/firebase";
 import { validateImageForStyleAnalysis, validateImageProperties } from "@/lib/image-validation";
+import { RecommendationProgress } from './RecommendationProgress';
+import { OutfitSkeletonGrid } from './OutfitCardSkeleton';
+import { Confetti } from './Confetti';
 
 // Processing step interface
 interface ProcessingStep {
@@ -155,33 +158,72 @@ function getColorName(r: number, g: number, b: number): string {
 }
 
 /**
- * Preload images and wait for them to fully load
+ * Preload images and wait for them to fully load with retry logic
  * @param imageUrls - Array of image URLs to preload
  * @returns Promise that resolves when all images are loaded
  */
 function preloadImages(imageUrls: string[]): Promise<void[]> {
-  const imagePromises = imageUrls.map((url) => {
-    return new Promise<void>((resolve) => {
+  console.log('🖼️ Starting image preload for', imageUrls.length, 'images...');
+  
+  const imagePromises = imageUrls.map((url, index) => {
+    return new Promise<void>((resolve, reject) => {
       if (typeof window === 'undefined') {
-        // Server-side rendering, skip preloading
+        console.log(`⚠️ Server-side rendering detected, skipping image ${index + 1}`);
         resolve();
         return;
       }
 
-      const img = document.createElement('img');
-      
-      img.onload = () => {
-        console.log(`✅ Image loaded successfully: ${url.substring(0, 50)}...`);
+      // Skip placeholder images
+      if (url.includes('placeholder') || !url) {
+        console.log(`⚠️ Image ${index + 1} is placeholder/empty, skipping preload`);
         resolve();
+        return;
+      }
+
+      console.log(`📷 Preloading image ${index + 1}/${imageUrls.length}...`);
+      
+      let attempts = 0;
+      const maxAttempts = 3;
+      const retryDelay = 2000; // 2 seconds between retries
+      
+      const attemptLoad = () => {
+        attempts++;
+        console.log(`  Attempt ${attempts}/${maxAttempts} for image ${index + 1}`);
+        
+        const img = document.createElement('img');
+        
+        const timeout = setTimeout(() => {
+          img.src = ''; // Cancel load
+          if (attempts < maxAttempts) {
+            console.warn(`  ⏱️ Image ${index + 1} timed out (15s), retrying in ${retryDelay}ms...`);
+            setTimeout(attemptLoad, retryDelay);
+          } else {
+            console.error(`  ❌ Image ${index + 1} failed after ${maxAttempts} attempts`);
+            reject(new Error(`Failed to load image ${index + 1} after ${maxAttempts} attempts`));
+          }
+        }, 15000); // 15 second timeout per attempt
+        
+        img.onload = () => {
+          clearTimeout(timeout);
+          console.log(`  ✅ Image ${index + 1} loaded successfully (${img.width}x${img.height})`);
+          resolve();
+        };
+        
+        img.onerror = () => {
+          clearTimeout(timeout);
+          if (attempts < maxAttempts) {
+            console.warn(`  ⚠️ Image ${index + 1} load error, retrying in ${retryDelay}ms...`);
+            setTimeout(attemptLoad, retryDelay);
+          } else {
+            console.error(`  ❌ Image ${index + 1} failed to load after ${maxAttempts} attempts`);
+            reject(new Error(`Image ${index + 1} failed to load`));
+          }
+        };
+        
+        img.src = url;
       };
       
-      img.onerror = () => {
-        console.error(`❌ Failed to load image: ${url.substring(0, 50)}...`);
-        // Resolve anyway to not block the UI if one image fails
-        resolve();
-      };
-      
-      img.src = url;
+      attemptLoad();
     });
   });
 
@@ -208,6 +250,8 @@ export function StyleAdvisor() {
   const [extractedData, setExtractedData] = React.useState<{ skinTone: string; dressColors: string; colorPalette?: string[] } | null>(null);
   const [isValidatingImage, setIsValidatingImage] = React.useState(false);
   const [imageValidationError, setImageValidationError] = React.useState<string | null>(null);
+  const [progressStage, setProgressStage] = React.useState(0);
+  const [showConfetti, setShowConfetti] = React.useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
@@ -248,15 +292,24 @@ export function StyleAdvisor() {
   }, []);
 
   React.useEffect(() => {
+    // Request browser location for weather
+    console.log('🌤️ Requesting browser location for weather...');
+    
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         try {
-          const weatherData = await getWeatherData({
-            lat: position.coords.latitude,
-            lon: position.coords.longitude,
-          });
+          const lat = position.coords.latitude;
+          const lon = position.coords.longitude;
+          
+          console.log(`✅ Location granted: [${lat.toFixed(4)}, ${lon.toFixed(4)}]`);
+          console.log(`🔄 Fetching weather for your location...`);
+          
+          const weatherData = await getWeatherData({ lat, lon });
+          
+          console.log(`✅ Weather received: ${weatherData}`);
           setWeather(weatherData);
         } catch (error) {
+          console.error('❌ Weather API error:', error);
           setWeather("Clear skies, around 25°C");
           toast({
             variant: "default",
@@ -268,14 +321,15 @@ export function StyleAdvisor() {
         }
       },
       (geoError) => {
-        if (geoError.code !== geoError.PERMISSION_DENIED) {
-           // Don't log error if user denied permission, but do for other errors.
-        }
+        console.warn('⚠️ Location access denied or unavailable');
+        console.log('Error code:', geoError.code, '(1=DENIED, 2=UNAVAILABLE, 3=TIMEOUT)');
+        console.log('Error message:', geoError.message);
+        
         setWeather("Clear skies, around 25°C");
         toast({
           variant: "default",
-          title: "Location is unavailable",
-          description: "Using default weather. For better results, enable location access in your browser.",
+          title: "Location access needed",
+          description: "Enable location access in your browser for weather-based recommendations. Using default weather for now.",
         });
         setIsFetchingWeather(false);
       }
@@ -796,11 +850,14 @@ export function StyleAdvisor() {
       if (!request.previousRecommendation) {
         updateStep('extract', 'processing');
         setLoadingMessage("Extracting colors from your image...");
+      setProgressStage(0);
 
-        const { skinTone, dressColors } = extractColorsFromCanvas();
-
-        request.skinTone = skinTone;
-        request.dressColors = dressColors;
+        // Use the skinTone and dressColors from the request or extractedData
+        const skinToneValue = request.skinTone || extractedData?.skinTone || '';
+        const dressColorsValue = request.dressColors || extractedData?.dressColors || '';
+        
+        request.skinTone = skinToneValue;
+        request.dressColors = dressColorsValue;
 
         setLastAnalysisRequest({
           photoDataUri: request.photoDataUri,
@@ -808,8 +865,8 @@ export function StyleAdvisor() {
           genre: request.genre,
           gender: request.gender,
           weather: request.weather,
-          skinTone: skinTone,
-          dressColors: dressColors,
+          skinTone: skinToneValue,
+          dressColors: dressColorsValue,
           userId: request.userId,
         });
         
@@ -821,13 +878,15 @@ export function StyleAdvisor() {
       updateStep('enhance', 'processing');
       updateStep('search', 'processing');
       setLoadingMessage("Analyzing your style with AI...");
+      setProgressStage(1);
 
       // Call the /api/recommend route which handles everything:
       // 1. Gemini style analysis
-      // 2. Image generation with Pollinations
+      // 2. Image generation with Pollinations (sequential with delays)
       // 3. Gemini image analysis for accurate colors
       // 4. Optimized Tavily search with proper queries
       console.log('📡 Calling /api/recommend with full processing pipeline...');
+      console.log('⏳ This will take 30-40 seconds to generate all 3 outfit images properly...');
       
       const response = await fetch('/api/recommend', {
         method: 'POST',
@@ -838,7 +897,14 @@ export function StyleAdvisor() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+        let errorData: { error?: string } = { error: 'Unknown error' };
+        try {
+          errorData = await response.json();
+        } catch (jsonError) {
+          console.error('❌ Failed to parse error response:', jsonError);
+          // Use status text as fallback
+          errorData = { error: response.statusText || 'API request failed' };
+        }
         throw new Error(errorData.error || `API request failed with status ${response.status}`);
       }
 
@@ -848,6 +914,9 @@ export function StyleAdvisor() {
         hasPayload: !!data.payload,
         outfitsCount: data.payload?.analysis?.outfitRecommendations?.length,
       });
+      
+      setLoadingMessage("API complete! Now loading all images for best experience...");
+      console.log('💻 Backend processing complete, starting client-side image loading...');
 
       if (!data.success || !data.payload) {
         throw new Error('Invalid API response structure');
@@ -887,6 +956,9 @@ export function StyleAdvisor() {
       updateStep('enhance', 'complete');
       updateStep('search', 'complete');
       
+      setProgressStage(2);
+      setLoadingMessage("Preparing images for display...");
+      
       // Use the recommendation ID from the API if available
       const recId = data.recommendationId || `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       setRecommendationId(recId);
@@ -904,31 +976,67 @@ export function StyleAdvisor() {
 
       // ✅ CRITICAL: Preload all images and wait for them to fully load
       updateStep('finalize', 'processing');
-      setLoadingMessage("Verifying all images are ready...");
+      setLoadingMessage("Loading all images... Please wait, this ensures the best experience!");
+      console.log('💼 Preparing to preload', imageUrls.length, 'images...');
+      
+      // Show user-friendly progress
+      const nonPlaceholderCount = imageUrls.filter((url: string) => !url.includes('placeholder')).length;
+      console.log(`🎯 ${nonPlaceholderCount} images need to be fully loaded before displaying results`);
       
       try {
+        console.log('⏳ Starting image preload process...');
         await preloadImages(imageUrls);
-        console.log('✅ All images preloaded successfully');
+        console.log('✅ All images preloaded and verified!');
+        updateStep('finalize', 'complete');
       } catch (imgError) {
-        console.warn('⚠️ Some images failed to preload:', imgError);
-        // Continue anyway - Pollinations images will load on demand
+        console.error('❌ Critical: Image preload failed:', imgError);
+        updateStep('finalize', 'error', 'Some images failed to load');
+        
+        // Check if any images loaded successfully
+        const loadedCount = imageUrls.filter((url: string, index: number) => {
+          const img = document.createElement('img');
+          img.src = url;
+          return img.complete && img.naturalHeight !== 0;
+        }).length;
+        
+        console.log(`📊 Status: ${loadedCount}/${imageUrls.length} images loaded`);
+        
+        if (loadedCount === 0) {
+          // No images loaded - show error
+          throw new Error('Failed to load any images. Please try again.');
+        }
+        
+        // Some images loaded - continue with warning
+        console.warn(`⚠️ Proceeding with ${loadedCount}/${imageUrls.length} images loaded`);
+        toast({
+          variant: "default",
+          title: "Partial Success",
+          description: `${loadedCount} out of ${imageUrls.length} images loaded. Some images may still be loading.`,
+          duration: 5000,
+        });
       }
       
-      updateStep('finalize', 'complete');
-
       // ✅ NOW set the analysis result after EVERYTHING is verified
       console.log('📦 Setting analysis result with complete data...');
       setAnalysisResult(result);
       setAllContentReady(true);
       
-      // Small delay to ensure smooth transition
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Small delay to ensure smooth transition and DOM updates
+      console.log('⏳ Final preparation for display...');
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // ✅ FINAL STEP: Show results only after all validation passes
-      console.log('🎉 Displaying results to user!');
+      // ✅ FINAL STEP: Show results only after all images are loaded and ready
+      console.log('🎉 All content ready! Displaying results to user!');
       setShowResults(true);
 
-      console.log('✅ Full recommendation flow complete!');
+      console.log('✅ Full recommendation flow complete with all images loaded!');
+      
+      // Show success toast
+      toast({
+        title: "Success!",
+        description: `Your personalized recommendations are ready with all ${nonPlaceholderCount} outfit images fully loaded!`,
+        duration: 4000,
+      });
 
     } catch (e) {
       console.error('❌ Analysis error:', e);
@@ -1310,76 +1418,20 @@ export function StyleAdvisor() {
       )}
 
       {isLoading && (
-        <Card className="w-full shadow-lg animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-headline">
-              <Sparkles className="text-accent animate-pulse" /> {loadingMessage}
-            </CardTitle>
-            <CardDescription>
-              Our AI is crafting your personalized feedback. This typically takes 15-25 seconds.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Processing Steps */}
-            {processingSteps.length > 0 && (
-              <div className="space-y-3">
-                {processingSteps.map((step) => (
-                  <motion.div
-                    key={step.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-border/50"
-                  >
-                    {step.status === 'pending' && (
-                      <Clock className="w-5 h-5 text-muted-foreground" />
-                    )}
-                    {step.status === 'processing' && (
-                      <Loader2 className="w-5 h-5 text-accent animate-spin" />
-                    )}
-                    {step.status === 'complete' && (
-                      <CheckCircle2 className="w-5 h-5 text-green-500" />
-                    )}
-                    {step.status === 'error' && (
-                      <AlertCircle className="w-5 h-5 text-destructive" />
-                    )}
-                    <div className="flex-1">
-                      <p className={cn(
-                        "text-sm font-medium",
-                        step.status === 'complete' && "text-green-500",
-                        step.status === 'error' && "text-destructive",
-                        step.status === 'processing' && "text-accent",
-                        step.status === 'pending' && "text-muted-foreground"
-                      )}>
-                        {step.label}
-                      </p>
-                      {step.message && step.status === 'error' && (
-                        <p className="text-xs text-muted-foreground mt-1">{step.message}</p>
-                      )}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            )}
-            
-            <Separator />
-            
-            {/* Skeleton placeholders */}
-            <div className="space-y-3">
-              <Skeleton className="h-5 w-1/3" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-5/6" />
-            </div>
-            <Separator />
-            <div className="space-y-3">
-              <Skeleton className="h-5 w-1/3" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-4/6" />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="space-y-8">
+          {/* Enhanced Progress Indicator */}
+          <Card className="w-full shadow-lg animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
+            <CardContent className="p-8">
+              <RecommendationProgress currentStage={progressStage} />
+            </CardContent>
+          </Card>
+
+          {/* Outfit Card Skeletons */}
+          <div className="space-y-4">
+            <h3 className="text-2xl font-bold text-center">Preparing your personalized outfits...</h3>
+            <OutfitSkeletonGrid />
+          </div>
+        </div>
       )}
 
       <AnimatePresence mode="wait">

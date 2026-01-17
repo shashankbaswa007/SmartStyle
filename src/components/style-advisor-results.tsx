@@ -325,23 +325,36 @@ export function StyleAdvisorResults({
             };
           });
           
-          const likedOutfitResult = await saveLikedOutfit(userId, {
-            imageUrl,
-            title: outfit.title || 'Untitled Outfit',
-            description: outfit.description || outfit.title || 'No description',
-            items: Array.isArray(outfit.items) ? outfit.items : [],
-            colorPalette,
-            styleType: outfit.styleType,
-            occasion: outfit.occasion,
-            shoppingLinks: {
-              amazon: outfit.shoppingLinks?.amazon || null,
-              tatacliq: outfit.shoppingLinks?.tatacliq || null,
-              myntra: outfit.shoppingLinks?.myntra || null,
-            },
-            itemShoppingLinks, // Save individual item links
-            likedAt: Date.now(),
-            recommendationId: recommendationId || `rec_${Date.now()}`,
-          });
+          console.log('🔥 BEFORE calling saveLikedOutfit - Function exists?', typeof saveLikedOutfit);
+          console.log('🔥 UserId:', userId);
+          console.log('🔥 ImageUrl:', imageUrl?.substring(0, 50));
+          
+          let likedOutfitResult;
+          try {
+            likedOutfitResult = await saveLikedOutfit(userId, {
+              imageUrl,
+              title: outfit.title || 'Untitled Outfit',
+              description: outfit.description || outfit.title || 'No description',
+              items: Array.isArray(outfit.items) ? outfit.items : [],
+              colorPalette,
+              styleType: outfit.styleType,
+              occasion: outfit.occasion,
+              shoppingLinks: {
+                amazon: outfit.shoppingLinks?.amazon || null,
+                tatacliq: outfit.shoppingLinks?.tatacliq || null,
+                myntra: outfit.shoppingLinks?.myntra || null,
+              },
+              itemShoppingLinks, // Save individual item links
+              likedAt: Date.now(),
+              recommendationId: recommendationId || `rec_${Date.now()}`,
+            });
+          } catch (saveError) {
+            console.error('🔥 ERROR inside saveLikedOutfit call:', saveError);
+            console.error('🔥 Error type:', saveError instanceof Error ? saveError.constructor.name : typeof saveError);
+            console.error('🔥 Error message:', saveError instanceof Error ? saveError.message : String(saveError));
+            console.error('🔥 Error stack:', saveError instanceof Error ? saveError.stack : 'No stack');
+            throw saveError; // Re-throw to be caught by outer try-catch
+          }
           
           console.log('📊 Save liked outfit result:', likedOutfitResult);
           
@@ -630,7 +643,23 @@ export function StyleAdvisorResults({
                 <div className="grid md:grid-cols-2 gap-6 mb-6">
                   {/* Left: Generated Image */}
                   <div className="relative">
-                    {generatedImageUrls[index] ? (
+                    {/* Check for error message in outfit */}
+                    {(outfit as any).error ? (
+                      <div className="aspect-square w-full rounded-xl bg-muted/50 border-2 border-destructive/30 flex items-center justify-center p-6">
+                        <div className="text-center space-y-4">
+                          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+                            <Info className="w-8 h-8 text-destructive" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-foreground mb-2">Image Unavailable</h4>
+                            <p className="text-sm text-muted-foreground">{(outfit as any).error}</p>
+                            <p className="text-xs text-muted-foreground mt-2">
+                              The outfit details and shopping links are still available below.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : generatedImageUrls[index] ? (
                       <div className="relative aspect-square w-full rounded-xl overflow-hidden shadow-lg border-2 border-accent/30">
                         {/* Loading Skeleton - Show until image loads */}
                         {!loadedImages.has(index) && !imageLoadErrors.has(index) && (

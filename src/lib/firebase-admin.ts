@@ -14,22 +14,29 @@ if (!admin.apps.length) {
     const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     
     if (serviceAccount) {
-      // Initialize with service account (production)
-      admin.initializeApp({
-        credential: admin.credential.cert(JSON.parse(serviceAccount)),
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-      });
+      try {
+        // Initialize with service account (production)
+        const credentials = JSON.parse(serviceAccount);
+        admin.initializeApp({
+          credential: admin.credential.cert(credentials),
+          projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+        });
+        console.log('✅ Firebase Admin SDK initialized with service account');
+      } catch (jsonError) {
+        console.error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', jsonError);
+        throw new Error('Invalid FIREBASE_SERVICE_ACCOUNT_KEY format - must be valid JSON');
+      }
     } else {
       // Initialize with project ID only (development/fallback)
       // This will work with Firebase Emulator or if deployed to Firebase
       admin.initializeApp({
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
       });
+      console.log('ℹ️ Firebase Admin SDK initialized without service account (development mode)');
     }
-    
-    console.log('✅ Firebase Admin SDK initialized successfully');
   } catch (error) {
     console.error('❌ Firebase Admin SDK initialization error:', error);
+    throw error;
   }
 }
 

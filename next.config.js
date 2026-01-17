@@ -90,13 +90,100 @@ const nextConfig = {
         pathname: '/**',
       }
     ],
+    // OPTIMIZED: Enable Next.js image optimization
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60,
   },
-  webpack: (config) => {
+  // OPTIMIZED: Webpack optimizations
+  webpack: (config, { dev, isServer }) => {
     config.externals.push({
         'require-in-the-middle': 'require-in-the-middle',
     });
+    
+    // OPTIMIZED: Tree-shaking for lodash and other libraries
+    if (!dev && !isServer) {
+      // Enable module concatenation
+      config.optimization.concatenateModules = true;
+      
+      // Split chunks for better caching
+      config.optimization.splitChunks = {
+        chunks: 'all',
+        cacheGroups: {
+          default: false,
+          vendors: false,
+          // Recharts in separate chunk (only loaded on /analytics)
+          recharts: {
+            test: /[\\/]node_modules[\\/](recharts|d3-.*)[\\/]/,
+            name: 'recharts',
+            priority: 20,
+          },
+          // Firebase in separate chunk
+          firebase: {
+            test: /[\\/]node_modules[\\/](firebase|@firebase)[\\/]/,
+            name: 'firebase',
+            priority: 15,
+          },
+          // UI components
+          ui: {
+            test: /[\\/]node_modules[\\/](@radix-ui)[\\/]/,
+            name: 'ui',
+            priority: 10,
+          },
+          // Common vendor chunk
+          vendor: {
+            test: /[\\/]node_modules[\\/]/,
+            name: 'vendor',
+            priority: 5,
+          },
+        },
+      };
+    }
+    
     return config;
-  }
+  },
+  // OPTIMIZED: Reduce bundle size
+  swcMinify: true,
+  compress: true,
+  poweredByHeader: false,
+  
+  // PWA Configuration
+  async headers() {
+    return [
+      {
+        source: '/sw.js',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+          {
+            key: 'Service-Worker-Allowed',
+            value: '/',
+          },
+        ],
+      },
+      {
+        source: '/manifest.json',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      {
+        source: '/icons/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;

@@ -47,24 +47,34 @@ export async function getWeatherData(coords: z.infer<typeof WeatherSchema>) {
   const { lat, lon } = coords;
   const apiKey = process.env.OPENWEATHER_API_KEY;
 
+  console.log(`🌤️ Weather API called for coordinates: [${lat}, ${lon}]`);
+
   if (!apiKey) {
-    console.error('OpenWeather API key not found.');
+    console.error('❌ OpenWeather API key not found.');
     return 'Weather data not available. API key missing.';
   }
 
   try {
-    const response = await fetch(
-      `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`
-    );
+    const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
+    console.log(`🔄 Fetching weather from OpenWeather API...`);
+    
+    const response = await fetch(url);
+    
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('OpenWeather API error:', errorData);
+      console.error('❌ OpenWeather API error:', errorData);
       return `Could not fetch weather. Status: ${response.status}`;
     }
+    
     const data = await response.json();
-    return `The weather in ${data.name} is ${data.main.temp}°C with ${data.weather[0].description}.`;
+    const result = `The weather in ${data.name} is ${data.main.temp}°C with ${data.weather[0].description}.`;
+    
+    console.log(`✅ Weather retrieved: ${data.name}, ${data.sys.country} - ${data.main.temp}°C`);
+    console.log(`   Coordinates verified: [${data.coord.lat}, ${data.coord.lon}]`);
+    
+    return result;
   } catch (error) {
-    console.error('Failed to fetch weather data:', error);
+    console.error('❌ Failed to fetch weather data:', error);
     return 'Failed to fetch weather data.';
   }
 }

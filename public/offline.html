@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SmartStyle - Offline</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      color: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    
+    .container {
+      text-align: center;
+      max-width: 500px;
+    }
+    
+    .icon {
+      font-size: 80px;
+      margin-bottom: 20px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    
+    h1 {
+      font-size: 32px;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #7B68EE 0%, #9B8CF5 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    p {
+      font-size: 16px;
+      color: #a0a0a0;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+    
+    .button {
+      display: inline-block;
+      padding: 12px 32px;
+      background: linear-gradient(135deg, #7B68EE 0%, #9B8CF5 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: 600;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 12px rgba(123, 104, 238, 0.4);
+    }
+    
+    .button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(123, 104, 238, 0.6);
+    }
+    
+    .status {
+      margin-top: 32px;
+      padding: 12px 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 8px;
+      border-left: 4px solid #ff6b6b;
+    }
+    
+    .status.online {
+      border-left-color: #51cf66;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">📡</div>
+    <h1>You're Offline</h1>
+    <p>
+      It looks like you've lost your internet connection. 
+      Don't worry, some features are still available offline!
+    </p>
+    
+    <a href="/" class="button" onclick="window.location.reload(); return false;">
+      Try Again
+    </a>
+    
+    <div class="status" id="status">
+      <strong>Connection Status:</strong> <span id="connection">Checking...</span>
+    </div>
+  </div>
+  
+  <script>
+    function updateConnectionStatus() {
+      const status = document.getElementById('status');
+      const connection = document.getElementById('connection');
+      
+      if (navigator.onLine) {
+        status.classList.add('online');
+        connection.textContent = 'Online - Ready to reconnect!';
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
+      } else {
+        status.classList.remove('online');
+        connection.textContent = 'Offline';
+      }
+    }
+    
+    updateConnectionStatus();
+    
+    window.addEventListener('online', updateConnectionStatus);
+    window.addEventListener('offline', updateConnectionStatus);
+    
+    setInterval(updateConnectionStatus, 3000);
+  </script>
+</body>
+</html>

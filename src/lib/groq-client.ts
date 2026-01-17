@@ -79,16 +79,34 @@ You provide detailed, actionable outfit recommendations that are practical, styl
       ],
       model: 'llama-3.3-70b-versatile', // Updated: llama-3.1-70b-versatile was deprecated Oct 2025
       temperature: 0.7,
-      max_tokens: 2048,
+      max_tokens: 1500, // OPTIMIZED: Reduced from 2048 (sufficient for structured JSON)
+      stream: true, // OPTIMIZED: Enable streaming for faster TTFB
       response_format: { type: 'json_object' },
     });
 
-    const responseText = completion.choices[0]?.message?.content || '{}';
+    // Handle streaming response
+    let responseText = '';
     
-    console.log('✅ Groq response received');
+    for await (const chunk of completion) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      responseText += content;
+    }
 
-    // Parse JSON response
-    const analysis = JSON.parse(responseText) as GroqStyleAnalysis;
+    if (!responseText || responseText === '{}') {
+      throw new Error('Empty response from Groq');
+    }
+    
+    console.log('✅ Groq streaming response received');
+
+    // Parse JSON response with error handling
+    let analysis: GroqStyleAnalysis;
+    try {
+      analysis = JSON.parse(responseText) as GroqStyleAnalysis;
+    } catch (parseError) {
+      console.error('❌ Failed to parse Groq response:', parseError);
+      console.error('Response text:', responseText.substring(0, 500));
+      throw new Error('Invalid JSON response from Groq - the AI returned malformed data');
+    }
 
     // Validate response
     if (!analysis.outfitRecommendations || analysis.outfitRecommendations.length === 0) {
@@ -96,6 +114,7 @@ You provide detailed, actionable outfit recommendations that are practical, styl
     }
 
     console.log(`✅ Generated ${analysis.outfitRecommendations.length} outfit recommendations via Groq`);
+
 
     return analysis;
   } catch (error) {
@@ -153,7 +172,7 @@ Please provide your response in the following JSON format:
         "Practical tip 2",
         "Practical tip 3"
       ],
-      "imagePrompt": "A detailed, photorealistic description for AI image generation: 'A high-resolution image of a mannequin wearing [describe the complete outfit in detail], set against a neutral studio background with soft lighting.'",
+      "imagePrompt": "PROFESSIONAL FASHION CATALOG PROMPT: Professional fashion catalog photography, full-body shot. [Describe complete outfit with EXACT fabric types, colors with hex codes, textures, and cut details]. Outfit displayed on WHITE MANNEQUIN in professional retail display (centered, front-facing). Include: specific accessories with materials/colors positioned on mannequin. Lighting: studio lighting with soft diffused key light from 45-degree angle creating subtle shadows for depth. Background: clean white seamless backdrop for professional catalog look. High resolution, sharp focus, professional quality, retail catalog aesthetic. Shot with 85mm lens, even lighting throughout, centered composition. [Specify mood: elegant and sophisticated / effortlessly chic / modern minimalist / etc.]",
       "isExistingMatch": false
     }
   ],

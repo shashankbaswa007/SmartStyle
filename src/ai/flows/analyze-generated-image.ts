@@ -268,8 +268,9 @@ RESPONSE FORMAT (JSON only):
 
   if (!useGemini) {
     const local = generateLocalQuery();
+    console.log('✅ Returning local analysis with', dominantColors.length, 'colors');
     return {
-      dominantColors,
+      dominantColors: dominantColors.length > 0 ? dominantColors : [],
       shoppingQuery: local.shoppingQuery,
       detailedDescription: local.detailedDescription,
     };

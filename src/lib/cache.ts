@@ -125,11 +125,22 @@ class ResponseCache<T> {
 // Export singleton instances for different data types
 export const userPreferencesCache = new ResponseCache<any>(60); // 1 hour cache
 export const recommendationCache = new ResponseCache<any>(30); // 30 minutes cache
+export const cache = new ResponseCache<any>(60); // General purpose cache (1 hour default)
+
+// Cache TTL constants (in seconds) for different types of data
+export const CACHE_TTL = {
+  IMAGE_ANALYSIS: 24 * 60 * 60,    // 24 hours - analysis rarely changes for same image
+  SHOPPING_LINKS: 6 * 60 * 60,     // 6 hours - prices and availability change
+  TAVILY_SEARCH: 10 * 60,          // 10 minutes - search results may update
+  WEATHER_DATA: 30 * 60,           // 30 minutes - weather changes frequently
+  USER_PREFERENCES: 60 * 60,       // 1 hour - user preferences fairly stable
+} as const;
 
 // Auto-cleanup every 10 minutes
 setInterval(() => {
   userPreferencesCache.cleanup();
   recommendationCache.cleanup();
+  cache.cleanup();
 }, 10 * 60 * 1000);
 
 export default ResponseCache;
