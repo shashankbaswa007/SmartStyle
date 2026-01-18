@@ -9,6 +9,13 @@ import crypto from 'crypto';
 import { getComprehensivePreferences } from '@/lib/preference-engine';
 import { getBlocklists } from '@/lib/blocklist-manager';
 import { generateSessionId, createInteractionSession } from '@/lib/interaction-tracker';
+import { 
+  calculateOutfitMatchScore, 
+  applyDiversificationRule, 
+  getAntiRepetitionCache, 
+  addToAntiRepetitionCache,
+  detectPatternLock 
+} from '@/lib/recommendation-diversifier';
 
 export async function POST(req: Request) {
   const startTime = Date.now();
@@ -121,7 +128,7 @@ export async function POST(req: Request) {
     
     console.log('🚀 [PERF] Processing 3 outfits in PARALLEL...');
     
-    const enrichedOutfits = await Promise.all(
+    let enrichedOutfits = await Promise.all(
       outfitsToProcess.map(async (outfit, index) => {
         const outfitStart = Date.now();
         const outfitNumber = index + 1;
@@ -206,6 +213,52 @@ export async function POST(req: Request) {
 
     console.log(`⏱️ [PERF] All outfits processed in parallel: ${Date.now() - outfitsStart}ms`);
     console.log('✅ All outfits processed!');
+
+    // ✨ Apply diversification if user is authenticated and has preferences
+    if (userId && userId !== 'anonymous' && userPreferences && userBlocklists) {
+      console.log('🎯 [Diversification] Applying 70-20-10 rule...');
+      
+      try {
+        // Calculate match scores for all outfits
+        const outfitMatches = enrichedOutfits.map(outfit =>
+          calculateOutfitMatchScore(outfit, userPreferences, userBlocklists)
+        );
+
+        // Apply 70-20-10 diversification
+        const diversified = applyDiversificationRule(outfitMatches);
+
+        // Check for pattern lock
+        const patternLock = await detectPatternLock(userId, userPreferences);
+        if (patternLock.isLocked) {
+          console.log('⚠️ Pattern lock detected! User stuck in style bubble. Forcing exploration.');
+        }
+
+        // Replace enrichedOutfits with diversified ones
+        enrichedOutfits = diversified.map((match, index) => ({
+          ...match.outfit,
+          matchScore: match.matchScore,
+          matchCategory: match.matchCategory,
+          explanation: match.explanation,
+          position: index + 1,
+        }));
+
+        console.log('✅ [Diversification] Applied:', {
+          position1: diversified[0]?.matchScore,
+          position2: diversified[1]?.matchScore,
+          position3: diversified[2]?.matchScore,
+          patternLocked: patternLock.isLocked,
+        });
+
+        // Add first outfit to anti-repetition cache
+        if (enrichedOutfits.length > 0) {
+          await addToAntiRepetitionCache(userId, enrichedOutfits[0]);
+          console.log('✅ [Diversification] Added to anti-repetition cache');
+        }
+      } catch (divError) {
+        console.error('⚠️ [Diversification] Failed (non-critical):', divError);
+        // Continue without diversification
+      }
+    }
 
     // ⚠️ REMOVED: Heavy color analysis that was adding 2-4s per outfit
     // Old code was running extractColorsFromUrl + optimized Tavily searches

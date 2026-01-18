@@ -38,6 +38,20 @@ service cloud.firestore {
         allow create: if isOwner(userId);
       }
     }
+
+    // Anti-Repetition Cache - NEW: Prevent showing same outfits
+    match /antiRepetitionCache/{userId} {
+      allow read: if canReadAnonymously() || isOwner(userId);
+      allow write: if isOwner(userId);
+      allow create: if isOwner(userId);
+    }
+
+    // Exploration Metrics - NEW: Track adaptive exploration success
+    match /explorationMetrics/{userId} {
+      allow read: if canReadAnonymously() || isOwner(userId);
+      allow write: if isOwner(userId);
+      allow create: if isOwner(userId);
+    }
     
     // Recommendation History - Users can only read/write their own recommendations
     // Anonymous users can create recommendations but they won't be persisted long-term
