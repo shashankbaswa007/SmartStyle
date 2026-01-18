@@ -11,6 +11,7 @@ import { getBlocklists } from '@/lib/blocklist-manager';
 import { generateSessionId, createInteractionSession } from '@/lib/interaction-tracker';
 import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
 import { logger } from '@/lib/logger';
+import { recommendationCache, createCacheKey } from '@/lib/request-cache';
 import { 
   calculateOutfitMatchScore, 
   applyDiversificationRule, 
@@ -93,8 +94,30 @@ export async function POST(req: Request) {
       .digest('hex')
       .substring(0, 16);
     
-    const cacheKey = `rec:${imageHash}:${occasion}:${gender}:${weather || 'any'}`;
+    const cacheKey = createCacheKey('recommend', {
+      imageHash,
+      occasion,
+      gender,
+      weather: weather || 'any',
+      userId: userId || 'anonymous',
+    });
     logger.log('🔑 [PERF] Cache key:', cacheKey);
+
+    // ✨ Check cache first to avoid expensive AI calls
+    const cachedResult = recommendationCache.get(cacheKey);
+    if (cachedResult) {
+      const totalTime = Date.now() - startTime;
+      logger.log(`✅ [CACHE HIT] Returning cached result (saved ${totalTime}ms)`);
+      logger.log(`📊 [CACHE STATS] Hit rate: ${(recommendationCache.getHitRate() * 100).toFixed(1)}%`);
+      
+      return NextResponse.json({
+        ...cachedResult,
+        cached: true,
+        performanceMs: totalTime,
+      });
+    }
+    
+    logger.log('❌ [CACHE MISS] Proceeding with AI generation...');
 
     // ✨ NEW: Fetch user preferences and blocklists for personalization
     let userPreferences = null;
@@ -354,13 +377,20 @@ export async function POST(req: Request) {
     logger.log(`⏱️ [PERF] TOTAL API TIME: ${totalTime}ms (${(totalTime/1000).toFixed(2)}s)`);
     logger.log(`⏱️ [PERF] ============================================`);
 
-    return NextResponse.json({ 
+    const response = { 
       success: true, 
       payload,
       recommendationId,
       performanceMs: totalTime,
       cached: false
-    });
+    };
+
+    // ✨ Store in cache for future requests (5 minute TTL)
+    recommendationCache.set(cacheKey, response);
+    logger.log(`✅ [CACHE] Result stored for 5 minutes`);
+    logger.log(`📊 [CACHE STATS] Size: ${recommendationCache.getStats().size}, Hit rate: ${(recommendationCache.getHitRate() * 100).toFixed(1)}%`);
+
+    return NextResponse.json(response);
   } catch (err: any) {
     const totalTime = Date.now() - startTime;
     logger.error('❌ Recommend route error:', err);
