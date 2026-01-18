@@ -25,6 +25,20 @@ service cloud.firestore {
       allow write: if isOwner(userId);
     }
     
+    // User Interactions - NEW: For personalization tracking
+    // Users can only read/write their own interaction sessions
+    match /userInteractions/{userId} {
+      allow read: if canReadAnonymously() || isOwner(userId);
+      allow write: if isOwner(userId);
+      
+      // Interaction sessions (nested under userInteractions)
+      match /sessions/{sessionId} {
+        allow read: if canReadAnonymously() || isOwner(userId);
+        allow write: if isOwner(userId);
+        allow create: if isOwner(userId);
+      }
+    }
+    
     // Recommendation History - Users can only read/write their own recommendations
     // Anonymous users can create recommendations but they won't be persisted long-term
     match /recommendationHistory/{recommendationId} {

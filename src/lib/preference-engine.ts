@@ -16,6 +16,10 @@ import {
   orderBy,
   limit as firestoreLimit,
   Timestamp,
+  updateDoc,
+  increment,
+  arrayUnion,
+  serverTimestamp,
 } from 'firebase/firestore';
 
 // ============================================
@@ -812,8 +816,6 @@ function getDefaultShoppingBehavior(): ShoppingBehavior {
 // ============================================
 // REAL-TIME PREFERENCE UPDATES
 // ============================================
-
-import { updateDoc, increment, arrayUnion, serverTimestamp } from 'firebase/firestore';
 
 /**
  * Extract colors from outfit data
