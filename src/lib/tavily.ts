@@ -1,6 +1,7 @@
 import { generateShoppingQuery } from '@/ai/flows/generate-shopping-query';
 import type { StructuredAnalysis, ClothingItem } from '@/ai/flows/analyze-generated-image';
 import { buildShoppingQueries, calculateColorMatchScore } from './shopping-query-builder';
+import { logger } from './logger';
 
 type TavilyResult = {
   amazon?: string | null;
@@ -244,7 +245,7 @@ function calculateProductRelevance(
 export async function searchShoppingLinksStructured(
   structuredAnalysis: StructuredAnalysis
 ): Promise<ShoppingLinkResult> {
-  console.log(`🛍️ [STRUCTURED SEARCH] Starting search for ${structuredAnalysis.items.length} items...`);
+  logger.log(`🛍️ [STRUCTURED SEARCH] Starting search for ${structuredAnalysis.items.length} items...`);
 
   // Check cache
   const cacheKey = JSON.stringify(structuredAnalysis.items.map(i => ({
@@ -255,7 +256,7 @@ export async function searchShoppingLinksStructured(
   
   const cached = searchCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
-    console.log('✅ Returning cached shopping links');
+    logger.log('✅ Returning cached shopping links');
     return cached.result;
   }
 
@@ -280,7 +281,7 @@ export async function searchShoppingLinksStructured(
     const myntraQuery = platformQueries.myntra[i];
     const cliqQuery = platformQueries.tatacliq[i];
     
-    console.log(`\n🔍 Item ${item.itemNumber}: ${item.type} (${item.color})`);
+    logger.log(`\n🔍 Item ${item.itemNumber}: ${item.type} (${item.color})`);
     
     const itemLinks: ItemShoppingLinks = {
       itemNumber: item.itemNumber,
@@ -307,9 +308,9 @@ export async function searchShoppingLinksStructured(
         totalRelevanceScore += r.relevanceScore;
         relevanceCount++;
       });
-      console.log(`  Amazon: ${amazonResults.length} results`);
+      logger.log(`  Amazon: ${amazonResults.length} results`);
     } catch (err) {
-      console.error(`  Amazon search failed:`, (err as Error).message);
+      logger.error(`  Amazon search failed:`, (err as Error).message);
     }
 
     // Search Myntra
@@ -326,9 +327,9 @@ export async function searchShoppingLinksStructured(
         totalRelevanceScore += r.relevanceScore;
         relevanceCount++;
       });
-      console.log(`  Myntra: ${myntraResults.length} results`);
+      logger.log(`  Myntra: ${myntraResults.length} results`);
     } catch (err) {
-      console.error(`  Myntra search failed:`, (err as Error).message);
+      logger.error(`  Myntra search failed:`, (err as Error).message);
     }
 
     // Search Tata CLiQ
@@ -345,9 +346,9 @@ export async function searchShoppingLinksStructured(
         totalRelevanceScore += r.relevanceScore;
         relevanceCount++;
       });
-      console.log(`  Tata CLiQ: ${cliqResults.length} results`);
+      logger.log(`  Tata CLiQ: ${cliqResults.length} results`);
     } catch (err) {
-      console.error(`  Tata CLiQ search failed:`, (err as Error).message);
+      logger.error(`  Tata CLiQ search failed:`, (err as Error).message);
     }
 
     byItem.push(itemLinks);
@@ -370,7 +371,7 @@ export async function searchShoppingLinksStructured(
     expiresAt: Date.now() + CACHE_TTL_MS,
   });
 
-  console.log(`\n✅ [STRUCTURED SEARCH] Complete: ${totalLinksFound} links, avg relevance: ${result.metadata.averageRelevanceScore.toFixed(2)}`);
+  logger.log(`\n✅ [STRUCTURED SEARCH] Complete: ${totalLinksFound} links, avg relevance: ${result.metadata.averageRelevanceScore.toFixed(2)}`);
   return result;
 }
 
@@ -422,7 +423,7 @@ async function searchSinglePlatform(
 
     return products;
   } catch (err) {
-    console.error(`Platform search failed for ${domains[0]}:`, (err as Error).message);
+    logger.error(`Platform search failed for ${domains[0]}:`, (err as Error).message);
     return [];
   }
 }
@@ -443,7 +444,7 @@ async function searchMultiplePlatforms(
   excludeTerms: string[],
   maxResults: number = 20
 ): Promise<TavilyResult> {
-  console.log(`🔍 Searching platforms ${domains.join(', ')} with query: "${query}"`);
+  logger.log(`🔍 Searching platforms ${domains.join(', ')} with query: "${query}"`);
 
   try {
     const response = await fetch(TAVILY_API_URL, {
@@ -461,18 +462,18 @@ async function searchMultiplePlatforms(
     });
 
     if (!response.ok) {
-      console.error(`[Tavily] API error: ${response.status}`);
+      logger.error(`[Tavily] API error: ${response.status}`);
       return { amazon: null, myntra: null, tatacliq: null };
     }
 
     const data = await response.json();
     
     if (!data.results || data.results.length === 0) {
-      console.log(`[Tavily] No results found for query: "${query}"`);
+      logger.log(`[Tavily] No results found for query: "${query}"`);
       return { amazon: null, myntra: null, tatacliq: null };
     }
 
-    console.log(`✅ Tavily found ${data.results.length} results`);
+    logger.log(`✅ Tavily found ${data.results.length} results`);
 
     // Filter and rank results with SMART RELEVANCE SCORING
     const filteredResults: TavilySearchResult[] = data.results
@@ -532,7 +533,7 @@ async function searchMultiplePlatforms(
       })
       .sort((a: TavilySearchResult, b: TavilySearchResult) => b.score - a.score);
 
-    console.log(`   Filtered to ${filteredResults.length} relevant results`);
+    logger.log(`   Filtered to ${filteredResults.length} relevant results`);
 
     return {
       amazon: extractLink(filteredResults, 'amazon'),
@@ -541,7 +542,7 @@ async function searchMultiplePlatforms(
     };
 
   } catch (error) {
-    console.error('[Tavily] Search error:', error);
+    logger.error('[Tavily] Search error:', error);
     return { amazon: null, myntra: null, tatacliq: null };
   }
 }
@@ -556,7 +557,7 @@ export async function tavilySearch(
   clothingType?: string
 ): Promise<TavilyResult> {
   if (!TAVILY_API_KEY) {
-    console.warn('⚠️ Tavily API key not configured; returning fallback search links.');
+    logger.warn('⚠️ Tavily API key not configured; returning fallback search links.');
     const fallbackQuery = `${gender || ''} ${clothingType || 'clothing'}`.trim();
     return {
       amazon: generateDirectSearchURL('amazon', fallbackQuery, gender),
@@ -580,7 +581,7 @@ export async function tavilySearch(
       /(shirt|jacket|blazer|top|sweater|coat|hoodie|cardigan|vest|blouse)/i.test(word)
     ) || cleanQuery.split(' ')[0];
 
-    console.log('🤖 Generating smart query with Gemini...');
+    logger.log('🤖 Generating smart query with Gemini...');
     const queryData = await generateShoppingQuery({
       clothingType: detectedClothingType,
       color: color,
@@ -589,7 +590,7 @@ export async function tavilySearch(
       occasion: occasion,
     });
 
-    console.log('✅ Smart query generated:', queryData);
+    logger.log('✅ Smart query generated:', queryData);
 
     // Search Amazon and Myntra with primary query
     const amazonMyntraResults = await searchMultiplePlatforms(
@@ -600,7 +601,7 @@ export async function tavilySearch(
     );
 
     // Search TATA CLiQ with AI-optimized simple query first
-    console.log('[Tavily] TATA CLiQ using AI-optimized query:', queryData.tataCliqQuery);
+    logger.log('[Tavily] TATA CLiQ using AI-optimized query:', queryData.tataCliqQuery);
     
     let cliqResult: string | null = null;
     
@@ -615,10 +616,10 @@ export async function tavilySearch(
     
     if (cliqResults.tatacliq) {
       cliqResult = cliqResults.tatacliq;
-      console.log(`[Tavily] TATA CLiQ success with AI query!`);
+      logger.log(`[Tavily] TATA CLiQ success with AI query!`);
     } else {
       // Fallback to even simpler queries
-      console.log('[Tavily] AI query failed, trying fallback CLiQ queries...');
+      logger.log('[Tavily] AI query failed, trying fallback CLiQ queries...');
       const cliqQueries = optimizeForCliq(queryData.primaryQuery, detectedClothingType, gender || '');
       
       for (const cliqQuery of cliqQueries) {
@@ -632,7 +633,7 @@ export async function tavilySearch(
         
         if (fallbackResults.tatacliq) {
           cliqResult = fallbackResults.tatacliq;
-          console.log(`[Tavily] TATA CLiQ success with fallback: "${cliqQuery}"`);
+          logger.log(`[Tavily] TATA CLiQ success with fallback: "${cliqQuery}"`);
           break;
         }
       }
@@ -640,7 +641,7 @@ export async function tavilySearch(
 
     // If still no CLiQ results, use direct search URL with AI query
     if (!cliqResult) {
-      console.log('[Tavily] No TATA CLiQ product found, using direct search URL');
+      logger.log('[Tavily] No TATA CLiQ product found, using direct search URL');
       cliqResult = generateDirectSearchURL('tatacliq', queryData.tataCliqQuery, gender);
     }
 
@@ -652,7 +653,7 @@ export async function tavilySearch(
 
     // If Amazon or Myntra missing, try fallback queries
     if (!result.amazon || !result.myntra) {
-      console.log('[Tavily] Some platforms missing, trying fallbacks...');
+      logger.log('[Tavily] Some platforms missing, trying fallbacks...');
       for (const fallbackQuery of queryData.fallbackQueries) {
         const fallbackResults = await searchMultiplePlatforms(
           fallbackQuery,
@@ -671,19 +672,19 @@ export async function tavilySearch(
     // Generate direct search URLs for any still missing links
     if (!result.amazon) {
       result.amazon = generateDirectSearchURL('amazon', queryData.primaryQuery, gender);
-      console.log('⚠️ No Amazon link found, using direct search URL');
+      logger.log('⚠️ No Amazon link found, using direct search URL');
     }
     
     if (!result.myntra) {
       result.myntra = generateDirectSearchURL('myntra', queryData.primaryQuery, gender);
-      console.log('⚠️ No Myntra link found, using direct search URL');
+      logger.log('⚠️ No Myntra link found, using direct search URL');
     }
 
-    console.log('[Tavily] Final results:', result);
+    logger.log('[Tavily] Final results:', result);
     return result;
 
   } catch (error) {
-    console.error('[Tavily] Smart search failed:', error);
+    logger.error('[Tavily] Smart search failed:', error);
     // Even in error case, return direct search URLs instead of null
     const fallbackQuery = `${gender || ''} ${clothingType || 'clothing'}`.trim();
     return {

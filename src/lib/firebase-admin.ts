@@ -6,6 +6,7 @@
  */
 
 import * as admin from 'firebase-admin';
+import { logger } from './logger';
 
 // Initialize Firebase Admin SDK (singleton pattern)
 if (!admin.apps.length) {
@@ -21,7 +22,7 @@ if (!admin.apps.length) {
           credential: admin.credential.cert(credentials),
           projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
         });
-        console.log('✅ Firebase Admin SDK initialized with service account');
+        logger.log('✅ Firebase Admin SDK initialized with service account');
       } catch (jsonError) {
         console.error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', jsonError);
         throw new Error('Invalid FIREBASE_SERVICE_ACCOUNT_KEY format - must be valid JSON');
@@ -32,10 +33,10 @@ if (!admin.apps.length) {
       admin.initializeApp({
         projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
       });
-      console.log('ℹ️ Firebase Admin SDK initialized without service account (development mode)');
+      logger.log('ℹ️ Firebase Admin SDK initialized without service account (development mode)');
     }
   } catch (error) {
-    console.error('❌ Firebase Admin SDK initialization error:', error);
+    logger.error('❌ Firebase Admin SDK initialization error:', error);
     throw error;
   }
 }

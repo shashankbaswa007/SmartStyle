@@ -125,9 +125,9 @@ export async function createInteractionSession(
       updatedAt: serverTimestamp(),
     });
 
-    console.log('✅ [Interaction Tracker] Session created:', sessionId);
+    logger.log('✅ [Interaction Tracker] Session created:', sessionId);
   } catch (error) {
-    console.error('❌ [Interaction Tracker] Failed to create session:', error);
+    logger.error('❌ [Interaction Tracker] Failed to create session:', error);
   }
 }
 
@@ -150,9 +150,9 @@ export async function trackAction(
       updatedAt: serverTimestamp(),
     });
 
-    console.log(`✅ [Interaction Tracker] Action tracked: ${action.type} at ${action.timestamp.toISOString()}`);
+    logger.log(`✅ [Interaction Tracker] Action tracked: ${action.type} at ${action.timestamp.toISOString()}`);
   } catch (error) {
-    console.error('❌ [Interaction Tracker] Failed to track action:', error);
+    logger.error('❌ [Interaction Tracker] Failed to track action:', error);
   }
 }
 
@@ -172,9 +172,9 @@ export async function updateSessionOutcome(
       updatedAt: serverTimestamp(),
     });
 
-    console.log(`✅ [Interaction Tracker] Outcome updated: ${outcome.outcome}`);
+    logger.log(`✅ [Interaction Tracker] Outcome updated: ${outcome.outcome}`);
   } catch (error) {
-    console.error('❌ [Interaction Tracker] Failed to update outcome:', error);
+    logger.error('❌ [Interaction Tracker] Failed to update outcome:', error);
   }
 }
 
@@ -295,7 +295,7 @@ export function startSessionTimeoutMonitoring(
   const timeoutMs = timeoutMinutes * 60 * 1000;
 
   const timeoutId = setTimeout(async () => {
-    console.log('⏱️ [Interaction Tracker] Session timeout reached:', sessionId);
+    logger.log('⏱️ [Interaction Tracker] Session timeout reached:', sessionId);
     
     // Check if session has any positive actions
     // This would require fetching the session, but for simplicity we'll just mark as ignored
@@ -306,7 +306,7 @@ export function startSessionTimeoutMonitoring(
     });
   }, timeoutMs);
 
-  console.log(`⏱️ [Interaction Tracker] Session timeout monitoring started: ${timeoutMinutes} minutes`);
+  logger.log(`⏱️ [Interaction Tracker] Session timeout monitoring started: ${timeoutMinutes} minutes`);
   
   return timeoutId;
 }
@@ -316,7 +316,7 @@ export function startSessionTimeoutMonitoring(
  */
 export function cancelSessionTimeout(timeoutId: NodeJS.Timeout): void {
   clearTimeout(timeoutId);
-  console.log('✅ [Interaction Tracker] Session timeout cancelled - user activity detected');
+  logger.log('✅ [Interaction Tracker] Session timeout cancelled - user activity detected');
 }
 
 // ============================================
@@ -533,9 +533,9 @@ export async function batchUpdateSession(
 
     await updateDoc(sessionRef, updateData);
 
-    console.log('✅ [Interaction Tracker] Batch update completed');
+    logger.log('✅ [Interaction Tracker] Batch update completed');
   } catch (error) {
-    console.error('❌ [Interaction Tracker] Batch update failed:', error);
+    logger.error('❌ [Interaction Tracker] Batch update failed:', error);
   }
 }
 
@@ -559,7 +559,7 @@ export function saveSessionToLocal(sessionData: LocalSessionData): void {
       lastSync: sessionData.lastSync.toISOString(),
     }));
   } catch (error) {
-    console.error('❌ [Interaction Tracker] Failed to save to localStorage:', error);
+    logger.error('❌ [Interaction Tracker] Failed to save to localStorage:', error);
   }
 }
 
@@ -581,7 +581,7 @@ export function loadSessionFromLocal(): LocalSessionData | null {
       })),
     };
   } catch (error) {
-    console.error('❌ [Interaction Tracker] Failed to load from localStorage:', error);
+    logger.error('❌ [Interaction Tracker] Failed to load from localStorage:', error);
     return null;
   }
 }

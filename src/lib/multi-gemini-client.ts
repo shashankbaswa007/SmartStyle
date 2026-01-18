@@ -5,6 +5,7 @@
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { logger } from './logger';
 
 export interface GeminiKeyConfig {
   key: string;
@@ -54,10 +55,10 @@ class MultiGeminiManager {
         modelName: 'gemini-2.0-flash',
       });
     } else if (backupKey === primaryKey) {
-      console.warn('⚠️ Backup Gemini key is same as primary - skipping to avoid shared quota');
+      logger.warn('⚠️ Backup Gemini key is same as primary - skipping to avoid shared quota');
     }
 
-    console.log(`🔑 Initialized ${this.keys.length} unique Gemini API key(s) (attempting image generation with gemini-2.0-flash)`);
+    logger.log(`🔑 Initialized ${this.keys.length} unique Gemini API key(s) (attempting image generation with gemini-2.0-flash)`);
   }
 
   /**
@@ -65,7 +66,7 @@ class MultiGeminiManager {
    */
   getNextAvailableKey(): string | null {
     if (this.keys.length === 0) {
-      console.error('❌ No Gemini API keys configured');
+      logger.error('❌ No Gemini API keys configured');
       return null;
     }
 
@@ -78,12 +79,12 @@ class MultiGeminiManager {
     for (let i = 0; i < this.keys.length; i++) {
       if (this.keys[i].isAvailable) {
         this.currentKeyIndex = i;
-        console.log(`🔄 Switched to ${this.keys[i].name}`);
+        logger.log(`🔄 Switched to ${this.keys[i].name}`);
         return this.keys[i].key;
       }
     }
 
-    console.error('❌ All Gemini API keys exhausted');
+    logger.error('❌ All Gemini API keys exhausted');
     return null;
   }
 
@@ -93,13 +94,13 @@ class MultiGeminiManager {
   markCurrentKeyExhausted(): boolean {
     if (this.keys[this.currentKeyIndex]) {
       this.keys[this.currentKeyIndex].isAvailable = false;
-      console.log(`⚠️ ${this.keys[this.currentKeyIndex].name} quota exceeded`);
+      logger.log(`⚠️ ${this.keys[this.currentKeyIndex].name} quota exceeded`);
       
       // Try to switch to next available key
       for (let i = 0; i < this.keys.length; i++) {
         if (this.keys[i].isAvailable) {
           this.currentKeyIndex = i;
-          console.log(`✅ Switched to ${this.keys[i].name}`);
+          logger.log(`✅ Switched to ${this.keys[i].name}`);
           return true;
         }
       }

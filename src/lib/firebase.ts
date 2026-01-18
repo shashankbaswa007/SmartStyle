@@ -9,9 +9,10 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
 import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
+import { logger } from './logger';
 
 // Debug: Log what environment variables are available
-console.log('🔍 Firebase env check:', {
+logger.log('🔍 Firebase env check:', {
   apiKey: typeof process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: typeof process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: typeof process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
@@ -28,7 +29,7 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-console.log('🔍 Firebase config object:', {
+logger.log('🔍 Firebase config object:', {
   hasApiKey: !!firebaseConfig.apiKey,
   hasAuthDomain: !!firebaseConfig.authDomain,
   hasProjectId: !!firebaseConfig.projectId,
@@ -41,10 +42,10 @@ const missingFields = Object.entries(firebaseConfig)
   .map(([key]) => key);
 
 if (missingFields.length > 0) {
-  console.error('❌ Missing Firebase configuration fields:', missingFields.join(', '));
-  console.error('Firebase config object:', firebaseConfig);
-  console.error('This usually means environment variables are not being loaded correctly.');
-  console.error('Check that .env or .env.local file exists with NEXT_PUBLIC_FIREBASE_* variables.');
+  logger.error('❌ Missing Firebase configuration fields:', missingFields.join(', '));
+  logger.error('Firebase config object:', firebaseConfig);
+  logger.error('This usually means environment variables are not being loaded correctly.');
+  logger.error('Check that .env or .env.local file exists with NEXT_PUBLIC_FIREBASE_* variables.');
   throw new Error(
     `Missing Firebase configuration: ${missingFields.map(f => 'NEXT_PUBLIC_FIREBASE_' + f.toUpperCase()).join(', ')}`
   );
@@ -54,9 +55,9 @@ if (missingFields.length > 0) {
 let app;
 try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-  console.log('✅ Firebase initialized successfully');
+  logger.log('✅ Firebase initialized successfully');
 } catch (error) {
-  console.error('❌ Firebase initialization error:', error);
+  logger.error('❌ Firebase initialization error:', error);
   throw error;
 }
 

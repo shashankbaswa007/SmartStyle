@@ -18,6 +18,7 @@ import {
   browserLocalPersistence,
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { logger } from './logger';
 
 // ============================================
 // GOOGLE AUTHENTICATION
@@ -47,7 +48,7 @@ export async function signInWithGoogle(): Promise<{ user: User | null; error?: s
 
     return { user: result.user };
   } catch (error: any) {
-    console.error('Google sign-in error:', error);
+    logger.error('Google sign-in error:', error);
     
     // Handle specific error codes
     let errorMessage = 'Failed to sign in with Google';
@@ -77,7 +78,7 @@ export async function signOut(): Promise<{ success: boolean; error?: string }> {
     
     return { success: true };
   } catch (error: any) {
-    console.error('Sign-out error:', error);
+    logger.error('Sign-out error:', error);
     return { success: false, error: 'Failed to sign out' };
   }
 }
