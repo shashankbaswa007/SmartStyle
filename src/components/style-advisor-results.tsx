@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Sparkles, Palette, Shirt, PenTool, Wand2, ShoppingCart, ShoppingBag, ExternalLink, Check, Heart, Info, ChevronDown, Star } from "lucide-react";
+import { Sparkles, Palette, Shirt, PenTool, Wand2, ShoppingCart, ShoppingBag, ExternalLink, Check, Heart, Info, ChevronDown, Star, Lightbulb } from "lucide-react";
 import type { AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
 import type { ShoppingLinkResult, ItemShoppingLinks, ProductLink } from "@/lib/tavily";
 import { Separator } from "./ui/separator";
@@ -20,6 +20,7 @@ import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import { saveRecommendationUsage } from "@/app/actions";
 import { EnhancedColorPalette } from "./EnhancedColorPalette";
+import { MatchScoreBadge } from "./match-score-badge";
 
 interface StyleAdvisorResultsProps {
   analysisResult: AnalyzeImageAndProvideRecommendationsOutput;
@@ -43,7 +44,12 @@ type OutfitWithLinks = AnalyzeImageAndProvideRecommendationsOutput['outfitRecomm
     amazon: string;
     tatacliq: string;
     myntra: string;
-  }>;
+  }>;  
+  // Personalization fields from diversification system
+  matchScore?: number;
+  matchCategory?: string;
+  explanation?: string;
+  position?: number;
 };
 
 
@@ -935,9 +941,30 @@ export function StyleAdvisorResults({
                 {/* Outfit Header with Select Button */}
                 <div className="flex items-start justify-between gap-4 mb-6">
                   <div className="flex-1">
-                    <h4 className="font-bold text-xl text-foreground flex items-center gap-2">
-                      <Wand2 className="text-accent w-5 h-5" /> {outfit.title}
-                    </h4>
+                    <div className="flex items-center gap-3 mb-2">
+                      <h4 className="font-bold text-xl text-foreground flex items-center gap-2">
+                        <Wand2 className="text-accent w-5 h-5" /> {outfit.title}
+                      </h4>
+                      {/* Match Score Badge - shows personalization confidence */}
+                      <MatchScoreBadge 
+                        matchScore={outfitWithLinks.matchScore}
+                        matchCategory={outfitWithLinks.matchCategory}
+                        showScore={true}
+                      />
+                    </div>
+                    
+                    {/* Recommendation Explanation - why this was recommended */}
+                    {outfitWithLinks.explanation && (
+                      <div className="mt-2 p-3 rounded-lg bg-accent/5 border border-accent/20">
+                        <div className="flex items-start gap-2">
+                          <Lightbulb className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
+                          <p className="text-sm text-muted-foreground">
+                            {outfitWithLinks.explanation}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    
                     {outfit.isExistingMatch && (
                       <Badge variant="secondary" className="mt-2">
                         ✨ Trending style match
