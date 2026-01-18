@@ -9,6 +9,8 @@ import crypto from 'crypto';
 import { getComprehensivePreferences } from '@/lib/preference-engine';
 import { getBlocklists } from '@/lib/blocklist-manager';
 import { generateSessionId, createInteractionSession } from '@/lib/interaction-tracker';
+import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
+import { logger } from '@/lib/logger';
 import { 
   calculateOutfitMatchScore, 
   applyDiversificationRule, 
@@ -19,7 +21,33 @@ import {
 
 export async function POST(req: Request) {
   const startTime = Date.now();
-  console.log('⏱️ [PERF] API request started at', new Date().toISOString());
+  logger.log('⏱️ [PERF] API request started at', new Date().toISOString());
+  
+  // Rate limiting: 10 requests per minute per client
+  const clientId = getClientIdentifier(req);
+  const rateLimit = checkRateLimit(clientId, {
+    windowMs: 60 * 1000, // 1 minute
+    maxRequests: 10,
+  });
+
+  if (!rateLimit.success) {
+    const retryAfter = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
+    return NextResponse.json(
+      { 
+        error: 'Too many requests. Please try again later.',
+        retryAfter,
+      },
+      { 
+        status: 429,
+        headers: {
+          'X-RateLimit-Limit': rateLimit.limit.toString(),
+          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
+          'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
+          'Retry-After': retryAfter.toString(),
+        },
+      }
+    );
+  }
   
   try {
     // Parse request body with error handling
@@ -27,7 +55,7 @@ export async function POST(req: Request) {
     try {
       body = await req.json();
     } catch (parseError) {
-      console.error('❌ Failed to parse request body:', parseError);
+      logger.error('❌ Failed to parse request body:', parseError);
       return NextResponse.json(
         { error: 'Invalid JSON in request body' },
         { status: 400 }
@@ -51,7 +79,7 @@ export async function POST(req: Request) {
       );
     }
 
-    console.log('🎯 Starting recommendation flow:', {
+    logger.log('🎯 Starting recommendation flow:', {
       hasPhoto: !!photoDataUri,
       occasion: occasion || 'not specified',
       gender,
@@ -66,7 +94,7 @@ export async function POST(req: Request) {
       .substring(0, 16);
     
     const cacheKey = `rec:${imageHash}:${occasion}:${gender}:${weather || 'any'}`;
-    console.log('🔑 [PERF] Cache key:', cacheKey);
+    logger.log('🔑 [PERF] Cache key:', cacheKey);
 
     // ✨ NEW: Fetch user preferences and blocklists for personalization
     let userPreferences = null;
@@ -74,7 +102,7 @@ export async function POST(req: Request) {
     let sessionId = generateSessionId();
     
     if (userId && userId !== 'anonymous') {
-      console.log('🎨 [Personalization] Fetching user preferences...');
+      logger.log('🎨 [Personalization] Fetching user preferences...');
       const prefStart = Date.now();
       
       try {
@@ -83,15 +111,15 @@ export async function POST(req: Request) {
           getBlocklists(userId),
         ]);
         
-        console.log(`⏱️ [PERF] Preferences fetched: ${Date.now() - prefStart}ms`);
-        console.log('✅ [Personalization] User profile loaded:', {
+        logger.log(`⏱️ [PERF] Preferences fetched: ${Date.now() - prefStart}ms`);
+        logger.log('✅ [Personalization] User profile loaded:', {
           interactions: userPreferences.totalInteractions,
           confidence: userPreferences.overallConfidence,
           favoriteColors: userPreferences.colors.favoriteColors.length,
           topStyles: userPreferences.styles.topStyles.length,
         });
       } catch (prefError) {
-        console.error('⚠️ [Personalization] Failed to fetch preferences:', prefError);
+        logger.error('⚠️ [Personalization] Failed to fetch preferences:', prefError);
         // Continue without personalization
       }
     }
@@ -115,10 +143,10 @@ export async function POST(req: Request) {
         15000, // 15 second timeout for AI analysis
         'AI analysis timed out after 15 seconds'
       );
-      console.log(`⏱️ [PERF] Analysis completed: ${Date.now() - analysisStart}ms`);
-      console.log('✅ Image analysis complete:', analysis.outfitRecommendations.length, 'recommendations');
+      logger.log(`⏱️ [PERF] Analysis completed: ${Date.now() - analysisStart}ms`);
+      logger.log('✅ Image analysis complete:', analysis.outfitRecommendations.length, 'recommendations');
     } catch (analysisError) {
-      console.error('❌ Image analysis failed:', analysisError);
+      logger.error('❌ Image analysis failed:', analysisError);
       throw new Error('Failed to analyze image. Please try again with a clearer photo.');
     }
 
@@ -126,13 +154,13 @@ export async function POST(req: Request) {
     const outfitsStart = Date.now();
     const outfitsToProcess = analysis.outfitRecommendations.slice(0, 3);
     
-    console.log('🚀 [PERF] Processing 3 outfits in PARALLEL...');
+    logger.log('🚀 [PERF] Processing 3 outfits in PARALLEL...');
     
     let enrichedOutfits = await Promise.all(
       outfitsToProcess.map(async (outfit, index) => {
         const outfitStart = Date.now();
         const outfitNumber = index + 1;
-        console.log(`⚡ [PERF] Starting outfit ${outfitNumber}/3`);
+        logger.log(`⚡ [PERF] Starting outfit ${outfitNumber}/3`);
 
         try {
           // Extract color hex codes
@@ -152,7 +180,7 @@ export async function POST(req: Request) {
             `Outfit ${outfitNumber} image generation timed out`
           ) as string;
 
-          console.log(`✅ [OUTFIT ${outfitNumber}] Image generated`);
+          logger.log(`✅ [OUTFIT ${outfitNumber}] Image generated`);
 
           // STEP 2: Extract ACTUAL colors from generated image for accurate shopping
           let extractedColors: any = null;
@@ -162,9 +190,9 @@ export async function POST(req: Request) {
               5000, // 5 second timeout for color extraction
               `Color extraction timeout`
             );
-            console.log(`✅ [OUTFIT ${outfitNumber}] Extracted ${extractedColors.dominantColors.length} colors from generated image`);
+            logger.log(`✅ [OUTFIT ${outfitNumber}] Extracted ${extractedColors.dominantColors.length} colors from generated image`);
           } catch (colorError) {
-            console.warn(`⚠️ [OUTFIT ${outfitNumber}] Color extraction failed, using AI colors:`, (colorError as Error).message);
+            logger.warn(`⚠️ [OUTFIT ${outfitNumber}] Color extraction failed, using AI colors:`, (colorError as Error).message);
           }
 
           // Use extracted colors from image if available, otherwise fallback to AI colors
@@ -184,7 +212,7 @@ export async function POST(req: Request) {
             `Shopping search timeout`
           );
 
-          console.log(`⏱️ [PERF] Outfit ${outfitNumber} completed: ${Date.now() - outfitStart}ms`);
+          logger.log(`⏱️ [PERF] Outfit ${outfitNumber} completed: ${Date.now() - outfitStart}ms`);
 
           // Return outfit with accurate colors and matching shopping links
           return {
@@ -196,8 +224,8 @@ export async function POST(req: Request) {
           };
 
         } catch (error: any) {
-          console.error(`❌ Outfit ${outfitNumber} failed:`, error.message);
-          console.log(`⏱️ [PERF] Outfit ${outfitNumber} failed after: ${Date.now() - outfitStart}ms`);
+          logger.error(`❌ Outfit ${outfitNumber} failed:`, error.message);
+          logger.log(`⏱️ [PERF] Outfit ${outfitNumber} failed after: ${Date.now() - outfitStart}ms`);
           
           return {
             ...outfit,
@@ -211,12 +239,12 @@ export async function POST(req: Request) {
       })
     );
 
-    console.log(`⏱️ [PERF] All outfits processed in parallel: ${Date.now() - outfitsStart}ms`);
-    console.log('✅ All outfits processed!');
+    logger.log(`⏱️ [PERF] All outfits processed in parallel: ${Date.now() - outfitsStart}ms`);
+    logger.log('✅ All outfits processed!');
 
     // ✨ Apply diversification if user is authenticated and has preferences
     if (userId && userId !== 'anonymous' && userPreferences && userBlocklists) {
-      console.log('🎯 [Diversification] Applying 70-20-10 rule...');
+      logger.log('🎯 [Diversification] Applying 70-20-10 rule...');
       
       try {
         // Calculate match scores for all outfits
@@ -230,7 +258,7 @@ export async function POST(req: Request) {
         // Check for pattern lock
         const patternLock = await detectPatternLock(userId, userPreferences);
         if (patternLock.isLocked) {
-          console.log('⚠️ Pattern lock detected! User stuck in style bubble. Forcing exploration.');
+          logger.log('⚠️ Pattern lock detected! User stuck in style bubble. Forcing exploration.');
         }
 
         // Replace enrichedOutfits with diversified ones
@@ -242,7 +270,7 @@ export async function POST(req: Request) {
           position: index + 1,
         }));
 
-        console.log('✅ [Diversification] Applied:', {
+        logger.log('✅ [Diversification] Applied:', {
           position1: diversified[0]?.matchScore,
           position2: diversified[1]?.matchScore,
           position3: diversified[2]?.matchScore,
@@ -252,10 +280,10 @@ export async function POST(req: Request) {
         // Add first outfit to anti-repetition cache
         if (enrichedOutfits.length > 0) {
           await addToAntiRepetitionCache(userId, enrichedOutfits[0]);
-          console.log('✅ [Diversification] Added to anti-repetition cache');
+          logger.log('✅ [Diversification] Added to anti-repetition cache');
         }
       } catch (divError) {
-        console.error('⚠️ [Diversification] Failed (non-critical):', divError);
+        logger.error('⚠️ [Diversification] Failed (non-critical):', divError);
         // Continue without diversification
       }
     }
@@ -266,7 +294,7 @@ export async function POST(req: Request) {
 
     // ✨ NEW: Create interaction tracking session
     if (userId && userId !== 'anonymous') {
-      console.log('📊 [Interaction Tracking] Creating session...');
+      logger.log('📊 [Interaction Tracking] Creating session...');
       
       try {
         await createInteractionSession(
@@ -291,9 +319,9 @@ export async function POST(req: Request) {
           }))
         );
         
-        console.log('✅ [Interaction Tracking] Session created:', sessionId);
+        logger.log('✅ [Interaction Tracking] Session created:', sessionId);
       } catch (trackError) {
-        console.error('⚠️ [Interaction Tracking] Failed to create session:', trackError);
+        logger.error('⚠️ [Interaction Tracking] Failed to create session:', trackError);
       }
     }
 
@@ -317,14 +345,14 @@ export async function POST(req: Request) {
     if (userId && userId !== 'anonymous') {
       // Fire and forget - don't wait for save
       saveRecommendation(userId, payload)
-        .then(id => console.log(`✅ [ASYNC] Recommendation saved: ${id}`))
-        .catch(err => console.error('⚠️ [ASYNC] Save failed:', err));
+        .then(id => logger.log(`✅ [ASYNC] Recommendation saved: ${id}`))
+        .catch(err => logger.error('⚠️ [ASYNC] Save failed:', err));
     }
 
     const totalTime = Date.now() - startTime;
-    console.log(`⏱️ [PERF] ============================================`);
-    console.log(`⏱️ [PERF] TOTAL API TIME: ${totalTime}ms (${(totalTime/1000).toFixed(2)}s)`);
-    console.log(`⏱️ [PERF] ============================================`);
+    logger.log(`⏱️ [PERF] ============================================`);
+    logger.log(`⏱️ [PERF] TOTAL API TIME: ${totalTime}ms (${(totalTime/1000).toFixed(2)}s)`);
+    logger.log(`⏱️ [PERF] ============================================`);
 
     return NextResponse.json({ 
       success: true, 
@@ -335,13 +363,13 @@ export async function POST(req: Request) {
     });
   } catch (err: any) {
     const totalTime = Date.now() - startTime;
-    console.error('❌ Recommend route error:', err);
-    console.log(`⏱️ [PERF] Failed after ${totalTime}ms`); 
+    logger.error('❌ Recommend route error:', err);
+    logger.log(`⏱️ [PERF] Failed after ${totalTime}ms`); 
 
     
     // Detailed error logging
     if (err instanceof Error) {
-      console.error('Error details:', {
+      logger.error('Error details:', {
         name: err.name,
         message: err.message,
         stack: err.stack,

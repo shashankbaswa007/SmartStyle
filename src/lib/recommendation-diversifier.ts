@@ -10,6 +10,7 @@
  */
 
 import { db } from '@/lib/firebase';
+import { logger } from '@/lib/logger';
 import {
   collection,
   doc,
@@ -373,7 +374,7 @@ export function applyDiversificationRule(
   outfitMatches: OutfitMatch[]
 ): OutfitMatch[] {
   if (outfitMatches.length < 3) {
-    console.warn('⚠️ Less than 3 outfits provided, diversification rule cannot be fully applied');
+    logger.warn('⚠️ Less than 3 outfits provided, diversification rule cannot be fully applied');
     return outfitMatches;
   }
 
@@ -419,7 +420,7 @@ export function applyDiversificationRule(
     diversified.push(sorted[2] || sorted[1] || sorted[0]);
   }
 
-  console.log('🎯 Diversification applied:', {
+  logger.log('🎯 Diversification applied:', {
     position1: diversified[0].matchScore,
     position2: diversified[1]?.matchScore,
     position3: diversified[2]?.matchScore,
@@ -467,7 +468,7 @@ export async function getAntiRepetitionCache(userId: string): Promise<AntiRepeti
 
     return emptyCache;
   } catch (error) {
-    console.error('❌ Error getting anti-repetition cache:', error);
+    logger.error('❌ Error getting anti-repetition cache:', error);
     return {
       userId,
       recentColorCombos: [],
@@ -533,9 +534,9 @@ export async function addToAntiRepetitionCache(
       lastUpdated: serverTimestamp(),
     });
 
-    console.log('✅ Added to anti-repetition cache');
+    logger.log('✅ Added to anti-repetition cache');
   } catch (error) {
-    console.error('❌ Error adding to anti-repetition cache:', error);
+    logger.error('❌ Error adding to anti-repetition cache:', error);
   }
 }
 
@@ -620,7 +621,7 @@ export async function getExplorationMetrics(userId: string): Promise<Exploration
 
     return initialMetrics;
   } catch (error) {
-    console.error('❌ Error getting exploration metrics:', error);
+    logger.error('❌ Error getting exploration metrics:', error);
     return {
       userId,
       totalExplorationShown: 0,
@@ -676,9 +677,9 @@ export async function updateExplorationMetrics(
       lastAdjusted: serverTimestamp(),
     });
 
-    console.log(`✅ Exploration metrics updated: ${metrics.explorationSuccessRate.toFixed(1)}% success, ${metrics.adaptiveExplorationLevel}% level`);
+    logger.log(`✅ Exploration metrics updated: ${metrics.explorationSuccessRate.toFixed(1)}% success, ${metrics.adaptiveExplorationLevel}% level`);
   } catch (error) {
-    console.error('❌ Error updating exploration metrics:', error);
+    logger.error('❌ Error updating exploration metrics:', error);
   }
 }
 
@@ -711,7 +712,7 @@ export async function detectPatternLock(
     const isLocked = colorConcentration > 85 && styleConcentration > 80;
 
     if (isLocked) {
-      console.log('⚠️ Pattern lock detected! User stuck in style bubble.');
+      logger.log('⚠️ Pattern lock detected! User stuck in style bubble.');
       return {
         userId,
         isLocked: true,
@@ -729,7 +730,7 @@ export async function detectPatternLock(
       forceExplorationPercentage: 10, // Normal 10% exploration
     };
   } catch (error) {
-    console.error('❌ Error detecting pattern lock:', error);
+    logger.error('❌ Error detecting pattern lock:', error);
     return {
       userId,
       isLocked: false,

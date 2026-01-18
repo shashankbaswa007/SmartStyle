@@ -6,6 +6,7 @@
  */
 
 import { db } from '@/lib/firebase';
+import { logger } from '@/lib/logger';
 import {
   collection,
   doc,
@@ -138,7 +139,7 @@ function getRecencyWeight(timestamp: Date): number {
  * Extracts favorite colors, disliked colors, successful combinations
  */
 export async function analyzeColorPreferences(userId: string): Promise<ColorPreferences> {
-  console.log('🎨 [Preference Engine] Analyzing color preferences for:', userId);
+  logger.log('🎨 [Preference Engine] Analyzing color preferences for:', userId);
 
   try {
     // Fetch liked outfits
@@ -248,7 +249,7 @@ export async function analyzeColorPreferences(userId: string): Promise<ColorPref
       likedSnapshot.size + wornSnapshot.size + interactionsSnapshot.size
     );
 
-    console.log('✅ [Preference Engine] Color analysis complete:', {
+    logger.log('✅ [Preference Engine] Color analysis complete:', {
       favoriteCount: favoriteColors.length,
       dislikedCount: dislikedColors.length,
       combinations: combinations.length,
@@ -264,7 +265,7 @@ export async function analyzeColorPreferences(userId: string): Promise<ColorPref
       confidence,
     };
   } catch (error) {
-    console.error('❌ [Preference Engine] Color analysis failed:', error);
+    logger.error('❌ [Preference Engine] Color analysis failed:', error);
     return getDefaultColorPreferences();
   }
 }
@@ -341,7 +342,7 @@ function calculateTemperaturePreference(colors: ColorPreference[]): 'warm' | 'co
  * Extracts preferred styles, fits, patterns segmented by occasion
  */
 export async function analyzeStylePreferences(userId: string): Promise<StylePreferences> {
-  console.log('👔 [Preference Engine] Analyzing style preferences for:', userId);
+  logger.log('👔 [Preference Engine] Analyzing style preferences for:', userId);
 
   try {
     const likedRef = collection(db, 'users', userId, 'likedOutfits');
@@ -422,7 +423,7 @@ export async function analyzeStylePreferences(userId: string): Promise<StylePref
     const styleConsistency = calculateOverallStyleConsistency(styleWeights);
     const confidence = calculateConfidenceScore(likedSnapshot.size + wornSnapshot.size);
 
-    console.log('✅ [Preference Engine] Style analysis complete:', {
+    logger.log('✅ [Preference Engine] Style analysis complete:', {
       topStyles: topStyles.length,
       confidence,
     });
@@ -437,7 +438,7 @@ export async function analyzeStylePreferences(userId: string): Promise<StylePref
       confidence,
     };
   } catch (error) {
-    console.error('❌ [Preference Engine] Style analysis failed:', error);
+    logger.error('❌ [Preference Engine] Style analysis failed:', error);
     return getDefaultStylePreferences();
   }
 }
@@ -450,7 +451,7 @@ export async function analyzeStylePreferences(userId: string): Promise<StylePref
  * Analyze user's seasonal preferences
  */
 export async function analyzeSeasonalPreferences(userId: string): Promise<SeasonalPreferences> {
-  console.log('🌦️ [Preference Engine] Analyzing seasonal preferences for:', userId);
+  logger.log('🌦️ [Preference Engine] Analyzing seasonal preferences for:', userId);
 
   try {
     const likedRef = collection(db, 'users', userId, 'likedOutfits');
@@ -509,7 +510,7 @@ export async function analyzeSeasonalPreferences(userId: string): Promise<Season
       confidence,
     };
   } catch (error) {
-    console.error('❌ [Preference Engine] Seasonal analysis failed:', error);
+    logger.error('❌ [Preference Engine] Seasonal analysis failed:', error);
     return getDefaultSeasonalPreferences();
   }
 }
@@ -522,7 +523,7 @@ export async function analyzeSeasonalPreferences(userId: string): Promise<Season
  * Analyze user's shopping behavior and price preferences
  */
 export async function analyzeShoppingBehavior(userId: string): Promise<ShoppingBehavior> {
-  console.log('🛍️ [Preference Engine] Analyzing shopping behavior for:', userId);
+  logger.log('🛍️ [Preference Engine] Analyzing shopping behavior for:', userId);
 
   try {
     const interactionsRef = collection(db, 'userInteractions', userId, 'sessions');
@@ -567,7 +568,7 @@ export async function analyzeShoppingBehavior(userId: string): Promise<ShoppingB
       confidence,
     };
   } catch (error) {
-    console.error('❌ [Preference Engine] Shopping analysis failed:', error);
+    logger.error('❌ [Preference Engine] Shopping analysis failed:', error);
     return getDefaultShoppingBehavior();
   }
 }
@@ -580,7 +581,7 @@ export async function analyzeShoppingBehavior(userId: string): Promise<ShoppingB
  * Get all user preferences in one call
  */
 export async function getComprehensivePreferences(userId: string): Promise<ComprehensivePreferences> {
-  console.log('📊 [Preference Engine] Fetching comprehensive preferences for:', userId);
+  logger.log('📊 [Preference Engine] Fetching comprehensive preferences for:', userId);
 
   const [colors, styles, seasonal, shopping] = await Promise.all([
     analyzeColorPreferences(userId),
@@ -1004,11 +1005,11 @@ export async function updatePreferencesFromLike(
       updatedAt: serverTimestamp(),
     });
 
-    console.log(`✅ Preferences updated from LIKE: +2 to ${colors.length} colors, +2 to ${styles.length} styles`);
+    logger.log(`✅ Preferences updated from LIKE: +2 to ${colors.length} colors, +2 to ${styles.length} styles`);
     return { success: true, message: 'Preferences updated from like' };
 
   } catch (error) {
-    console.error('❌ Error updating preferences from like:', error);
+    logger.error('❌ Error updating preferences from like:', error);
     return { success: false, message: error instanceof Error ? error.message : 'Update failed' };
   }
 }
@@ -1131,11 +1132,11 @@ export async function updatePreferencesFromWear(
       updatedAt: serverTimestamp(),
     });
 
-    console.log(`✅ Preferences updated from WEAR: +5 to ${colors.length} colors, +5 to ${styles.length} styles`);
+    logger.log(`✅ Preferences updated from WEAR: +5 to ${colors.length} colors, +5 to ${styles.length} styles`);
     return { success: true, message: 'Preferences updated from wear' };
 
   } catch (error) {
-    console.error('❌ Error updating preferences from wear:', error);
+    logger.error('❌ Error updating preferences from wear:', error);
     return { success: false, message: error instanceof Error ? error.message : 'Update failed' };
   }
 }
@@ -1195,11 +1196,11 @@ export async function trackShoppingClick(
 
     await updateDoc(prefsRef, updates);
 
-    console.log(`✅ Shopping click tracked: ${platform} - ${item}`);
+    logger.log(`✅ Shopping click tracked: ${platform} - ${item}`);
     return { success: true, message: 'Shopping click tracked' };
 
   } catch (error) {
-    console.error('❌ Error tracking shopping click:', error);
+    logger.error('❌ Error tracking shopping click:', error);
     return { success: false, message: error instanceof Error ? error.message : 'Tracking failed' };
   }
 }

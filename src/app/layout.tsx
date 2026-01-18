@@ -6,6 +6,7 @@ import { AuthProvider } from '@/components/auth/AuthProvider';
 import { Header } from '@/components/Header';
 import { InstallPWA } from '@/components/InstallPWA';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
+import { ErrorBoundary } from '@/components/error-boundary';
 import Script from 'next/script';
 
 const inter = Inter({
@@ -87,15 +88,17 @@ export default function RootLayout({
         <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
       </head>
       <body className={`${inter.variable} ${playfairDisplay.variable} font-body antialiased bg-background`}>
-        <AuthProvider>
-          <ServiceWorkerRegister />
-          <Header />
-          <main className="pt-16">
-            {children}
-          </main>
-          <Toaster />
-          <InstallPWA />
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            <ServiceWorkerRegister />
+            <Header />
+            <main className="pt-16">
+              {children}
+            </main>
+            <Toaster />
+            <InstallPWA />
+          </AuthProvider>
+        </ErrorBoundary>
         
         {/* Web Vitals Tracking */}
         <Script
