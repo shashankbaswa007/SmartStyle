@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 import { trackOutfitSelection } from "@/lib/personalization";
 import { saveLikedOutfit } from "@/lib/likedOutfits";
 import { useToast } from "@/hooks/use-toast";
+import { updatePreferencesFromLike, updatePreferencesFromWear, trackShoppingClick } from "@/lib/preference-engine";
 import { Badge } from "./ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
@@ -367,6 +368,8 @@ export function StyleAdvisorResults({
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedOutfit, setSelectedOutfit] = useState<string | null>(null);
   const [isUsing, setIsUsing] = useState<number | null>(null);
+  const [wornOutfits, setWornOutfits] = useState<Set<number>>(new Set());
+  const [isMarkingWorn, setIsMarkingWorn] = useState<number | null>(null);
   const { toast } = useToast();
   const [isAnonymous, setIsAnonymous] = useState(true);
   const [authChecked, setAuthChecked] = useState(false);
@@ -588,6 +591,19 @@ export function StyleAdvisorResults({
             });
           } else if (likedOutfitResult.success) {
             console.log('✅ Outfit saved to likes collection');
+            
+            // Update preferences from like (+2 weight)
+            try {
+              const season = getCurrentSeason();
+              await updatePreferencesFromLike(userId, outfit, {
+                occasion: outfit.occasion || 'casual',
+                season,
+              });
+              console.log('✅ Preferences updated from like (+2 weight)');
+            } catch (prefError) {
+              console.warn('⚠️ Failed to update preferences from like (non-critical):', prefError);
+            }
+            
             toast({
               title: "Added to Favorites! ❤️",
               description: `"${outfit.title}" has been added to your likes!`,
@@ -766,6 +782,75 @@ export function StyleAdvisorResults({
       fetchShoppingLinks();
     }
   }, [analysisResult.outfitRecommendations, gender]);
+
+  // Get current season for preference tracking
+  const getCurrentSeason = (): 'summer' | 'winter' | 'monsoon' => {
+    const month = new Date().getMonth() + 1; // 1-12
+    if (month >= 6 && month <= 9) return 'monsoon';
+    if (month >= 11 || month <= 2) return 'winter';
+    return 'summer';
+  };
+
+  // Handle "Mark as Worn" button click
+  const handleMarkAsWorn = async (outfitIndex: number, outfit: any) => {
+    if (!userId) {
+      toast({
+        title: "Sign in required",
+        description: "Sign in to track worn outfits and get better recommendations!",
+        action: (
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => window.location.href = '/auth'}
+          >
+            Sign In
+          </Button>
+        ),
+      });
+      return;
+    }
+
+    setIsMarkingWorn(outfitIndex);
+    try {
+      const season = getCurrentSeason();
+      const result = await updatePreferencesFromWear(userId, outfit, {
+        occasion: outfit.occasion || 'casual',
+        season,
+      });
+
+      if (result.success) {
+        setWornOutfits(prev => new Set(prev).add(outfitIndex));
+        toast({
+          title: "Marked as Worn! 👔",
+          description: `We'll remember you love "${outfit.title}" style! Future recommendations will be even better.`,
+        });
+        console.log('✅ Preferences updated from wear (+5 weight)');
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      console.error('❌ Error marking outfit as worn:', error);
+      toast({
+        title: "Update Failed",
+        description: error instanceof Error ? error.message : 'Failed to mark as worn',
+        variant: "destructive",
+      });
+    } finally {
+      setIsMarkingWorn(null);
+    }
+  };
+
+  // Handle shopping link click (track behavior)
+  const handleShoppingClick = async (platform: 'amazon' | 'myntra' | 'tatacliq', item: string) => {
+    if (userId) {
+      try {
+        await trackShoppingClick(userId, platform, item);
+        console.log(`✅ Shopping click tracked: ${platform} - ${item}`);
+      } catch (error) {
+        console.warn('⚠️ Failed to track shopping click (non-critical):', error);
+      }
+    }
+  };
 
   return (
     <motion.div
@@ -1069,6 +1154,7 @@ export function StyleAdvisorResults({
                                 href={itemLinks.amazon}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={() => handleShoppingClick('amazon', item)}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 hover:scale-105 transition-all duration-200 border border-orange-200/50 hover:border-orange-300 shadow-sm hover:shadow-orange-500/30"
                                 title={`Search "${item}" on Amazon`}
                               >
@@ -1079,6 +1165,7 @@ export function StyleAdvisorResults({
                                 href={itemLinks.tatacliq}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={() => handleShoppingClick('tatacliq', item)}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 hover:scale-105 transition-all duration-200 border border-blue-200/50 hover:border-blue-300 shadow-sm hover:shadow-blue-500/30"
                                 title={`Search "${item}" on TATA CLiQ`}
                               >
@@ -1089,6 +1176,7 @@ export function StyleAdvisorResults({
                                 href={itemLinks.myntra}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={() => handleShoppingClick('myntra', item)}
                                 className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 hover:scale-105 transition-all duration-200 border border-pink-200/50 hover:border-pink-300 shadow-sm hover:shadow-pink-500/30"
                                 title={`Search "${item}" on Myntra`}
                               >
@@ -1170,6 +1258,45 @@ export function StyleAdvisorResults({
                           ? "This outfit will help improve future recommendations" 
                           : "Click to save this outfit to your favorites"}
                       </p>
+                      
+                      {/* Mark as Worn Button - Strongest signal (+5 weight) */}
+                      {userId && !isAnonymous && selectedOutfit === `outfit${index + 1}` && (
+                        <div className="mt-3 pt-3 border-t border-border/10">
+                          <button
+                            onClick={() => handleMarkAsWorn(index, outfit)}
+                            disabled={wornOutfits.has(index) || isMarkingWorn === index}
+                            className={`w-full px-6 py-3 rounded-lg font-medium text-sm transition-all duration-300 flex items-center justify-center gap-2 ${
+                              wornOutfits.has(index)
+                                ? 'bg-purple-500/20 text-purple-600 border-2 border-purple-500 cursor-not-allowed'
+                                : isMarkingWorn === index
+                                ? 'bg-purple-500/50 text-white cursor-wait'
+                                : 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white shadow-md hover:shadow-lg transform hover:scale-105'
+                            }`}
+                          >
+                            {isMarkingWorn === index ? (
+                              <>
+                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                <span>Updating...</span>
+                              </>
+                            ) : wornOutfits.has(index) ? (
+                              <>
+                                <Check className="w-5 h-5" />
+                                <span>Marked as Worn ✓</span>
+                              </>
+                            ) : (
+                              <>
+                                <Shirt className="w-5 h-5" />
+                                <span>I Wore This! (+5 points)</span>
+                              </>
+                            )}
+                          </button>
+                          <p className="text-xs text-muted-foreground text-center mt-1.5">
+                            {wornOutfits.has(index)
+                              ? "Thanks! We'll remember this style for future recommendations"
+                              : "Actually wore this? Mark it to boost these style preferences!"}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

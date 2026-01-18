@@ -808,3 +808,396 @@ function getDefaultShoppingBehavior(): ShoppingBehavior {
     confidence: 0,
   };
 }
+
+// ============================================
+// REAL-TIME PREFERENCE UPDATES
+// ============================================
+
+import { updateDoc, increment, arrayUnion, serverTimestamp } from 'firebase/firestore';
+
+/**
+ * Extract colors from outfit data
+ */
+function extractColors(outfit: {
+  colorPalette?: string[];
+  colors?: string[];
+  items?: string[];
+}): string[] {
+  const colors: string[] = [];
+  
+  // Primary source: colorPalette
+  if (outfit.colorPalette && Array.isArray(outfit.colorPalette)) {
+    colors.push(...outfit.colorPalette);
+  }
+  
+  // Fallback: colors field
+  if (outfit.colors && Array.isArray(outfit.colors)) {
+    colors.push(...outfit.colors);
+  }
+  
+  // Extract color names from items (e.g., "navy blue shirt" -> "navy blue")
+  if (outfit.items && Array.isArray(outfit.items)) {
+    const colorKeywords = ['black', 'white', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'brown', 
+                           'navy', 'gray', 'grey', 'beige', 'khaki', 'olive', 'maroon', 'burgundy', 'cream', 'ivory'];
+    
+    outfit.items.forEach(item => {
+      const itemLower = item.toLowerCase();
+      colorKeywords.forEach(color => {
+        if (itemLower.includes(color)) {
+          colors.push(color);
+        }
+      });
+    });
+  }
+  
+  return [...new Set(colors)]; // Remove duplicates
+}
+
+/**
+ * Extract style types from outfit data
+ */
+function extractStyles(outfit: {
+  styleType?: string;
+  style?: string;
+  occasion?: string;
+  description?: string;
+}): string[] {
+  const styles: string[] = [];
+  
+  if (outfit.styleType) styles.push(outfit.styleType.toLowerCase());
+  if (outfit.style) styles.push(outfit.style.toLowerCase());
+  
+  // Extract style keywords from description
+  const styleKeywords = ['casual', 'formal', 'business', 'smart', 'elegant', 'bohemian', 'minimalist', 
+                         'streetwear', 'vintage', 'modern', 'classic', 'trendy', 'chic', 'sporty'];
+  
+  const description = (outfit.description || '').toLowerCase();
+  styleKeywords.forEach(keyword => {
+    if (description.includes(keyword)) {
+      styles.push(keyword);
+    }
+  });
+  
+  return [...new Set(styles)];
+}
+
+/**
+ * Update preferences when user LIKES an outfit (+2 weight)
+ * Called from frontend when user clicks like button
+ */
+export async function updatePreferencesFromLike(
+  userId: string,
+  outfit: {
+    colorPalette?: string[];
+    colors?: string[];
+    items?: string[];
+    styleType?: string;
+    style?: string;
+    occasion?: string;
+    description?: string;
+    title?: string;
+  },
+  context: {
+    occasion?: string;
+    season?: 'summer' | 'winter' | 'monsoon';
+  }
+): Promise<{ success: boolean; message: string }> {
+  try {
+    if (!userId) {
+      return { success: false, message: 'No userId provided' };
+    }
+
+    const prefsRef = doc(db, 'userPreferences', userId);
+    const prefsDoc = await getDoc(prefsRef);
+    
+    if (!prefsDoc.exists()) {
+      return { success: false, message: 'User preferences not found' };
+    }
+
+    const currentPrefs = prefsDoc.data();
+    const colorWeights = currentPrefs.colorWeights || {};
+    const styleWeights = currentPrefs.styleWeights || {};
+    const provenCombinations = currentPrefs.provenCombinations || [];
+    const occasionPreferences = currentPrefs.occasionPreferences || {};
+    const seasonalPreferences = currentPrefs.seasonalPreferences || { summer: [], winter: [], monsoon: [] };
+
+    // Extract colors and increment weights by +2
+    const colors = extractColors(outfit);
+    colors.forEach(color => {
+      const normalizedColor = color.toLowerCase().trim();
+      colorWeights[normalizedColor] = (colorWeights[normalizedColor] || 0) + 2;
+    });
+
+    // Extract styles and increment weights by +2
+    const styles = extractStyles(outfit);
+    styles.forEach(style => {
+      const normalizedStyle = style.toLowerCase().trim();
+      styleWeights[normalizedStyle] = (styleWeights[normalizedStyle] || 0) + 2;
+    });
+
+    // Add color combination to proven combos (if 2+ colors)
+    if (colors.length >= 2) {
+      const combo = colors.slice(0, 3).sort(); // Top 3 colors, sorted for consistency
+      const comboString = combo.join(',');
+      if (!provenCombinations.some((c: string[]) => c.join(',') === comboString)) {
+        provenCombinations.push(combo);
+      }
+    }
+
+    // Update occasion-specific preferences
+    if (context.occasion) {
+      const occasion = context.occasion.toLowerCase();
+      if (!occasionPreferences[occasion]) {
+        occasionPreferences[occasion] = { preferredItems: [], preferredColors: [], notes: '' };
+      }
+      
+      // Add colors to occasion preferences
+      colors.forEach(color => {
+        const normalizedColor = color.toLowerCase().trim();
+        if (!occasionPreferences[occasion].preferredColors.includes(normalizedColor)) {
+          occasionPreferences[occasion].preferredColors.push(normalizedColor);
+        }
+      });
+      
+      // Add items to occasion preferences
+      if (outfit.items) {
+        outfit.items.forEach(item => {
+          if (!occasionPreferences[occasion].preferredItems.includes(item)) {
+            occasionPreferences[occasion].preferredItems.push(item);
+          }
+        });
+      }
+    }
+
+    // Update seasonal preferences
+    if (context.season) {
+      const season = context.season;
+      if (!seasonalPreferences[season]) {
+        seasonalPreferences[season] = [];
+      }
+      
+      colors.forEach(color => {
+        const normalizedColor = color.toLowerCase().trim();
+        if (!seasonalPreferences[season].includes(normalizedColor)) {
+          seasonalPreferences[season].push(normalizedColor);
+        }
+      });
+    }
+
+    // Recalculate accuracy score
+    const totalLikes = (currentPrefs.totalLikes || 0) + 1;
+    const totalDislikes = currentPrefs.totalDislikes || 0;
+    const totalRecommendations = currentPrefs.totalRecommendations || 1;
+    const accuracyScore = Math.min(100, Math.round(((totalLikes - totalDislikes) / totalRecommendations) * 100));
+
+    // Update Firestore with atomic operations
+    await updateDoc(prefsRef, {
+      colorWeights,
+      styleWeights,
+      provenCombinations,
+      occasionPreferences,
+      seasonalPreferences,
+      totalLikes: increment(1),
+      accuracyScore,
+      updatedAt: serverTimestamp(),
+    });
+
+    console.log(`✅ Preferences updated from LIKE: +2 to ${colors.length} colors, +2 to ${styles.length} styles`);
+    return { success: true, message: 'Preferences updated from like' };
+
+  } catch (error) {
+    console.error('❌ Error updating preferences from like:', error);
+    return { success: false, message: error instanceof Error ? error.message : 'Update failed' };
+  }
+}
+
+/**
+ * Update preferences when user WEARS an outfit (+5 weight - strongest signal!)
+ * Called from frontend when user marks outfit as worn
+ */
+export async function updatePreferencesFromWear(
+  userId: string,
+  outfit: {
+    colorPalette?: string[];
+    colors?: string[];
+    items?: string[];
+    styleType?: string;
+    style?: string;
+    occasion?: string;
+    description?: string;
+    title?: string;
+  },
+  context: {
+    occasion?: string;
+    season?: 'summer' | 'winter' | 'monsoon';
+  }
+): Promise<{ success: boolean; message: string }> {
+  try {
+    if (!userId) {
+      return { success: false, message: 'No userId provided' };
+    }
+
+    const prefsRef = doc(db, 'userPreferences', userId);
+    const prefsDoc = await getDoc(prefsRef);
+    
+    if (!prefsDoc.exists()) {
+      return { success: false, message: 'User preferences not found' };
+    }
+
+    const currentPrefs = prefsDoc.data();
+    const colorWeights = currentPrefs.colorWeights || {};
+    const styleWeights = currentPrefs.styleWeights || {};
+    const provenCombinations = currentPrefs.provenCombinations || [];
+    const occasionPreferences = currentPrefs.occasionPreferences || {};
+    const seasonalPreferences = currentPrefs.seasonalPreferences || { summer: [], winter: [], monsoon: [] };
+
+    // Extract colors and increment weights by +5 (WORE is strongest signal!)
+    const colors = extractColors(outfit);
+    colors.forEach(color => {
+      const normalizedColor = color.toLowerCase().trim();
+      colorWeights[normalizedColor] = (colorWeights[normalizedColor] || 0) + 5;
+    });
+
+    // Extract styles and increment weights by +5
+    const styles = extractStyles(outfit);
+    styles.forEach(style => {
+      const normalizedStyle = style.toLowerCase().trim();
+      styleWeights[normalizedStyle] = (styleWeights[normalizedStyle] || 0) + 5;
+    });
+
+    // Add color combination to proven combos (with higher priority)
+    if (colors.length >= 2) {
+      const combo = colors.slice(0, 3).sort();
+      const comboString = combo.join(',');
+      // Remove if exists and add to front (most recent wear)
+      const filteredCombos = provenCombinations.filter((c: string[]) => c.join(',') !== comboString);
+      provenCombinations.unshift(combo);
+    }
+
+    // Update occasion-specific preferences (wore = strong signal)
+    if (context.occasion) {
+      const occasion = context.occasion.toLowerCase();
+      if (!occasionPreferences[occasion]) {
+        occasionPreferences[occasion] = { preferredItems: [], preferredColors: [], notes: 'Worn outfit' };
+      }
+      
+      colors.forEach(color => {
+        const normalizedColor = color.toLowerCase().trim();
+        if (!occasionPreferences[occasion].preferredColors.includes(normalizedColor)) {
+          occasionPreferences[occasion].preferredColors.unshift(normalizedColor); // Add to front
+        }
+      });
+      
+      if (outfit.items) {
+        outfit.items.forEach(item => {
+          if (!occasionPreferences[occasion].preferredItems.includes(item)) {
+            occasionPreferences[occasion].preferredItems.unshift(item); // Add to front
+          }
+        });
+      }
+    }
+
+    // Update seasonal preferences (wore = strong seasonal signal)
+    if (context.season) {
+      const season = context.season;
+      if (!seasonalPreferences[season]) {
+        seasonalPreferences[season] = [];
+      }
+      
+      colors.forEach(color => {
+        const normalizedColor = color.toLowerCase().trim();
+        // Remove and add to front (most recent wear)
+        const filtered = seasonalPreferences[season].filter((c: string) => c !== normalizedColor);
+        seasonalPreferences[season] = [normalizedColor, ...filtered];
+      });
+    }
+
+    // Recalculate accuracy score (wearing = ultimate acceptance)
+    const totalSelections = (currentPrefs.totalSelections || 0) + 1;
+    const totalRecommendations = currentPrefs.totalRecommendations || 1;
+    const accuracyScore = Math.min(100, Math.round((totalSelections / totalRecommendations) * 100));
+
+    // Update Firestore with atomic operations
+    await updateDoc(prefsRef, {
+      colorWeights,
+      styleWeights,
+      provenCombinations,
+      occasionPreferences,
+      seasonalPreferences,
+      totalSelections: increment(1),
+      accuracyScore: Math.max(currentPrefs.accuracyScore || 0, accuracyScore), // Don't decrease
+      updatedAt: serverTimestamp(),
+    });
+
+    console.log(`✅ Preferences updated from WEAR: +5 to ${colors.length} colors, +5 to ${styles.length} styles`);
+    return { success: true, message: 'Preferences updated from wear' };
+
+  } catch (error) {
+    console.error('❌ Error updating preferences from wear:', error);
+    return { success: false, message: error instanceof Error ? error.message : 'Update failed' };
+  }
+}
+
+/**
+ * Track shopping link click
+ * Called when user clicks shopping link (increment shopping behavior data)
+ */
+export async function trackShoppingClick(
+  userId: string,
+  platform: 'amazon' | 'myntra' | 'tatacliq',
+  item: string,
+  estimatedPrice?: number
+): Promise<{ success: boolean; message: string }> {
+  try {
+    if (!userId) {
+      return { success: false, message: 'No userId provided' };
+    }
+
+    const prefsRef = doc(db, 'userPreferences', userId);
+    const prefsDoc = await getDoc(prefsRef);
+    
+    if (!prefsDoc.exists()) {
+      return { success: false, message: 'User preferences not found' };
+    }
+
+    const currentPrefs = prefsDoc.data();
+    const shoppingClicks = currentPrefs.shoppingClicks || {};
+    
+    // Track platform clicks
+    if (!shoppingClicks[platform]) {
+      shoppingClicks[platform] = { count: 0, items: [] };
+    }
+    shoppingClicks[platform].count += 1;
+    
+    // Track clicked items
+    if (!shoppingClicks[platform].items.includes(item)) {
+      shoppingClicks[platform].items.push(item);
+    }
+
+    // Update price range if price provided
+    const updates: any = {
+      shoppingClicks,
+      updatedAt: serverTimestamp(),
+    };
+
+    if (estimatedPrice && estimatedPrice > 0) {
+      const currentMin = currentPrefs.priceRange?.min || 0;
+      const currentMax = currentPrefs.priceRange?.max || 10000;
+      
+      // Adjust price range based on clicked items
+      updates.priceRange = {
+        min: currentMin === 0 ? estimatedPrice * 0.7 : Math.min(currentMin, estimatedPrice * 0.7),
+        max: Math.max(currentMax, estimatedPrice * 1.3),
+      };
+    }
+
+    await updateDoc(prefsRef, updates);
+
+    console.log(`✅ Shopping click tracked: ${platform} - ${item}`);
+    return { success: true, message: 'Shopping click tracked' };
+
+  } catch (error) {
+    console.error('❌ Error tracking shopping click:', error);
+    return { success: false, message: error instanceof Error ? error.message : 'Tracking failed' };
+  }
+}
