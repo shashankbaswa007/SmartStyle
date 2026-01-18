@@ -1,9 +1,13 @@
 /**
  * Groq API client for AI-powered fashion recommendations
  * Used as fallback when Gemini quota is exceeded
+ * Enhanced with personalization support
  */
 
 import Groq from 'groq-sdk';
+import { ComprehensivePreferences } from './preference-engine';
+import { Blocklists } from './blocklist-manager';
+import { buildPersonalizedPrompt, PersonalizationContext } from './prompt-personalizer';
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY || '',
@@ -17,6 +21,10 @@ export interface GroqRecommendationInput {
   skinTone?: string;
   dressColors?: string;
   previousRecommendation?: any;
+  // NEW: Personalization data
+  userId?: string;
+  userPreferences?: ComprehensivePreferences;
+  userBlocklists?: Blocklists;
 }
 
 export interface GroqOutfitRecommendation {
@@ -47,13 +55,18 @@ export interface GroqStyleAnalysis {
 }
 
 /**
- * Generate fashion recommendations using Groq's Llama 3.1 70B model
- * This is a fallback when Gemini API quota is exceeded
+ * Generate fashion recommendations using Groq's Llama 3.3 70B model
+ * Enhanced with personalization support
  */
 export async function generateRecommendationsWithGroq(
   input: GroqRecommendationInput
 ): Promise<GroqStyleAnalysis> {
-  console.log('🤖 Using Groq AI for recommendations (Gemini fallback)...');
+  const hasPersonalization = input.userId && input.userPreferences && input.userBlocklists;
+  
+  console.log('🤖 Using Groq AI for recommendations...', {
+    personalized: hasPersonalization,
+    interactions: input.userPreferences?.totalInteractions || 0,
+  });
 
   const prompt = buildGroqPrompt(input);
 
@@ -69,8 +82,9 @@ export async function generateRecommendationsWithGroq(
 - Current fashion trends and timeless style principles
 - Sustainable and versatile wardrobe building
 - Cultural and regional fashion preferences
+${hasPersonalization ? '\n- Personalized styling based on user\'s historical preferences and behavior' : ''}
 
-You provide detailed, actionable outfit recommendations that are practical, stylish, and appropriate for the user's needs. Always respond in valid JSON format.`,
+You provide detailed, actionable outfit recommendations that are practical, stylish, and appropriate for the user's needs. ${hasPersonalization ? 'You pay special attention to the user\'s established preferences, favorite colors, and past outfit choices to create highly personalized recommendations.' : ''} Always respond in valid JSON format.`,
         },
         {
           role: 'user',
@@ -129,6 +143,7 @@ You provide detailed, actionable outfit recommendations that are practical, styl
 
 /**
  * Build the prompt for Groq based on user inputs
+ * Enhanced with personalization support
  */
 function buildGroqPrompt(input: GroqRecommendationInput): string {
   const {
@@ -138,16 +153,49 @@ function buildGroqPrompt(input: GroqRecommendationInput): string {
     weather,
     skinTone,
     dressColors,
+    userPreferences,
+    userBlocklists,
   } = input;
 
-  return `
+  // Base context
+  let prompt = `
 Generate 3 complete, diverse outfit recommendations for the following scenario:
 
 **Occasion:** ${occasion}
 **Style Genre:** ${genre || 'Any'}
 **Gender:** ${gender || 'Unisex'}
 ${weather ? `**Weather:** ${weather}` : ''}
-${skinTone ? `**Skin Tone:** ${skinTone}` : ''}
+${skinTone ? `**Skin Tone:** ${skinTone}` : ''}`;
+
+  // Add personalization if available
+  if (userPreferences && userBlocklists) {
+    const personalizationContext: PersonalizationContext = {
+      preferences: userPreferences,
+      blocklists: userBlocklists,
+      currentContext: {
+        occasion,
+        weather,
+        gender: gender || 'Unisex',
+        uploadedColors: dressColors ? dressColors.split(',').map(c => c.trim()) : undefined,
+        skinTone,
+      },
+    };
+
+    const personalizedSections = buildPersonalizedPrompt(personalizationContext);
+    
+    prompt += '\n\n' + personalizedSections.preferencesSection;
+    prompt += '\n' + personalizedSections.strategySection;
+    prompt += '\n' + personalizedSections.constraintsSection;
+    
+    console.log('✅ [Groq] Personalization injected:', {
+      favoriteColors: userPreferences.colors.favoriteColors.length,
+      topStyles: userPreferences.styles.topStyles.length,
+      confidence: userPreferences.overallConfidence,
+    });
+  }
+  
+  // Continue with rest of prompt (current colors and format instructions)
+  prompt += `
 ${dressColors ? `**Current Outfit Colors:** ${dressColors}` : ''}
 
 Please provide your response in the following JSON format:
@@ -198,6 +246,8 @@ Please provide your response in the following JSON format:
 
 Make the recommendations diverse in style while staying appropriate for the occasion.
 `;
+  
+  return prompt;
 }
 
 /**

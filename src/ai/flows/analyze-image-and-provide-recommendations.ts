@@ -13,6 +13,8 @@ import {z} from 'zod';
 import { getPersonalizationContext } from '@/lib/personalization';
 import { generateRecommendationsWithGroq, isGroqConfigured } from '@/lib/groq-client';
 import crypto from 'crypto';
+import { getComprehensivePreferences } from '@/lib/preference-engine';
+import { getBlocklists } from '@/lib/blocklist-manager';
 
 // ============================================
 // AI RESPONSE CACHE (10-minute TTL)
@@ -616,6 +618,25 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
         console.log('🚀 Using Groq AI as primary recommendation engine (14,400/day FREE)...');
         
         // Prepare Groq input from enhanced input
+        // ✨ NEW: Fetch comprehensive preferences for personalization
+        let userPreferences = null;
+        let userBlocklists = null;
+        
+        if (input.userId && input.userId !== 'anonymous') {
+          try {
+            [userPreferences, userBlocklists] = await Promise.all([
+              getComprehensivePreferences(input.userId),
+              getBlocklists(input.userId),
+            ]);
+            console.log('✅ [AI Flow] Preferences loaded for Groq:', {
+              interactions: userPreferences.totalInteractions,
+              confidence: userPreferences.overallConfidence,
+            });
+          } catch (prefError) {
+            console.warn('⚠️ [AI Flow] Failed to load preferences for Groq:', prefError);
+          }
+        }
+        
         const groqInput = {
           occasion: input.occasion,
           genre: input.genre,
@@ -624,6 +645,10 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
           skinTone: input.skinTone,
           dressColors: input.dressColors,
           previousRecommendation: input.previousRecommendation,
+          // ✨ NEW: Pass personalization data to Groq
+          userId: input.userId,
+          userPreferences: userPreferences || undefined,
+          userBlocklists: userBlocklists || undefined,
         };
         
         const groqResult = await generateRecommendationsWithGroq(groqInput);

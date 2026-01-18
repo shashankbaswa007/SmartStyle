@@ -6,6 +6,9 @@ import tavilySearch from '@/lib/tavily';
 import saveRecommendation from '@/lib/firestoreRecommendations';
 import { withTimeout } from '@/lib/timeout-utils';
 import crypto from 'crypto';
+import { getComprehensivePreferences } from '@/lib/preference-engine';
+import { getBlocklists } from '@/lib/blocklist-manager';
+import { generateSessionId, createInteractionSession } from '@/lib/interaction-tracker';
 
 export async function POST(req: Request) {
   const startTime = Date.now();
@@ -58,7 +61,35 @@ export async function POST(req: Request) {
     const cacheKey = `rec:${imageHash}:${occasion}:${gender}:${weather || 'any'}`;
     console.log('🔑 [PERF] Cache key:', cacheKey);
 
-    // Step 1: Analyze via Gemini flow with timeout
+    // ✨ NEW: Fetch user preferences and blocklists for personalization
+    let userPreferences = null;
+    let userBlocklists = null;
+    let sessionId = generateSessionId();
+    
+    if (userId && userId !== 'anonymous') {
+      console.log('🎨 [Personalization] Fetching user preferences...');
+      const prefStart = Date.now();
+      
+      try {
+        [userPreferences, userBlocklists] = await Promise.all([
+          getComprehensivePreferences(userId),
+          getBlocklists(userId),
+        ]);
+        
+        console.log(`⏱️ [PERF] Preferences fetched: ${Date.now() - prefStart}ms`);
+        console.log('✅ [Personalization] User profile loaded:', {
+          interactions: userPreferences.totalInteractions,
+          confidence: userPreferences.overallConfidence,
+          favoriteColors: userPreferences.colors.favoriteColors.length,
+          topStyles: userPreferences.styles.topStyles.length,
+        });
+      } catch (prefError) {
+        console.error('⚠️ [Personalization] Failed to fetch preferences:', prefError);
+        // Continue without personalization
+      }
+    }
+
+    // Step 1: Analyze via Gemini/Groq flow with timeout (now personalized!)
     const analysisStart = Date.now();
     let analysis;
     try {
@@ -71,7 +102,8 @@ export async function POST(req: Request) {
           weather, 
           skinTone, 
           dressColors, 
-          previousRecommendation 
+          previousRecommendation,
+          userId, // Pass userId to enable personalization in AI flow
         }),
         15000, // 15 second timeout for AI analysis
         'AI analysis timed out after 15 seconds'
@@ -179,6 +211,39 @@ export async function POST(req: Request) {
     // Old code was running extractColorsFromUrl + optimized Tavily searches
     // Now using AI-generated colors directly for speed
 
+    // ✨ NEW: Create interaction tracking session
+    if (userId && userId !== 'anonymous') {
+      console.log('📊 [Interaction Tracking] Creating session...');
+      
+      try {
+        await createInteractionSession(
+          userId,
+          sessionId,
+          {
+            occasion,
+            genre,
+            gender,
+            weather: weather ? { temp: 0, condition: weather } : undefined,
+          },
+          enrichedOutfits.map((outfit, index) => ({
+            position: index + 1,
+            title: outfit.title,
+            colors: Array.isArray(outfit.colorPalette) 
+              ? outfit.colorPalette.map((c: any) => typeof c === 'string' ? c : c.hex || '#000000')
+              : [],
+            styles: outfit.styleType ? [outfit.styleType] : [],
+            items: outfit.items || [],
+            imageUrl: outfit.imageUrl || '',
+            description: outfit.description,
+          }))
+        );
+        
+        console.log('✅ [Interaction Tracking] Session created:', sessionId);
+      } catch (trackError) {
+        console.error('⚠️ [Interaction Tracking] Failed to create session:', trackError);
+      }
+    }
+
     const payload = {
       userId: userId || 'anonymous',
       timestamp: Date.now(),
@@ -188,6 +253,7 @@ export async function POST(req: Request) {
       weather,
       skinTone,
       dressColors,
+      sessionId, // Include session ID for frontend tracking
       // PRIVACY: photoDataUri is NOT stored - only metadata
       analysis: { ...analysis, outfitRecommendations: enrichedOutfits },
     };
