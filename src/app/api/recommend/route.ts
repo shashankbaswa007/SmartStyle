@@ -12,6 +12,7 @@ import { generateSessionId, createInteractionSession } from '@/lib/interaction-t
 import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
 import { logger } from '@/lib/logger';
 import { recommendationCache, createCacheKey } from '@/lib/request-cache';
+import { recommendRequestSchema, validateRequest, formatValidationError } from '@/lib/validation';
 import { 
   calculateOutfitMatchScore, 
   applyDiversificationRule, 
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
   }
   
   try {
-    // Parse request body with error handling
+    // Parse and validate request body with Zod
     let body;
     try {
       body = await req.json();
@@ -63,22 +64,18 @@ export async function POST(req: Request) {
       );
     }
 
-    const { photoDataUri, occasion, genre, gender, weather, skinTone, dressColors, previousRecommendation, userId } = body;
-
-    // Validate required fields
-    if (!photoDataUri) {
+    // Validate request body against schema
+    const validation = validateRequest(recommendRequestSchema, body);
+    if (!validation.success) {
+      logger.error('❌ Validation failed:', validation.error);
       return NextResponse.json(
-        { error: 'Photo data is required' },
+        formatValidationError(validation.error),
         { status: 400 }
       );
     }
 
-    if (!gender) {
-      return NextResponse.json(
-        { error: 'Gender is required' },
-        { status: 400 }
-      );
-    }
+    // Use validated data (type-safe!)
+    const { photoDataUri, occasion, genre, gender, weather, skinTone, dressColors, previousRecommendation, userId } = validation.data;
 
     logger.log('🎯 Starting recommendation flow:', {
       hasPhoto: !!photoDataUri,
@@ -154,14 +151,14 @@ export async function POST(req: Request) {
       analysis = await withTimeout(
         analyzeImageAndProvideRecommendations({ 
           photoDataUri, 
-          occasion, 
-          genre, 
+          occasion: occasion || '', 
+          genre: genre || '', 
           gender, 
-          weather, 
-          skinTone, 
-          dressColors, 
-          previousRecommendation,
-          userId, // Pass userId to enable personalization in AI flow
+          weather: weather || '', 
+          skinTone: skinTone || '', 
+          dressColors: dressColors?.join(', ') || '', 
+          previousRecommendation: previousRecommendation || '',
+          userId: userId || '', // Pass userId to enable personalization in AI flow
         }),
         15000, // 15 second timeout for AI analysis
         'AI analysis timed out after 15 seconds'
@@ -324,8 +321,8 @@ export async function POST(req: Request) {
           userId,
           sessionId,
           {
-            occasion,
-            genre,
+            occasion: occasion || 'casual',
+            genre: genre || undefined,
             gender,
             weather: weather ? { temp: 0, condition: weather } : undefined,
           },
