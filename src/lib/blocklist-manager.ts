@@ -8,6 +8,7 @@
  */
 
 import { db } from '@/lib/firebase';
+import { logger } from '@/lib/logger';
 import { doc, getDoc, updateDoc, setDoc, Timestamp, arrayUnion } from 'firebase/firestore';
 
 // ============================================
@@ -77,7 +78,7 @@ export async function getBlocklists(userId: string): Promise<Blocklists> {
 
     return getEmptyBlocklists();
   } catch (error) {
-    console.error('❌ [Blocklist] Failed to fetch blocklists:', error);
+    logger.error('❌ [Blocklist] Failed to fetch blocklists:', error);
     return getEmptyBlocklists();
   }
 }
@@ -142,9 +143,9 @@ export async function addToHardBlocklist(
       updatedAt: Timestamp.now(),
     });
 
-    console.log(`✅ [Blocklist] Added to hard blocklist: ${type}/${value}`);
+    logger.log(`✅ [Blocklist] Added to hard blocklist: ${type}/${value}`);
   } catch (error) {
-    console.error('❌ [Blocklist] Failed to add to hard blocklist:', error);
+    logger.error('❌ [Blocklist] Failed to add to hard blocklist:', error);
   }
 }
 
@@ -166,9 +167,9 @@ export async function removeFromHardBlocklist(
       updatedAt: Timestamp.now(),
     });
 
-    console.log(`✅ [Blocklist] Removed from hard blocklist: ${type}/${value}`);
+    logger.log(`✅ [Blocklist] Removed from hard blocklist: ${type}/${value}`);
   } catch (error) {
-    console.error('❌ [Blocklist] Failed to remove from hard blocklist:', error);
+    logger.error('❌ [Blocklist] Failed to remove from hard blocklist:', error);
   }
 }
 
@@ -220,9 +221,9 @@ export async function addToSoftBlocklist(
       updatedAt: Timestamp.now(),
     });
 
-    console.log(`✅ [Blocklist] Updated soft blocklist: ${type}/${value} (count: ${updatedItems[existingIndex]?.count || ignoreCount})`);
+    logger.log(`✅ [Blocklist] Updated soft blocklist: ${type}/${value} (count: ${updatedItems[existingIndex]?.count || ignoreCount})`);
   } catch (error) {
-    console.error('❌ [Blocklist] Failed to add to soft blocklist:', error);
+    logger.error('❌ [Blocklist] Failed to add to soft blocklist:', error);
   }
 }
 
@@ -274,9 +275,9 @@ export async function addToTemporaryBlocklist(
       updatedAt: Timestamp.now(),
     });
 
-    console.log(`✅ [Blocklist] Added to temporary blocklist (expires: ${expiresAt.toLocaleDateString()})`);
+    logger.log(`✅ [Blocklist] Added to temporary blocklist (expires: ${expiresAt.toLocaleDateString()})`);
   } catch (error) {
-    console.error('❌ [Blocklist] Failed to add to temporary blocklist:', error);
+    logger.error('❌ [Blocklist] Failed to add to temporary blocklist:', error);
   }
 }
 
@@ -311,9 +312,9 @@ export async function cleanExpiredTemporaryBlocks(userId: string): Promise<void>
       updatedAt: Timestamp.now(),
     });
 
-    console.log(`✅ [Blocklist] Cleaned expired temporary blocks`);
+    logger.log(`✅ [Blocklist] Cleaned expired temporary blocks`);
   } catch (error) {
-    console.error('❌ [Blocklist] Failed to clean temporary blocks:', error);
+    logger.error('❌ [Blocklist] Failed to clean temporary blocks:', error);
   }
 }
 
@@ -333,7 +334,7 @@ export async function analyzeIgnoredSession(
 ): Promise<void> {
   if (ignoredOutfits.length < 2) return; // Need at least 2 outfits to find patterns
 
-  console.log('🔍 [Blocklist] Analyzing ignored session for patterns');
+  logger.log('🔍 [Blocklist] Analyzing ignored session for patterns');
 
   // Find common colors
   const colorCounts = new Map<string, number>();
@@ -358,7 +359,7 @@ export async function analyzeIgnoredSession(
   for (const [color, count] of colorCounts.entries()) {
     if (count >= threshold) {
       await addToSoftBlocklist(userId, 'colors', color, 1);
-      console.log(`🔍 [Blocklist] Common ignored color: ${color} (${count}/${totalOutfits} outfits)`);
+      logger.log(`🔍 [Blocklist] Common ignored color: ${color} (${count}/${totalOutfits} outfits)`);
     }
   }
 
@@ -366,7 +367,7 @@ export async function analyzeIgnoredSession(
   for (const [style, count] of styleCounts.entries()) {
     if (count >= threshold) {
       await addToSoftBlocklist(userId, 'styles', style, 1);
-      console.log(`🔍 [Blocklist] Common ignored style: ${style} (${count}/${totalOutfits} outfits)`);
+      logger.log(`🔍 [Blocklist] Common ignored style: ${style} (${count}/${totalOutfits} outfits)`);
     }
   }
 }
@@ -381,7 +382,7 @@ export async function promoteToHardBlocklist(userId: string): Promise<void> {
   for (const item of blocklists.softBlocklist.colors) {
     if ((item.count || 0) >= 10) {
       await addToHardBlocklist(userId, 'colors', item.value, 'Consistently ignored (10+ times)');
-      console.log(`⬆️ [Blocklist] Promoted color to hard blocklist: ${item.value}`);
+      logger.log(`⬆️ [Blocklist] Promoted color to hard blocklist: ${item.value}`);
     }
   }
 
@@ -389,7 +390,7 @@ export async function promoteToHardBlocklist(userId: string): Promise<void> {
   for (const item of blocklists.softBlocklist.styles) {
     if ((item.count || 0) >= 10) {
       await addToHardBlocklist(userId, 'styles', item.value, 'Consistently ignored (10+ times)');
-      console.log(`⬆️ [Blocklist] Promoted style to hard blocklist: ${item.value}`);
+      logger.log(`⬆️ [Blocklist] Promoted style to hard blocklist: ${item.value}`);
     }
   }
 }

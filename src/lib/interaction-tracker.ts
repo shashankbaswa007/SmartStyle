@@ -9,6 +9,7 @@
  */
 
 import { db } from '@/lib/firebase';
+import { logger } from '@/lib/logger';
 import {
   collection,
   doc,

@@ -4,6 +4,7 @@
  */
 
 import { db } from './firebase';
+import { logger } from './logger';
 import { collection, addDoc, serverTimestamp, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import type { StructuredAnalysis } from '@/ai/flows/analyze-generated-image';
 import type { ShoppingLinkResult } from './tavily';
@@ -19,7 +20,7 @@ if (typeof window !== 'undefined') {
       const { firebaseApp } = require('./firebase');
       analytics = getAnalytics(firebaseApp);
     }).catch(() => {
-      console.warn('Firebase Analytics not available');
+      logger.warn('Firebase Analytics not available');
     });
   } catch (e) {
     // Analytics not available
@@ -182,9 +183,9 @@ export async function logShoppingSearch(
       processing_time_ms: metadata.totalProcessingTime,
     });
 
-    console.log('✅ Shopping search logged to Firestore');
+    logger.log('✅ Shopping search logged to Firestore');
   } catch (error) {
-    console.error('❌ Failed to log shopping search:', error);
+    logger.error('❌ Failed to log shopping search:', error);
     // Don't throw - analytics failure shouldn't break the app
   }
 }
@@ -219,9 +220,9 @@ export async function logShoppingSearchFailed(
       error_message: errorMessage,
     });
 
-    console.log('✅ Shopping search failure logged');
+    logger.log('✅ Shopping search failure logged');
   } catch (error) {
-    console.error('❌ Failed to log shopping search failure:', error);
+    logger.error('❌ Failed to log shopping search failure:', error);
   }
 }
 
@@ -259,9 +260,9 @@ export async function trackShoppingLinkClick(
       relevance_score: relevanceScore,
     });
 
-    console.log(`✅ Click tracked: ${platform} - ${itemName}`);
+    logger.log(`✅ Click tracked: ${platform} - ${itemName}`);
   } catch (error) {
-    console.error('❌ Failed to track shopping link click:', error);
+    logger.error('❌ Failed to track shopping link click:', error);
   }
 }
 
@@ -304,7 +305,7 @@ export async function getShoppingSearchStats(days: number = 7) {
       avgProcessingTimeMs: Math.round(avgProcessingTime),
     };
   } catch (error) {
-    console.error('❌ Failed to get shopping search stats:', error);
+    logger.error('❌ Failed to get shopping search stats:', error);
     return null;
   }
 }
@@ -348,7 +349,7 @@ export async function getPlatformPerformance(days: number = 7) {
       total: totalLinks,
     };
   } catch (error) {
-    console.error('❌ Failed to get platform performance:', error);
+    logger.error('❌ Failed to get platform performance:', error);
     return null;
   }
 }
