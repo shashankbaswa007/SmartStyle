@@ -19,9 +19,46 @@ import {
   Timestamp,
   updateDoc,
   increment,
+  writeBatch,
 } from 'firebase/firestore';
 import { userPreferencesCache } from './cache';
 import { FirebaseError } from 'firebase/app';
+
+// ============================================
+// CONSTANTS
+// ============================================
+
+/**
+ * Preference weight constants for different user actions
+ * Higher weight = stronger signal for personalization
+ */
+export const PREFERENCE_WEIGHTS = {
+  LIKE: 2,        // User liked an outfit
+  WEAR: 5,        // User actually wore an outfit (strongest signal)
+  SELECT: 3,      // User selected an outfit
+  IGNORE: -0.5,   // User ignored recommendations
+  DISLIKE: -2,    // User explicitly disliked
+} as const;
+
+// ============================================
+// VALIDATION HELPERS
+// ============================================
+
+/**
+ * Validate and sanitize userId to prevent empty strings and whitespace-only inputs
+ */
+function validateUserId(userId: string | undefined | null): string {
+  if (!userId || typeof userId !== 'string') {
+    throw new Error('Invalid userId: must be a non-empty string');
+  }
+  
+  const trimmed = userId.trim();
+  if (trimmed === '') {
+    throw new Error('Invalid userId: cannot be empty or whitespace-only');
+  }
+  
+  return trimmed;
+}
 
 // ============================================
 // IN-MEMORY QUERY CACHE (5-minute TTL)
@@ -34,6 +71,7 @@ interface CachedQuery<T> {
 
 const queryCache = new Map<string, CachedQuery<any>>();
 const QUERY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_QUERY_CACHE_SIZE = 1000; // Hard limit to prevent memory leaks
 
 /**
  * Get cached query result if not expired
@@ -51,13 +89,27 @@ function getCachedQuery<T>(key: string): T | null {
 }
 
 /**
- * Cache query result with timestamp
+ * Cache query result with timestamp and enforce size limit with LRU eviction
  */
 function setCachedQuery<T>(key: string, data: T): void {
+  // Enforce hard size limit to prevent memory leaks
+  if (queryCache.size >= MAX_QUERY_CACHE_SIZE) {
+    // Remove oldest 20% of entries (LRU eviction)
+    const entries = Array.from(queryCache.entries())
+      .sort(([, a], [, b]) => a.timestamp - b.timestamp);
+    
+    const toRemove = Math.floor(MAX_QUERY_CACHE_SIZE * 0.2);
+    for (let i = 0; i < toRemove; i++) {
+      queryCache.delete(entries[i][0]);
+    }
+    
+    console.warn(`⚠️ Query cache limit reached (${MAX_QUERY_CACHE_SIZE}). Evicted ${toRemove} oldest entries.`);
+  }
+  
   queryCache.set(key, { data, timestamp: Date.now() });
   
-  // Auto-cleanup: remove expired entries when cache grows large
-  if (queryCache.size > 100) {
+  // Periodic cleanup: remove expired entries when cache grows
+  if (queryCache.size > MAX_QUERY_CACHE_SIZE * 0.8) {
     const now = Date.now();
     for (const [k, v] of queryCache.entries()) {
       if (now - v.timestamp > QUERY_CACHE_TTL) {
@@ -252,20 +304,17 @@ export async function initializeUserPreferences(userId: string): Promise<void> {
  */
 export async function getUserPreferences(userId: string): Promise<UserPreferences | null> {
   try {
-    if (!userId) {
-      console.warn('⚠️ No userId provided to getUserPreferences');
-      return null;
-    }
+    const validatedUserId = validateUserId(userId);
 
     // Check in-memory cache first (5-minute TTL)
-    const cacheKey = `prefs:${userId}`;
+    const cacheKey = `prefs:${validatedUserId}`;
     const cached = getCachedQuery<UserPreferences>(cacheKey);
     if (cached) {
       console.log('✅ User preferences loaded from 5-min cache');
       return cached;
     }
 
-    const prefsRef = doc(db, 'userPreferences', userId);
+    const prefsRef = doc(db, 'userPreferences', validatedUserId);
     const prefsDoc = await getDoc(prefsRef);
 
     if (prefsDoc.exists()) {
@@ -277,14 +326,14 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
     }
 
     // Initialize if doesn't exist
-    console.log('📝 Initializing new user preferences for:', userId);
-    await initializeUserPreferences(userId);
+    console.log('📝 Initializing new user preferences for:', validatedUserId);
+    await initializeUserPreferences(validatedUserId);
     const newPrefsDoc = await getDoc(prefsRef);
     
     if (newPrefsDoc.exists()) {
       const newPrefs = newPrefsDoc.data() as UserPreferences;
       // Cache the new preferences
-      userPreferencesCache.set({ userId }, newPrefs, 60);
+      userPreferencesCache.set({ userId: validatedUserId }, newPrefs, 60);
       return newPrefs;
     }
     
@@ -308,16 +357,17 @@ export async function updateUserPreferences(
   updates: Partial<UserPreferences>
 ): Promise<void> {
   try {
+    // Clear cache FIRST to prevent race condition
+    // If we clear after update, concurrent reads might cache stale data
+    userPreferencesCache.clear();
+    clearQueryCache(userId);
+    console.log('🔄 User preferences cache cleared before update (prevents race condition)');
+    
     const prefsRef = doc(db, 'userPreferences', userId);
     await updateDoc(prefsRef, {
       ...updates,
       updatedAt: Timestamp.now(),
     });
-    
-    // Invalidate both caches when preferences are updated
-    userPreferencesCache.clear();
-    clearQueryCache(userId);
-    console.log('🔄 User preferences cache cleared after update');
   } catch (error) {
     console.error('Error updating user preferences:', error);
     throw error;

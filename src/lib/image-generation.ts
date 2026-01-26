@@ -14,28 +14,30 @@ interface ImageGenerationOptions {
  * Generate image using Pollinations AI (free, no API key required)
  * Uses Flux model for high-quality fashion images
  * Returns URL immediately - image generates on-demand when accessed
- * Pollinations handles rate limiting internally via CDN caching
+ * Includes retry logic for rate limiting
  */
-async function generateWithPollinations(options: ImageGenerationOptions): Promise<string> {
+async function generateWithPollinations(options: ImageGenerationOptions, retryCount = 0): Promise<string> {
   const { prompt, width = 800, height = 1000 } = options;
+  const maxRetries = 3;
   
-  // OPTIMIZATION: Removed artificial delays - Pollinations CDN handles caching
-  // Old delays: 5s min between requests + 3s generation wait = 8s wasted per image!
-  // Parallel requests now work efficiently with unique seeds
-  
-  // Add seed for uniqueness and randomness for variety
-  const seed = Date.now() + Math.floor(Math.random() * 10000);
+  // Add seed for uniqueness with MAXIMUM randomness for diverse images
+  // Combine multiple entropy sources: time, random, prompt hash, retry count
+  const randomComponent = Math.floor(Math.random() * 1000000);
+  const timeComponent = Date.now();
+  const hashComponent = Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+  const retryOffset = retryCount * 77777; // Different seeds for retries
+  const seed = (timeComponent + randomComponent + hashComponent + retryOffset) % 999999999;
   const encodedPrompt = encodeURIComponent(prompt);
   const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=${width}&height=${height}&nologo=true&enhance=true&model=flux&seed=${seed}`;
   
-  console.log('🎨 [PERF] Pollinations AI - URL generated instantly');
+  console.log(`🎨 [PERF] Pollinations AI - URL generated (attempt ${retryCount + 1}/${maxRetries + 1})`);
   console.log('📝 Prompt:', prompt.substring(0, 100) + '...');
   console.log('🔗 Image URL:', url.substring(0, 100) + '...');
   
-  // Quick validation with shorter timeout
+  // Validate the URL works before returning
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
     
     const response = await fetch(url, { 
       method: 'HEAD',
@@ -44,11 +46,34 @@ async function generateWithPollinations(options: ImageGenerationOptions): Promis
     clearTimeout(timeoutId);
     
     if (response.status === 429) {
-      console.warn('⚠️ Pollinations rate limit detected');
+      // Rate limit hit - retry with exponential backoff
+      if (retryCount < maxRetries) {
+        const backoffMs = Math.min(1000 * Math.pow(2, retryCount), 8000); // Max 8 seconds
+        console.warn(`⚠️ Pollinations rate limit hit. Retrying in ${backoffMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, backoffMs));
+        return generateWithPollinations(options, retryCount + 1);
+      } else {
+        throw new Error('Rate limit exceeded after max retries');
+      }
     }
+    
+    if (!response.ok && response.status !== 404) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    console.log('✅ Pollinations URL validated successfully');
   } catch (error: any) {
-    // Ignore validation errors - image will still work
-    console.log('ℹ️ [PERF] Skipping validation, returning URL immediately');
+    if (error.name === 'AbortError') {
+      console.log('ℹ️ Validation timeout - image will generate on first access');
+    } else if (retryCount < maxRetries && error.message?.includes('rate limit')) {
+      const backoffMs = Math.min(1000 * Math.pow(2, retryCount), 8000);
+      console.warn(`⚠️ Error detected. Retrying in ${backoffMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+      return generateWithPollinations(options, retryCount + 1);
+    } else {
+      console.warn('⚠️ Pollinations validation failed:', error.message);
+      // Return URL anyway - it might work when accessed by browser
+    }
   }
   
   return url;
@@ -199,15 +224,15 @@ export async function generateOutfitImageWithFallback(
     height: 1000,
   };
 
-  // Strategy 1: Try Pollinations (free, instant URL generation)
+  // Strategy 1: Try Pollinations with retry logic (free, instant URL generation)
   try {
-    console.log('🔄 [PERF] Strategy 1: Pollinations AI (instant URL generation)');
+    console.log('🔄 [PERF] Strategy 1: Pollinations AI with retry logic');
     const imageUrl = await generateWithPollinations(options);
     const duration = ((Date.now() - startTime) / 1000).toFixed(3);
     console.log(`✅ [PERF] Pollinations URL generated in ${duration}s!`);
     return imageUrl;
-  } catch (pollinationsError) {
-    console.warn('⚠️ Pollinations failed:', pollinationsError);
+  } catch (pollinationsError: any) {
+    console.warn('⚠️ Pollinations failed after retries:', pollinationsError?.message || pollinationsError);
   }
 
   // Strategy 2: Try HuggingFace if API key is available
@@ -225,10 +250,21 @@ export async function generateOutfitImageWithFallback(
     console.log('ℹ️ HUGGINGFACE_API_KEY not configured, skipping HuggingFace');
   }
 
-  // Strategy 3: Fallback to placeholder
-  console.log('⚠️ All image generation methods failed, using placeholder');
+  // Strategy 3: Try Pollinations one more time with different seed (rate limit may have cleared)
+  try {
+    console.log('🔄 Final attempt: Retrying Pollinations with fresh seed...');
+    const finalOptions = { ...options, prompt: options.prompt + ' ' + Date.now() };
+    const imageUrl = await generateWithPollinations(finalOptions, 0);
+    console.log('✅ Pollinations successful on final retry!');
+    return imageUrl;
+  } catch (finalError) {
+    console.warn('⚠️ Final Pollinations retry failed:', finalError);
+  }
+
+  // Strategy 4: Fallback to placeholder with helpful message
+  console.log('⚠️ All image generation methods exhausted, using placeholder');
   const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-  console.log(`ℹ️ Using placeholder after ${duration}s`);
-  const placeholderUrl = `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Fashion Outfit')}`;
+  console.log(`ℹ️ Using placeholder after ${duration}s (Rate limits may apply, try again in a minute)`);
+  const placeholderUrl = `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Fashion Outfit - Retry in 1min')}`;
   return placeholderUrl;
 }

@@ -18,6 +18,7 @@ interface CacheStats {
   hits: number;
   misses: number;
   size: number;
+  stampedePrevented: number; // Track how many stampedes were prevented
 }
 
 class RequestCache {
@@ -26,13 +27,15 @@ class RequestCache {
   private readonly maxSize: number;
   private readonly ttl: number; // Time to live in milliseconds
   private cleanupInterval: NodeJS.Timeout | null;
+  private locks: Map<string, Promise<any>>; // Dogpile prevention locks
 
   constructor(maxSize: number = 100, ttlMinutes: number = 5) {
     this.cache = new Map();
-    this.stats = { hits: 0, misses: 0, size: 0 };
+    this.stats = { hits: 0, misses: 0, size: 0, stampedePrevented: 0 };
     this.maxSize = maxSize;
     this.ttl = ttlMinutes * 60 * 1000;
     this.cleanupInterval = null;
+    this.locks = new Map();
     
     // Start cleanup interval
     this.startCleanup();
@@ -100,6 +103,45 @@ class RequestCache {
   }
 
   /**
+   * Get value from cache or fetch if missing (dogpile prevention)
+   * Prevents cache stampede by ensuring only one request fetches data
+   * while others wait for the result
+   */
+  async getOrFetch<T>(
+    key: string,
+    fetchFn: () => Promise<T>
+  ): Promise<T> {
+    // Try cache first
+    const cached = this.get<T>(key);
+    if (cached !== null) {
+      return cached;
+    }
+
+    // Check if another request is already fetching
+    const existingLock = this.locks.get(key);
+    if (existingLock) {
+      this.stats.stampedePrevented++;
+      console.log(`⏳ [Cache] Waiting for concurrent fetch of key: ${key.substring(0, 30)}...`);
+      return existingLock as Promise<T>;
+    }
+
+    // Create lock and fetch
+    const fetchPromise = fetchFn()
+      .then(data => {
+        this.set(key, data);
+        this.locks.delete(key);
+        return data;
+      })
+      .catch(error => {
+        this.locks.delete(key);
+        throw error;
+      });
+
+    this.locks.set(key, fetchPromise);
+    return fetchPromise;
+  }
+
+  /**
    * Clear specific key or entire cache
    */
   clear(key?: string): void {
@@ -107,7 +149,7 @@ class RequestCache {
       this.cache.delete(key);
     } else {
       this.cache.clear();
-      this.stats = { hits: 0, misses: 0, size: 0 };
+      this.stats = { hits: 0, misses: 0, size: 0, stampedePrevented: 0 };
     }
     this.stats.size = this.cache.size;
   }
@@ -128,6 +170,14 @@ class RequestCache {
   getHitRate(): number {
     const total = this.stats.hits + this.stats.misses;
     return total > 0 ? (this.stats.hits / total) * 100 : 0;
+  }
+
+  /**
+   * Get stampede prevention rate
+   */
+  getStampedePreventionRate(): number {
+    const total = this.stats.misses;
+    return total > 0 ? (this.stats.stampedePrevented / total) * 100 : 0;
   }
 
   /**

@@ -386,18 +386,33 @@ export function StyleAdvisorResults({
   // NEW: Track image loading state
   const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set());
   const [imageLoadErrors, setImageLoadErrors] = useState<Set<number>>(new Set());
+  const [allImagesReady, setAllImagesReady] = useState(false);
 
   // Reset image loading state when new images arrive
   useEffect(() => {
     setLoadedImages(new Set());
     setImageLoadErrors(new Set());
+    setAllImagesReady(false);
   }, [generatedImageUrls]);
 
+  // Check if all images are ready (loaded or errored)
+  useEffect(() => {
+    const totalImages = generatedImageUrls.length;
+    const readyImages = loadedImages.size + imageLoadErrors.size;
+    
+    if (totalImages > 0 && readyImages >= totalImages) {
+      console.log('✅ All images ready:', { loaded: loadedImages.size, errors: imageLoadErrors.size });
+      setAllImagesReady(true);
+    }
+  }, [loadedImages, imageLoadErrors, generatedImageUrls]);
+
   const handleImageLoad = (index: number) => {
+    console.log('🖼️ Image loaded:', index);
     setLoadedImages(prev => new Set(prev).add(index));
   };
 
   const handleImageError = (index: number) => {
+    console.log('❌ Image error:', index);
     setImageLoadErrors(prev => new Set(prev).add(index));
   };
 
@@ -560,7 +575,7 @@ export function StyleAdvisorResults({
           console.log('🔥 UserId:', userId);
           console.log('🔥 ImageUrl:', imageUrl?.substring(0, 50));
           
-          let likedOutfitResult;
+          let likedOutfitResult: { success: boolean; message: string; isDuplicate?: boolean } | undefined;
           try {
             likedOutfitResult = await saveLikedOutfit(userId, {
               imageUrl,
@@ -592,7 +607,7 @@ export function StyleAdvisorResults({
           if (likedOutfitResult.isDuplicate) {
             console.log('ℹ️ Outfit already in likes');
             toast({
-              title: "Already Liked",
+              title: "Already Liked ❤️",
               description: "This outfit is already in your favorites!",
             });
           } else if (likedOutfitResult.success) {
@@ -601,26 +616,39 @@ export function StyleAdvisorResults({
             // Update preferences from like (+2 weight)
             try {
               const season = getCurrentSeason();
-              await updatePreferencesFromLike(userId, outfit, {
+              const prefResult = await updatePreferencesFromLike(userId, outfit, {
                 occasion: outfit.occasion || 'casual',
                 season,
               });
-              console.log('✅ Preferences updated from like (+2 weight)');
+              
+              if (prefResult.success) {
+                console.log('✅ Preferences updated from like (+2 weight)');
+              } else {
+                console.warn('⚠️ Preference update returned unsuccessful:', prefResult.message);
+              }
             } catch (prefError) {
-              console.warn('⚠️ Failed to update preferences from like (non-critical):', prefError);
+              console.error('❌ Error updating preferences from like:', prefError);
+              console.error('   Error details:', {
+                name: prefError instanceof Error ? prefError.name : 'Unknown',
+                message: prefError instanceof Error ? prefError.message : String(prefError),
+                userId,
+                outfitTitle: outfit.title
+              });
+              // Non-critical error - don't block the like action
             }
             
             toast({
               title: "Added to Favorites! ❤️",
-              description: `"${outfit.title}" has been added to your likes!`,
+              description: `"${outfit.title}" has been saved to your likes! View it in your Likes page.`,
             });
           } else {
             console.error('❌ Failed to save to likes:', likedOutfitResult.message);
             toast({
-              title: "Couldn't Save",
+              title: "Couldn't Save to Likes",
               description: likedOutfitResult.message || "Failed to add to favorites",
               variant: "destructive",
             });
+            // Don't return here - still track the selection for preferences
           }
         } else {
           console.error('❌ Outfit data not found at index:', outfitIndex);
@@ -630,12 +658,6 @@ export function StyleAdvisorResults({
             variant: "destructive",
           });
         }
-        
-        console.log('✅ Outfit selection tracked successfully!');
-        toast({
-          title: "Outfit Saved! 🎉",
-          description: `"${outfitTitle}" saved to your preferences. Future recommendations will be personalized!`,
-        });
       } else {
         if (result.error?.includes('sign in')) {
           toast({
@@ -817,12 +839,18 @@ export function StyleAdvisorResults({
     }
 
     setIsMarkingWorn(outfitIndex);
+    console.log('🔄 Marking outfit as worn:', { outfitIndex, userId, outfit: outfit.title });
+    
     try {
       const season = getCurrentSeason();
+      console.log('📅 Current season:', season);
+      
       const result = await updatePreferencesFromWear(userId, outfit, {
         occasion: outfit.occasion || 'casual',
         season,
       });
+
+      console.log('📊 Update result:', result);
 
       if (result.success) {
         setWornOutfits(prev => new Set(prev).add(outfitIndex));
@@ -830,15 +858,45 @@ export function StyleAdvisorResults({
           title: "Marked as Worn! 👔",
           description: `We'll remember you love "${outfit.title}" style! Future recommendations will be even better.`,
         });
-        console.log('✅ Preferences updated from wear (+5 weight)');
+        console.log('✅ Preferences updated from wear (+5 weight):', {
+          colors: outfit.colorPalette || outfit.colors,
+          style: outfit.styleType || outfit.style,
+          occasion: outfit.occasion
+        });
       } else {
-        throw new Error(result.message);
+        throw new Error(result.message || 'Unknown error');
       }
     } catch (error) {
       console.error('❌ Error marking outfit as worn:', error);
+      console.error('   Error details:', {
+        name: error instanceof Error ? error.name : 'Unknown',
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        userId,
+        outfitIndex,
+        outfitTitle: outfit.title,
+        hasColorPalette: !!outfit.colorPalette,
+        hasColors: !!outfit.colors,
+        season: getCurrentSeason()
+      });
+      
+      // Provide user-friendly error messages based on error type
+      let userMessage = 'Failed to mark as worn. Please try again.';
+      if (error instanceof Error) {
+        if (error.message.includes('Nested arrays')) {
+          userMessage = 'Data format error. Please refresh the page and try again.';
+        } else if (error.message.includes('permission')) {
+          userMessage = 'Permission denied. Please check your account settings.';
+        } else if (error.message.includes('network')) {
+          userMessage = 'Network error. Please check your connection and try again.';
+        } else {
+          userMessage = error.message;
+        }
+      }
+      
       toast({
         title: "Update Failed",
-        description: error instanceof Error ? error.message : 'Failed to mark as worn',
+        description: userMessage,
         variant: "destructive",
       });
     } finally {
@@ -863,8 +921,33 @@ export function StyleAdvisorResults({
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="w-full space-y-8"
+      className="w-full space-y-8 relative"
     >
+      {/* Loading Overlay - Show while images are loading */}
+      {!allImagesReady && generatedImageUrls.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-background/98 backdrop-blur-sm z-50 flex items-center justify-center"
+        >
+          <div className="text-center space-y-6 px-4">
+            <div className="w-20 h-20 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
+            <div className="space-y-2">
+              <h3 className="text-2xl font-bold text-foreground">Generating Your Outfits</h3>
+              <p className="text-muted-foreground max-w-md">
+                Creating {generatedImageUrls.length} unique fashion recommendations...
+              </p>
+              <div className="flex items-center justify-center gap-2 pt-2">
+                <div className="text-sm font-medium text-accent">
+                  {loadedImages.size + imageLoadErrors.size} / {generatedImageUrls.length} images ready
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+      
       <header className="text-center">
         <h2 className="text-3xl md:text-4xl font-headline font-bold text-foreground flex items-center justify-center gap-3">
           <Sparkles className="w-8 h-8 text-accent" /> Your Style Analysis
@@ -941,10 +1024,17 @@ export function StyleAdvisorResults({
                 {/* Outfit Header with Select Button */}
                 <div className="flex items-start justify-between gap-4 mb-6">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-3 mb-2 flex-wrap">
                       <h4 className="font-bold text-xl text-foreground flex items-center gap-2">
                         <Wand2 className="text-accent w-5 h-5" /> {outfit.title}
                       </h4>
+                      {/* Shopping Error Badge */}
+                      {(outfit as any).shoppingError && (
+                        <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-600 dark:text-amber-400">
+                          <Info className="w-3 h-3 mr-1" />
+                          Shopping links unavailable
+                        </Badge>
+                      )}
                       {/* Match Score Badge - shows personalization confidence */}
                       <MatchScoreBadge 
                         matchScore={outfitWithLinks.matchScore}
@@ -977,18 +1067,18 @@ export function StyleAdvisorResults({
                 <div className="grid md:grid-cols-2 gap-6 mb-6">
                   {/* Left: Generated Image */}
                   <div className="relative">
-                    {/* Check for error message in outfit */}
-                    {(outfit as any).error ? (
+                    {/* Check for image error (not shopping error) */}
+                    {(outfit as any).error && !(outfit as any).shoppingError ? (
                       <div className="aspect-square w-full rounded-xl bg-muted/50 border-2 border-destructive/30 flex items-center justify-center p-6">
                         <div className="text-center space-y-4">
                           <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
                             <Info className="w-8 h-8 text-destructive" />
                           </div>
                           <div>
-                            <h4 className="font-semibold text-foreground mb-2">Image Unavailable</h4>
+                            <h4 className="font-semibold text-foreground mb-2">Image Generation Failed</h4>
                             <p className="text-sm text-muted-foreground">{(outfit as any).error}</p>
                             <p className="text-xs text-muted-foreground mt-2">
-                              The outfit details and shopping links are still available below.
+                              The outfit details are still available below.
                             </p>
                           </div>
                         </div>
@@ -1010,6 +1100,7 @@ export function StyleAdvisorResults({
                           src={generatedImageUrls[index]} 
                           alt={`Generated outfit: ${outfit.title}`} 
                           fill 
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                           style={{ objectFit: 'cover' }} 
                           className={`transition-opacity duration-300 ${
                             loadedImages.has(index) ? 'opacity-100' : 'opacity-0'
@@ -1018,6 +1109,10 @@ export function StyleAdvisorResults({
                           priority={index === 0}
                           onLoad={() => handleImageLoad(index)}
                           onError={() => handleImageError(index)}
+                          unoptimized={
+                            generatedImageUrls[index]?.includes('pollinations.ai') ||
+                            generatedImageUrls[index]?.includes('placeholder')
+                          }
                         />
                         
                         {/* REMOVED: No watermark/attribution shown */}
@@ -1045,32 +1140,9 @@ export function StyleAdvisorResults({
 
                     {/* Enhanced Interactive Color Palette */}
                     {((outfit as any).colorDetails && (outfit as any).colorDetails.length > 0) || 
-                     (outfit.colorPalette && outfit.colorPalette.length > 0) || 
-                     ((outfit as any).generatedImageColors && (outfit as any).generatedImageColors.length > 0) ? (
+                     (outfit.colorPalette && outfit.colorPalette.length > 0) ? (
                       <div className="space-y-3">
-                        {/* Generated Image Colors (Primary - Most Accurate) */}
-                        {(outfit as any).generatedImageColors && (outfit as any).generatedImageColors.length > 0 && (
-                          <div>
-                            <div className="flex items-center gap-2 mb-2">
-                              <Sparkles className="w-4 h-4 text-accent" />
-                              <h5 className="text-sm font-semibold text-accent uppercase tracking-wide">
-                                Actual Outfit Colors
-                              </h5>
-                              <span className="text-xs text-muted-foreground">(from generated image)</span>
-                            </div>
-                            <EnhancedColorPalette
-                              colors={(outfit as any).generatedImageColors.map((c: any) => ({
-                                hex: c.hex || '#808080',
-                                name: c.name || '',
-                                percentage: Math.round((c.count / 1000) * 100), // Approximate percentage
-                              }))}
-                              outfitTitle={outfit.title + " - Actual Colors"}
-                              showHarmonyInfo={true}
-                            />
-                          </div>
-                        )}
-
-                        {/* AI Recommended Colors (Secondary) */}
+                        {/* AI Recommended Colors */}
                         {((outfit as any).colorDetails || outfit.colorPalette) && (
                           <EnhancedColorPalette
                             colors={
@@ -1109,7 +1181,7 @@ export function StyleAdvisorResults({
                                   })
                             }
                             outfitTitle={outfit.title}
-                            showHarmonyInfo={!(outfit as any).generatedImageColors}
+                            showHarmonyInfo={true}
                           />
                         )}
                       </div>

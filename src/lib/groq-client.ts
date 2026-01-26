@@ -46,12 +46,12 @@ export interface GroqOutfitRecommendation {
 
 export interface GroqStyleAnalysis {
   outfitRecommendations: GroqOutfitRecommendation[];
-  styleAnalysis: {
+  styleAnalysis?: {
     currentStyle: string;
     strengths: string[];
     improvements: string[];
   };
-  seasonalAdvice: string;
+  seasonalAdvice?: string;
 }
 
 /**
@@ -84,7 +84,18 @@ export async function generateRecommendationsWithGroq(
 - Cultural and regional fashion preferences
 ${hasPersonalization ? '\n- Personalized styling based on user\'s historical preferences and behavior' : ''}
 
-You provide detailed, actionable outfit recommendations that are practical, stylish, and appropriate for the user's needs. ${hasPersonalization ? 'You pay special attention to the user\'s established preferences, favorite colors, and past outfit choices to create highly personalized recommendations.' : ''} Always respond in valid JSON format.`,
+You provide detailed, actionable outfit recommendations that are practical, stylish, and appropriate for the user's needs. ${hasPersonalization ? 'You pay special attention to the user\'s established preferences, favorite colors, and past outfit choices to create highly personalized recommendations.' : ''} Always respond in valid JSON format.
+
+🚨 CRITICAL DIVERSITY REQUIREMENTS 🚨
+Each of your 3 outfit recommendations MUST be COMPLETELY DIFFERENT:
+- DIFFERENT style types (e.g., casual, formal, streetwear, bohemian, minimalist, vintage)
+- DIFFERENT color schemes (vary light/dark, warm/cool, neutral/bold, monochrome/multicolor)
+- DIFFERENT silhouettes and fits (e.g., relaxed, tailored, oversized, fitted)
+- DIFFERENT vibes and aesthetics (e.g., professional, edgy, romantic, sporty)
+- DIFFERENT items (no repeating the same clothing pieces across outfits)
+
+Think of each outfit as targeting a DIFFERENT personality or interpretation of the occasion.
+NEVER generate similar or repetitive recommendations - make each one UNIQUE and DISTINCT.`,
         },
         {
           role: 'user',
@@ -92,10 +103,13 @@ You provide detailed, actionable outfit recommendations that are practical, styl
         },
       ],
       model: 'llama-3.3-70b-versatile', // Updated: llama-3.1-70b-versatile was deprecated Oct 2025
-      temperature: 0.7,
+      temperature: 0.95, // OPTIMIZED: Balanced for diversity without incoherence
       max_tokens: 1500, // OPTIMIZED: Reduced from 2048 (sufficient for structured JSON)
       stream: true, // OPTIMIZED: Enable streaming for faster TTFB
       response_format: { type: 'json_object' },
+      top_p: 0.92, // Balanced for diverse but coherent outputs
+      frequency_penalty: 1.5, // MAXIMUM: Strongest penalty for repetition
+      presence_penalty: 1.2, // HIGH: Strong encouragement for new topics
     });
 
     // Handle streaming response
@@ -127,8 +141,23 @@ You provide detailed, actionable outfit recommendations that are practical, styl
       throw new Error('Invalid response from Groq: no recommendations generated');
     }
 
-    console.log(`✅ Generated ${analysis.outfitRecommendations.length} outfit recommendations via Groq`);
+    // Validate diversity - ensure recommendations are actually different
+    const diversity = validateDiversity(analysis.outfitRecommendations);
+    if (diversity.score < 60) {
+      console.warn('⚠️ Low diversity detected:', diversity.reason, '- Score:', diversity.score);
+      console.warn('📋 Outfit titles:', analysis.outfitRecommendations.map(r => ({
+        title: r.title,
+        style: r.styleType,
+        colors: r.colorPalette
+      })));
+      // Log warning but continue - better to give user something than error out
+      // The high temperature and penalties should prevent this most of the time
+    } else {
+      console.log(`✅ Good diversity score: ${diversity.score}/100`);
+    }
 
+    console.log(`✅ Generated ${analysis.outfitRecommendations.length} outfit recommendations via Groq`);
+    console.log(`📊 Final Diversity score: ${diversity.score}/100`);
 
     return analysis;
   } catch (error) {
@@ -198,53 +227,63 @@ ${skinTone ? `**Skin Tone:** ${skinTone}` : ''}`;
   prompt += `
 ${dressColors ? `**Current Outfit Colors:** ${dressColors}` : ''}
 
-Please provide your response in the following JSON format:
+Your task: Create 3 RADICALLY DIFFERENT complete outfits. Each must be UNIQUE:
 
+🎯 CRITICAL DIVERSITY MANDATE (NON-NEGOTIABLE):
+❌ WRONG: Three navy suits with white shirts (TOO SIMILAR - REJECTED)
+❌ WRONG: Three casual jeans outfits with different colored tops (NOT DIVERSE ENOUGH)
+✅ CORRECT: One professional suit, one streetwear hoodie outfit, one bohemian layered look
+
+- Outfit 1: One style direction (e.g., Minimalist Professional - monochrome, clean lines, tailored)
+- Outfit 2: COMPLETELY DIFFERENT style (e.g., Bold Streetwear - bright colors, oversized, graphic prints)
+- Outfit 3: YET ANOTHER DIFFERENT approach (e.g., Artistic Bohemian - earth tones, flowing fabrics, layered)
+
+⚠️ STRICT REQUIREMENTS - EACH OUTFIT MUST HAVE:
+- UNIQUE style type (casual/formal/streetwear/bohemian/minimalist/vintage/sporty/preppy/punk) - NO REPEATS!
+- DISTINCT color scheme with ZERO shared colors between outfits if possible
+  * Example: Outfit 1 (navy, white, grey) vs Outfit 2 (red, black, tan) vs Outfit 3 (olive, cream, burgundy)
+- DIFFERENT silhouette & fit (slim-fit vs oversized vs relaxed vs athletic vs tailored)
+- DIFFERENT vibe (professional vs edgy vs romantic vs sporty vs artistic vs rebellious)
+- NO REPEATED clothing items across the 3 outfits - each outfit is COMPLETELY NEW
+- DIFFERENT color palettes: vary ALL aspects (light/dark, warm/cool, neutral/bold, monochrome/colorful)
+- DIFFERENT FORMALITY LEVELS (casual vs smart-casual vs business-casual vs formal)
+- DIFFERENT TEXTURES & MATERIALS if possible (cotton vs wool vs denim vs leather vs linen)
+
+Think of each outfit as designed for a DIFFERENT PERSON with a DIFFERENT personality.
+DO NOT create variations of the same outfit - create 3 COMPLETELY DISTINCT looks.
+
+JSON RESPONSE FORMAT:
 {
   "outfitRecommendations": [
     {
-      "title": "Brief outfit name (e.g., 'Smart Casual Elegance')",
-      "description": "A 2-3 sentence description of this complete outfit and why it works for the occasion",
-      "items": [
-        "Specific clothing item 1 with color and material (e.g., 'Navy blue cotton blazer')",
-        "Specific clothing item 2",
-        "Specific clothing item 3",
-        "Footwear",
-        "Key accessories"
-      ],
-      "colorPalette": ["primary color", "secondary color", "accent color"],
-      "styleType": "The fashion style category (e.g., casual, formal, streetwear, bohemian, minimalist, vintage, sporty)",
-      "occasion": "Specific occasion where this outfit would be appropriate (e.g., office, date night, casual brunch, night out, business meeting)",
-      "stylingTips": [
-        "Practical tip 1 on how to wear this outfit",
-        "Practical tip 2",
-        "Practical tip 3"
-      ],
-      "imagePrompt": "PROFESSIONAL FASHION CATALOG PROMPT: Professional fashion catalog photography, full-body shot. [Describe complete outfit with EXACT fabric types, colors with hex codes, textures, and cut details]. Outfit displayed on WHITE MANNEQUIN in professional retail display (centered, front-facing). Include: specific accessories with materials/colors positioned on mannequin. Lighting: studio lighting with soft diffused key light from 45-degree angle creating subtle shadows for depth. Background: clean white seamless backdrop for professional catalog look. High resolution, sharp focus, professional quality, retail catalog aesthetic. Shot with 85mm lens, even lighting throughout, centered composition. [Specify mood: elegant and sophisticated / effortlessly chic / modern minimalist / etc.]",
+      "title": "Concise outfit name",
+      "description": "Why this outfit works (2-3 sentences)",
+      "items": ["Item 1 with color+material", "Item 2", "Item 3", "Footwear", "Accessories"],
+      "colorPalette": ["#HEX1", "#HEX2", "#HEX3"],
+      "styleType": "casual|formal|streetwear|bohemian|minimalist|vintage|sporty",
+      "occasion": "Specific occasion",
+      "stylingTips": ["Tip 1", "Tip 2", "Tip 3"],
+      "imagePrompt": "PROFESSIONAL FASHION CATALOG: Full-body shot, [detailed outfit description with fabrics, colors, textures]. White mannequin, centered, front-facing. Studio lighting at 45°. White seamless backdrop. High-res, 85mm lens, professional catalog quality.",
       "isExistingMatch": false
     }
   ],
   "styleAnalysis": {
-    "currentStyle": "Brief description of the user's apparent style based on inputs",
+    "currentStyle": "User's apparent style",
     "strengths": ["Strength 1", "Strength 2"],
     "improvements": ["Suggestion 1", "Suggestion 2"]
   },
-  "seasonalAdvice": "Brief seasonal styling advice based on weather and occasion"
+  "seasonalAdvice": "Brief seasonal advice"
 }
 
-**Requirements:**
-1. Generate exactly 3 diverse outfit recommendations
-2. Each outfit must be COMPLETE (top, bottom, shoes, accessories)
-3. Consider weather conditions if provided
-4. Respect the occasion (formal, casual, etc.)
-5. Use complementary colors from the color palette
-6. Make recommendations practical and achievable
-7. Ensure outfits are culturally appropriate
-8. Include specific brand-agnostic item descriptions
-9. Provide actionable styling tips
-10. Create detailed imagePrompt for AI image generation
+DIVERSITY EXAMPLES for "Business Casual":
+✓ Outfit 1: "Smart Professional" - Navy blazer, white shirt, grey trousers, oxford shoes (classic)
+✓ Outfit 2: "Creative Edge" - Black turtleneck, burgundy corduroys, chelsea boots (modern)
+✓ Outfit 3: "Casual Friday" - Olive bomber, cream henley, dark jeans, white sneakers (relaxed)
 
-Make the recommendations diverse in style while staying appropriate for the occasion.
+✗ WRONG (too similar):
+✗ Outfit 1: Navy blazer, white shirt, grey pants
+✗ Outfit 2: Navy suit, white shirt, grey trousers
+✗ Outfit 3: Navy jacket, white shirt, grey slacks
 `;
   
   return prompt;
@@ -259,6 +298,71 @@ export function isGroqConfigured(): boolean {
     console.warn('⚠️ GROQ_API_KEY not configured - Groq fallback unavailable');
   }
   return isConfigured;
+}
+
+/**
+ * Validate that outfit recommendations are sufficiently diverse
+ */
+function validateDiversity(outfits: GroqOutfitRecommendation[]): { isValid: boolean; score: number; reason?: string } {
+  if (outfits.length < 3) {
+    return { isValid: true, score: 100 }; // Can't compare if less than 3
+  }
+
+  let diversityScore = 100;
+  const reasons: string[] = [];
+
+  // Check 1: All outfits have different style types
+  const styleTypes = outfits.map(o => o.styleType?.toLowerCase() || '');
+  const uniqueStyles = new Set(styleTypes);
+  if (uniqueStyles.size < outfits.length) {
+    diversityScore -= 30;
+    reasons.push('Some outfits have same styleType');
+  }
+
+  // Check 2: Color palettes are different
+  for (let i = 0; i < outfits.length; i++) {
+    for (let j = i + 1; j < outfits.length; j++) {
+      const colors1 = new Set(outfits[i].colorPalette?.map(c => c.toLowerCase()) || []);
+      const colors2 = new Set(outfits[j].colorPalette?.map(c => c.toLowerCase()) || []);
+      
+      // Count overlapping colors
+      const overlap = [...colors1].filter(c => colors2.has(c)).length;
+      const totalUnique = colors1.size + colors2.size;
+      const similarity = totalUnique > 0 ? (overlap / totalUnique) * 100 : 0;
+      
+      if (similarity > 60) { // More than 60% color overlap
+        diversityScore -= 20;
+        reasons.push(`Outfits ${i+1} and ${j+1} have ${similarity.toFixed(0)}% color overlap`);
+      }
+    }
+  }
+
+  // Check 3: Titles are different
+  const titles = outfits.map(o => o.title.toLowerCase());
+  const uniqueTitles = new Set(titles);
+  if (uniqueTitles.size < outfits.length) {
+    diversityScore -= 25;
+    reasons.push('Some outfits have identical titles');
+  }
+
+  // Check 4: Items are different (at least some variation)
+  for (let i = 0; i < outfits.length; i++) {
+    for (let j = i + 1; j < outfits.length; j++) {
+      const items1 = new Set(outfits[i].items?.map(item => item.toLowerCase().split(' ').slice(-1)[0]) || []);
+      const items2 = new Set(outfits[j].items?.map(item => item.toLowerCase().split(' ').slice(-1)[0]) || []);
+      
+      const overlap = [...items1].filter(item => items2.has(item)).length;
+      if (overlap > items1.size * 0.7) { // More than 70% item overlap
+        diversityScore -= 15;
+        reasons.push(`Outfits ${i+1} and ${j+1} have very similar items`);
+      }
+    }
+  }
+
+  const isValid = diversityScore >= 50; // Threshold for acceptable diversity
+  const reason = reasons.length > 0 ? reasons.join('; ') : undefined;
+
+  return { isValid, score: Math.max(0, diversityScore), reason };
 }
 
 /**

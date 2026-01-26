@@ -78,7 +78,9 @@ export async function getBlocklists(userId: string): Promise<Blocklists> {
 
     return getEmptyBlocklists();
   } catch (error) {
-    logger.error('❌ [Blocklist] Failed to fetch blocklists:', error);
+    if ((error as any)?.code !== 'permission-denied') {
+      logger.error('❌ [Blocklist] Failed to fetch blocklists:', error);
+    }
     return getEmptyBlocklists();
   }
 }

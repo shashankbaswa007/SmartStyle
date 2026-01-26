@@ -34,6 +34,7 @@ export interface RateLimitResult {
 
 /**
  * Check if a request should be rate limited
+ * Uses atomic operations to prevent race conditions
  * @param identifier - Unique identifier (e.g., IP address, user ID)
  * @param config - Rate limit configuration
  * @returns Rate limit result with remaining requests
@@ -60,7 +61,7 @@ export function checkRateLimit(
     };
   }
 
-  // Check if limit exceeded
+  // Check if limit exceeded BEFORE incrementing (prevents race condition)
   if (entry.count >= config.maxRequests) {
     return {
       success: false,
@@ -70,14 +71,17 @@ export function checkRateLimit(
     };
   }
 
-  // Increment counter
-  entry.count += 1;
-  rateLimitMap.set(identifier, entry);
+  // Atomic increment by creating new object
+  const newEntry = {
+    count: entry.count + 1,
+    resetTime: entry.resetTime,
+  };
+  rateLimitMap.set(identifier, newEntry);
 
   return {
     success: true,
     limit: config.maxRequests,
-    remaining: config.maxRequests - entry.count,
+    remaining: config.maxRequests - newEntry.count,
     resetTime: entry.resetTime,
   };
 }

@@ -12,13 +12,57 @@ import { z } from 'zod';
 export const recommendRequestSchema = z.object({
   photoDataUri: z.string()
     .min(1, 'Photo data is required')
-    .startsWith('data:image/', 'Invalid image data format'),
+    .max(15_000_000, 'Image data too large. Maximum size is ~10MB')
+    .startsWith('data:image/', 'Invalid image data format')
+    .refine(
+      (data) => {
+        // Validate MIME type (only allow safe image formats)
+        const mimeMatch = data.match(/^data:image\/(jpeg|jpg|png|webp);base64,/i);
+        return !!mimeMatch;
+      },
+      { message: 'Invalid image type. Only JPEG, PNG, and WebP are allowed' }
+    )
+    .refine(
+      (data) => {
+        try {
+          // Extract and validate base64 portion
+          const base64Data = data.split(',')[1];
+          if (!base64Data) return false;
+          
+          // Check if valid base64 (only alphanumeric, +, /, = chars)
+          return /^[A-Za-z0-9+/]*={0,2}$/.test(base64Data);
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Invalid base64 image data format' }
+    )
+    .refine(
+      (data) => {
+        try {
+          // Estimate decoded size (base64 is ~33% larger than binary)
+          const base64Data = data.split(',')[1];
+          const estimatedBytes = (base64Data.length * 3) / 4;
+          // Max 10MB decoded size
+          return estimatedBytes <= 10 * 1024 * 1024;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Image file size exceeds 10MB limit' }
+    ),
   
-  occasion: z.enum(['office', 'casual', 'party', 'ethnic', 'workout', 'formal'])
-    .optional(),
+  occasion: z.string()
+    .min(3, 'Occasion must be at least 3 characters')
+    .max(100, 'Occasion must be less than 100 characters')
+    .optional()
+    .describe('Event or occasion (e.g., office, casual, party, wedding, formal, travel, etc.)'),
   
   genre: z.string()
-    .optional(),
+    .min(3, 'Genre must be at least 3 characters')
+    .max(100, 'Genre must be less than 100 characters')
+    .optional()
+    .describe('Style genre or theme (e.g., bohemian, minimalist, streetwear, vintage, etc.)'),
   
   gender: z.enum(['male', 'female', 'unisex'])
     .describe('User gender for outfit recommendations'),
@@ -31,9 +75,12 @@ export const recommendRequestSchema = z.object({
     .optional()
     .describe('User skin tone for color matching'),
   
-  dressColors: z.array(z.string())
+  dressColors: z.union([
+    z.array(z.string()),
+    z.string().transform(str => str ? str.split(',').map(c => c.trim()) : [])
+  ])
     .optional()
-    .describe('Current dress colors for complementary suggestions'),
+    .describe('Current dress colors for complementary suggestions (accepts string or array)'),  
   
   previousRecommendation: z.string()
     .optional()

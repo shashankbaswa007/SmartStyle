@@ -2,6 +2,32 @@
 // Server-side only - uses Firebase Admin SDK (production) or skips in development
 import { getFirestore, FieldValue } from '@/lib/firebase-admin';
 
+/**
+ * Retry helper with exponential backoff for transient failures
+ */
+async function retryOperation<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 3,
+  operationName: string = 'operation'
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (attempt === maxRetries) {
+        console.error(`❌ ${operationName} failed after ${maxRetries} attempts:`, error);
+        throw error;
+      }
+      
+      const backoffMs = Math.min(1000 * Math.pow(2, attempt), 5000);
+      console.warn(`⚠️ ${operationName} attempt ${attempt}/${maxRetries} failed. Retrying in ${backoffMs}ms...`);
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+    }
+  }
+  
+  throw new Error(`${operationName} failed unexpectedly`);
+}
+
 export async function saveRecommendation(userId: string, payload: any, customId?: string): Promise<string | null> {
   try {
     // Validate inputs
@@ -30,15 +56,22 @@ export async function saveRecommendation(userId: string, payload: any, customId?
     // Use custom ID if provided, otherwise generate a new one
     const docId = customId || `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    // Use Admin SDK for server-side writes
+    // Use Admin SDK for server-side writes with retry logic
     const db = getFirestore();
     const docRef = db.collection('users').doc(userId).collection('recommendationHistory').doc(docId);
     
-    await docRef.set({
-      ...payload,
-      createdAt: FieldValue.serverTimestamp(),
-      userId, // Include userId in document for easier querying
-    });
+    // Retry the set operation up to 3 times with exponential backoff
+    await retryOperation(
+      async () => {
+        await docRef.set({
+          ...payload,
+          createdAt: FieldValue.serverTimestamp(),
+          userId, // Include userId in document for easier querying
+        });
+      },
+      3,
+      'saveRecommendation'
+    );
     
     console.log(`✅ Recommendation saved to recommendationHistory: ${docId}`);
     return docId;

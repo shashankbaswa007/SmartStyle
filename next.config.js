@@ -90,11 +90,17 @@ const nextConfig = {
         pathname: '/**',
       }
     ],
-    // OPTIMIZED: Enable Next.js image optimization
+    // Disable optimization for external images to prevent 500 errors
+    unoptimized: false,
+    // OPTIMIZED: Enable Next.js image optimization with better error handling
     formats: ['image/avif', 'image/webp'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 60,
+    // Add dangerouslyAllowSVG for better compatibility
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
   // OPTIMIZED: Webpack optimizations
   webpack: (config, { dev, isServer }) => {
@@ -102,44 +108,8 @@ const nextConfig = {
         'require-in-the-middle': 'require-in-the-middle',
     });
     
-    // OPTIMIZED: Tree-shaking for lodash and other libraries
-    if (!dev && !isServer) {
-      // Enable module concatenation
-      config.optimization.concatenateModules = true;
-      
-      // Split chunks for better caching
-      config.optimization.splitChunks = {
-        chunks: 'all',
-        cacheGroups: {
-          default: false,
-          vendors: false,
-          // Recharts in separate chunk (only loaded on /analytics)
-          recharts: {
-            test: /[\\/]node_modules[\\/](recharts|d3-.*)[\\/]/,
-            name: 'recharts',
-            priority: 20,
-          },
-          // Firebase in separate chunk
-          firebase: {
-            test: /[\\/]node_modules[\\/](firebase|@firebase)[\\/]/,
-            name: 'firebase',
-            priority: 15,
-          },
-          // UI components
-          ui: {
-            test: /[\\/]node_modules[\\/](@radix-ui)[\\/]/,
-            name: 'ui',
-            priority: 10,
-          },
-          // Common vendor chunk
-          vendor: {
-            test: /[\\/]node_modules[\\/]/,
-            name: 'vendor',
-            priority: 5,
-          },
-        },
-      };
-    }
+    // Let Next.js handle chunk splitting automatically
+    // Custom chunk splitting was causing 404s in dev mode
     
     return config;
   },

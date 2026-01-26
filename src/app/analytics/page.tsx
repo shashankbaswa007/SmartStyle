@@ -1,11 +1,5 @@
 'use client';
 
-/**
- * Analytics Dashboard Page
- * 
- * Displays user's style evolution, preference trends, and recommendation insights
- */
-
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { 
@@ -34,29 +28,8 @@ import type { UserPreferences, RecommendationHistory } from '@/lib/personalizati
 import { getLikedOutfits } from '@/lib/likedOutfits';
 import Link from 'next/link';
 import Particles from '@/components/Particles';
-import ShinyText from '@/components/ShinyText';
 import TextPressure from '@/components/TextPressure';
-import SplashCursor from '@/components/SplashCursor';
 import { useMounted } from '@/hooks/useMounted';
-import { 
-  BarChart, 
-  Bar, 
-  PieChart, 
-  Pie, 
-  Cell, 
-  ResponsiveContainer, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  Radar,
-  Area,
-  AreaChart
-} from 'recharts';
 
 interface StyleInsights {
   topColors: { color: string; count: number; hex: string }[];
@@ -92,67 +65,172 @@ const itemVariants = {
   },
 };
 
-// Beautiful gradient colors for charts
-const CHART_COLORS = {
-  violet: ['#8B5CF6', '#A78BFA', '#C4B5FD', '#DDD6FE', '#EDE9FE'],
-  pink: ['#EC4899', '#F472B6', '#F9A8D4', '#FBCFE8', '#FCE7F3'],
-  blue: ['#3B82F6', '#60A5FA', '#93C5FD', '#BFDBFE', '#DBEAFE'],
-  emerald: ['#10B981', '#34D399', '#6EE7B7', '#A7F3D0', '#D1FAE5'],
-  amber: ['#F59E0B', '#FBBF24', '#FCD34D', '#FDE68A', '#FEF3C7'],
-};
-
-// Helper function to convert color names to hex
-const getColorHex = (colorName: string): string => {
-  const colorMap: Record<string, string> = {
-    // Basics
-    'black': '#000000', 'white': '#FFFFFF', 'gray': '#808080', 'grey': '#808080',
-    'red': '#FF0000', 'blue': '#0000FF', 'green': '#008000', 'yellow': '#FFFF00',
-    'orange': '#FFA500', 'purple': '#800080', 'pink': '#FFC0CB', 'brown': '#A52A2A',
-    
-    // Extended
-    'navy': '#000080', 'teal': '#008080', 'maroon': '#800000',
-    'olive': '#808000', 'lime': '#00FF00', 'cyan': '#00FFFF',
-    'magenta': '#FF00FF', 'silver': '#C0C0C0', 'gold': '#FFD700',
-    'beige': '#F5F5DC', 'tan': '#D2B48C', 'cream': '#FFFDD0',
-    'coral': '#FF7F50', 'salmon': '#FA8072', 'crimson': '#DC143C',
-    'burgundy': '#800020', 'indigo': '#4B0082', 'violet': '#EE82EE',
-    
-    // Fashion colors
-    'navy blue': '#000080', 'light blue': '#ADD8E6', 'dark blue': '#00008B',
-    'royal blue': '#4169E1', 'sky blue': '#87CEEB',
-  };
-
-  const normalized = colorName.toLowerCase().trim();
-  if (colorName.startsWith('#')) return colorName.toUpperCase();
-  return colorMap[normalized] || '#6366F1'; // Default to accent color
-};
-
-// Custom tooltip for charts
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (active && payload && payload.length) {
-    return (
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-background/95 backdrop-blur-xl border border-border/50 rounded-lg p-4 shadow-2xl"
-      >
-        <p className="text-sm font-bold mb-2 text-foreground">{label}</p>
-        {payload.map((entry: any, index: number) => (
-          <div key={index} className="flex items-center gap-2">
-            <div 
-              className="w-3 h-3 rounded-full" 
-              style={{ backgroundColor: entry.color }}
-            />
-            <p className="text-sm text-muted-foreground">
-              {entry.name}: <span className="font-semibold text-foreground">{entry.value}</span>
-            </p>
+// Simple Bar Chart Component
+function SimpleBarChart({ data }: { data: { name: string; count: number; hex?: string }[] }) {
+  const maxCount = Math.max(...data.map(d => d.count), 1);
+  
+  return (
+    <div className="space-y-4">
+      {data.map((item, index) => (
+        <motion.div
+          key={index}
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: index * 0.1 }}
+          className="space-y-2"
+        >
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2">
+              {item.hex && (
+                <div 
+                  className="w-4 h-4 rounded-full border-2 border-white/20 shadow-sm" 
+                  style={{ backgroundColor: item.hex }}
+                />
+              )}
+              <span className="font-medium capitalize">{item.name}</span>
+            </div>
+            <span className="text-muted-foreground font-semibold">{item.count}</span>
           </div>
+          <div className="h-10 bg-muted/20 rounded-lg overflow-hidden border border-border/10">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${(item.count / maxCount) * 100}%` }}
+              transition={{ duration: 0.8, delay: index * 0.1, ease: "easeOut" }}
+              className="h-full rounded-lg relative"
+              style={{ 
+                background: item.hex 
+                  ? `linear-gradient(90deg, ${item.hex} 0%, ${item.hex}dd 100%)`
+                  : 'linear-gradient(90deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.8) 100%)',
+                minWidth: '3%',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+              }}
+            >
+              <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent" />
+            </motion.div>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+// Simple Pie Chart Component
+function SimplePieChart({ data }: { data: { name: string; value: number; color: string }[] }) {
+  const total = data.reduce((sum, item) => sum + item.value, 0);
+  let currentAngle = 0;
+  
+  return (
+    <div className="flex flex-col lg:flex-row items-center gap-8 justify-center">
+      <div className="relative">
+        <svg viewBox="0 0 200 200" className="w-72 h-72">
+          {/* Outer glow circle */}
+          <circle
+            cx="100"
+            cy="100"
+            r="90"
+            fill="none"
+            stroke="hsl(var(--border))"
+            strokeWidth="1"
+            opacity="0.3"
+          />
+          
+          {data.map((item, index) => {
+            const percentage = (item.value / total) * 100;
+            const angle = (percentage / 100) * 360;
+            const startAngle = currentAngle;
+            const endAngle = currentAngle + angle;
+            
+            const start = polarToCartesian(100, 100, 80, startAngle);
+            const end = polarToCartesian(100, 100, 80, endAngle);
+            const largeArc = angle > 180 ? 1 : 0;
+            
+            const pathData = [
+              `M 100 100`,
+              `L ${start.x} ${start.y}`,
+              `A 80 80 0 ${largeArc} 1 ${end.x} ${end.y}`,
+              `Z`
+            ].join(' ');
+            
+            currentAngle += angle;
+            
+            return (
+              <motion.path
+                key={index}
+                d={pathData}
+                fill={item.color}
+                initial={{ opacity: 0, scale: 0 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ delay: index * 0.15, duration: 0.6, ease: "easeOut" }}
+                className="transition-all hover:opacity-90 cursor-pointer"
+                style={{
+                  filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))'
+                }}
+              />
+            );
+          })}
+          
+          {/* Center circle for donut effect */}
+          <circle
+            cx="100"
+            cy="100"
+            r="45"
+            fill="hsl(var(--card))"
+            className="transition-colors"
+          />
+          
+          {/* Center text */}
+          <text
+            x="100"
+            y="95"
+            textAnchor="middle"
+            className="text-2xl font-bold fill-foreground"
+          >
+            {total}
+          </text>
+          <text
+            x="100"
+            y="110"
+            textAnchor="middle"
+            className="text-xs fill-muted-foreground"
+          >
+            Total
+          </text>
+        </svg>
+      </div>
+      
+      <div className="grid grid-cols-1 gap-3 w-full max-w-xs">
+        {data.map((item, index) => (
+          <motion.div 
+            key={index} 
+            className="flex items-center gap-3 p-3 rounded-lg bg-muted/20 border border-border/10 hover:bg-muted/30 transition-colors"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: index * 0.1 + 0.3 }}
+          >
+            <div 
+              className="w-5 h-5 rounded-full flex-shrink-0 border-2 border-white/30 shadow-md" 
+              style={{ backgroundColor: item.color }}
+            />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold truncate capitalize">{item.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {item.value} items ({((item.value / total) * 100).toFixed(1)}%)
+              </p>
+            </div>
+          </motion.div>
         ))}
-      </motion.div>
-    );
-  }
-  return null;
-};
+      </div>
+    </div>
+  );
+}
+
+function polarToCartesian(cx: number, cy: number, radius: number, degrees: number) {
+  const radians = (degrees - 90) * Math.PI / 180.0;
+  return {
+    x: cx + (radius * Math.cos(radians)),
+    y: cy + (radius * Math.sin(radians))
+  };
+}
 
 export default function AnalyticsPage() {
   const { user } = useAuth();
@@ -163,6 +241,23 @@ export default function AnalyticsPage() {
   const [history, setHistory] = useState<RecommendationHistory[]>([]);
   const [insights, setInsights] = useState<StyleInsights | null>(null);
   const [likedCount, setLikedCount] = useState(0);
+
+  // Hard-kill any stale service workers or caches to stop old chunk URLs
+  useEffect(() => {
+    // Unregister any existing service workers
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        regs.forEach(reg => reg.unregister().catch(() => undefined));
+      }).catch(() => undefined);
+    }
+
+    // Clear runtime caches that may hold old chunk manifests
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      caches.keys().then(keys => {
+        keys.forEach(key => caches.delete(key).catch(() => undefined));
+      }).catch(() => undefined);
+    }
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -177,35 +272,30 @@ export default function AnalyticsPage() {
       setError(null);
       
       if (!user) {
-        console.log('⚠️ No user found for analytics');
         setLoading(false);
         return;
       }
 
-      console.log('🔍 Loading analytics for user:', user.uid);
-
-      // Fetch all data in parallel
       const [prefs, recs, liked] = await Promise.all([
         getUserPreferences(user.uid),
         getRecommendationHistory(user.uid, 100),
         getLikedOutfits(user.uid)
       ]);
 
-      console.log('📊 User preferences:', prefs);
-      console.log('📊 Recommendation history:', recs.length, 'items');
-      console.log('📊 Liked outfits:', liked.length, liked);
+      console.log('📊 Analytics data loaded:', {
+        preferences: prefs,
+        recommendationCount: recs.length,
+        likedCount: liked.length,
+        sampleRecommendation: recs[0],
+      });
 
       setPreferences(prefs);
       setHistory(recs);
       setLikedCount(liked.length);
-
-      // Calculate insights - pass liked outfits data
-      const calculatedInsights = calculateInsights(recs, liked.length, liked);
-      console.log('📊 Calculated insights:', calculatedInsights);
-      setInsights(calculatedInsights);
+      setInsights(calculateInsights(recs, liked.length, liked));
 
     } catch (error) {
-      console.error('❌ Error loading analytics:', error);
+      console.error('Error loading analytics:', error);
       setError(error instanceof Error ? error.message : 'Failed to load analytics data');
     } finally {
       setLoading(false);
@@ -215,624 +305,416 @@ export default function AnalyticsPage() {
   const calculateInsights = (recs: RecommendationHistory[], likedTotal: number, likedOutfits: any[]): StyleInsights => {
     const colorCounts: { [key: string]: number } = {};
     const occasionCounts: { [key: string]: number } = {};
-    const seasonCounts: { [key: string]: number } = {};
     const styleCounts: { [key: string]: number } = {};
-    const monthCounts: { [key: string]: number } = {};
-    let totalLikes = 0;
-    let totalFeedback = 0;
+    const seasonCounts: { [key: string]: number } = {};
 
-    // Process liked outfits data (richer data source with colorPalette, styleType, occasion)
-    console.log('🎨 Processing liked outfits for insights:', likedOutfits.length);
-    likedOutfits.forEach((outfit) => {
-      // Count colors from colorPalette array
+    // Extract data from liked outfits (primary source for charts)
+    likedOutfits.forEach(outfit => {
+      // Count colors from liked outfits
       if (outfit.colorPalette && Array.isArray(outfit.colorPalette)) {
         outfit.colorPalette.forEach((color: string) => {
-          if (color) {
-            colorCounts[color] = (colorCounts[color] || 0) + 1;
+          const normalizedColor = color.toLowerCase().trim();
+          if (normalizedColor) {
+            colorCounts[normalizedColor] = (colorCounts[normalizedColor] || 0) + 1;
           }
         });
       }
-
-      // Count occasions
+      
+      // Count occasions from liked outfits
       if (outfit.occasion) {
-        occasionCounts[outfit.occasion] = (occasionCounts[outfit.occasion] || 0) + 1;
+        const normalizedOccasion = outfit.occasion.toLowerCase().trim();
+        occasionCounts[normalizedOccasion] = (occasionCounts[normalizedOccasion] || 0) + 1;
       }
-
-      // Count styles
+      
+      // Count styles from liked outfits
       if (outfit.styleType) {
-        styleCounts[outfit.styleType] = (styleCounts[outfit.styleType] || 0) + 1;
-      }
-
-      // Track activity by month and season from likedAt timestamp
-      if (outfit.likedAt) {
-        const date = new Date(outfit.likedAt);
-        const month = date.toLocaleDateString('en-US', { month: 'short' });
-        const monthNum = date.getMonth();
-
-        monthCounts[month] = (monthCounts[month] || 0) + 1;
-
-        // Determine season (0-11 months)
-        if (monthNum >= 2 && monthNum <= 4) {
-          seasonCounts.spring = (seasonCounts.spring || 0) + 1;
-        } else if (monthNum >= 5 && monthNum <= 7) {
-          seasonCounts.summer = (seasonCounts.summer || 0) + 1;
-        } else if (monthNum >= 8 && monthNum <= 10) {
-          seasonCounts.fall = (seasonCounts.fall || 0) + 1;
-        } else {
-          seasonCounts.winter = (seasonCounts.winter || 0) + 1;
-        }
+        const normalizedStyle = outfit.styleType.toLowerCase().trim();
+        styleCounts[normalizedStyle] = (styleCounts[normalizedStyle] || 0) + 1;
       }
     });
 
-    // Also process recommendation history for additional data
-    recs.forEach((rec) => {
-      // Count occasions from recommendations
-      if (rec.occasion) {
-        occasionCounts[rec.occasion] = (occasionCounts[rec.occasion] || 0) + 1;
+    // Supplement with recommendation history data for additional context
+    recs.forEach(rec => {
+      // Count occasions from recommendations (lower weight)
+      if (rec.occasion && !occasionCounts[rec.occasion.toLowerCase().trim()]) {
+        const normalizedOccasion = rec.occasion.toLowerCase().trim();
+        occasionCounts[normalizedOccasion] = (occasionCounts[normalizedOccasion] || 0) + 1;
       }
-
-      // Count seasons from recommendations
-      if (rec.season) {
-        seasonCounts[rec.season] = (seasonCounts[rec.season] || 0) + 1;
-      }
-
-      // Track months from recommendations
-      if (rec.createdAt) {
-        const month = new Date(rec.createdAt.toDate()).toLocaleDateString('en-US', { month: 'short' });
-        monthCounts[month] = (monthCounts[month] || 0) + 1;
-      }
-
-      // Count feedback
-      if (rec.feedback) {
-        totalFeedback++;
-        if (rec.feedback.liked && rec.feedback.liked.length > 0) {
-          totalLikes += rec.feedback.liked.length;
-
-          // Count colors and styles from liked outfits in recommendations
-          rec.feedback.liked.forEach((outfitId) => {
-            const outfit = rec.recommendations[outfitId as keyof typeof rec.recommendations];
-            if (outfit) {
-              outfit.colors?.forEach((color) => {
-                colorCounts[color] = (colorCounts[color] || 0) + 1;
-              });
-              if (outfit.style) {
-                styleCounts[outfit.style] = (styleCounts[outfit.style] || 0) + 1;
-              }
-            }
-          });
-        }
+      
+      // Count seasons based on weather
+      if (rec.weather && typeof rec.weather.temp === 'number') {
+        const temp = rec.weather.temp;
+        const season = temp > 25 ? 'Summer' : temp > 15 ? 'Spring/Fall' : 'Winter';
+        seasonCounts[season] = (seasonCounts[season] || 0) + 1;
       }
     });
 
-    const topColors = Object.entries(colorCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 8)
-      .map(([color, count]) => ({ 
-        color, 
-        count,
-        hex: getColorHex(color)
-      }));
-
-    const topOccasions = Object.entries(occasionCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 6)
-      .map(([occasion, count]) => ({ occasion, count }));
-
-    const topStyles = Object.entries(styleCounts)
-      .sort(([, a], [, b]) => b - a)
-      .slice(0, 5)
-      .map(([style, count]) => ({ style, count }));
-
-    const seasonalDistribution = Object.entries(seasonCounts)
-      .sort(([, a], [, b]) => b - a)
-      .map(([season, count]) => ({ season, count }));
-
-    const mostActiveMonth = Object.entries(monthCounts)
-      .sort(([, a], [, b]) => b - a)[0]?.[0] || 'N/A';
-
-    const likeRate = totalFeedback > 0 ? (totalLikes / (totalFeedback * 3)) * 100 : 0;
-
-    console.log('✨ Analytics insights:', {
-      topColorsCount: topColors.length,
-      topOccasionsCount: topOccasions.length,
-      topStylesCount: topStyles.length,
-      seasonalCount: seasonalDistribution.length,
-      likeRate,
+    console.log('📈 Calculated insights:', {
+      colorCounts,
+      occasionCounts,
+      styleCounts,
+      seasonCounts,
+      totalRecs: recs.length,
+      likedTotal,
+      likedOutfitsCount: likedOutfits.length
     });
+
+    const colorMap: { [key: string]: string } = {
+      'black': '#000000', 'white': '#FFFFFF', 'gray': '#808080', 'grey': '#808080',
+      'red': '#FF0000', 'blue': '#0000FF', 'green': '#008000', 'yellow': '#FFFF00', 
+      'orange': '#FFA500', 'purple': '#800080', 'pink': '#FFC0CB', 'brown': '#A52A2A', 
+      'beige': '#F5F5DC', 'navy': '#000080', 'maroon': '#800000', 'olive': '#808000',
+      'lime': '#00FF00', 'teal': '#008080', 'aqua': '#00FFFF', 'silver': '#C0C0C0',
+      'gold': '#FFD700', 'indigo': '#4B0082', 'violet': '#EE82EE', 'cream': '#FFFDD0'
+    };
+
+    // Helper to get hex color from color name or hex string
+    const getHexColor = (color: string): string => {
+      const normalized = color.toLowerCase().trim();
+      // If already a hex color, return it
+      if (/^#[0-9A-Fa-f]{6}$/.test(color)) {
+        return color.toUpperCase();
+      }
+      // Look up in color map
+      return colorMap[normalized] || '#6366F1';
+    };
 
     return {
-      topColors,
-      topOccasions,
-      topStyles,
-      likeRate: Math.round(likeRate),
+      topColors: Object.entries(colorCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([color, count]) => ({
+          color,
+          count,
+          hex: getHexColor(color)
+        })),
+      topOccasions: Object.entries(occasionCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([occasion, count]) => ({ occasion, count })),
+      topStyles: Object.entries(styleCounts)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([style, count]) => ({ style, count })),
+      likeRate: recs.length > 0 ? (likedTotal / recs.length) * 100 : 0,
       totalRecommendations: recs.length,
-      totalFeedback,
+      totalFeedback: recs.filter(r => r.feedback).length,
       totalLiked: likedTotal,
-      seasonalDistribution,
-      mostActiveMonth,
+      seasonalDistribution: Object.entries(seasonCounts).map(([season, count]) => ({ season, count })),
+      mostActiveMonth: 'Recent'
     };
   };
 
-  if (loading) {
-    return (
-      <ProtectedRoute>
-        <div className="min-h-screen bg-background relative overflow-hidden">
-          <div className="container mx-auto py-12 px-4 max-w-7xl">
-            <div className="space-y-8">
-              <Skeleton className="h-12 w-64" />
-              <div className="grid md:grid-cols-4 gap-6">
-                <Skeleton className="h-32" />
-                <Skeleton className="h-32" />
-                <Skeleton className="h-32" />
-                <Skeleton className="h-32" />
-              </div>
-              <div className="grid md:grid-cols-2 gap-6">
-                <Skeleton className="h-96" />
-                <Skeleton className="h-96" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </ProtectedRoute>
-    );
+  if (!isMounted) {
+    return null;
   }
 
-  if (error) {
+  // If no user, show a gentle sign-in prompt instead of blank screen
+  if (!user) {
     return (
-      <ProtectedRoute>
-        <div className="min-h-screen bg-background flex items-center justify-center px-4">
-          <Alert variant="destructive" className="max-w-2xl">
-            <BarChart3 className="h-4 w-4" />
-            <AlertTitle>Error Loading Analytics</AlertTitle>
-            <AlertDescription>
-              <p className="mb-4">{error}</p>
-              <Button onClick={loadAnalytics} variant="outline">
-                Try Again
-              </Button>
-            </AlertDescription>
-          </Alert>
-        </div>
-      </ProtectedRoute>
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Card className="max-w-md w-full mx-4 text-center">
+          <CardHeader>
+            <CardTitle className="text-2xl">Sign in to view your analytics</CardTitle>
+            <CardDescription>We need your account to load personalized insights.</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <Link href="/auth">
+              <Button className="w-full">Go to Sign In</Button>
+            </Link>
+            <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">
+              Back to home
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
-
-  if (!preferences || (history.length === 0 && likedCount === 0)) {
-    return (
-      <ProtectedRoute>
-        <main className="relative min-h-screen overflow-hidden">
-          {/* Particles Background - Fixed Position */}
-          <div className="fixed inset-0 -z-10">
-            {isMounted && (
-              <>
-                {/* SplashCursor removed for analytics page */}
-                <Particles
-                  className="absolute inset-0"
-                  particleColors={['#8B5CF6', '#A78BFA', '#C4B5FD']}
-                  particleCount={500}
-                  particleSpread={10}
-                  speed={0.3}
-                  particleBaseSize={150}
-                  moveParticlesOnHover={true}
-                  alphaParticles={false}
-                  disableRotation={false}
-                />
-              </>
-            )}
-          </div>
-          
-          <div className="container mx-auto py-20 px-4 relative z-10">
-            <Card className="max-w-2xl mx-auto bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-2xl">
-              <CardHeader className="text-center">
-                <div className="mx-auto w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center mb-4">
-                  <BarChart3 className="w-8 h-8 text-accent" />
-                </div>
-                <CardTitle className="text-2xl">No Analytics Data Yet</CardTitle>
-                <CardDescription className="text-base">
-                  Start using SmartStyle to build your personalized style insights!
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6 text-center">
-                <div className="space-y-3 text-muted-foreground">
-                  <p className="flex items-center justify-center gap-2">
-                    <Sparkles className="w-4 h-4" />
-                    Upload your photos and get AI recommendations
-                  </p>
-                  <p className="flex items-center justify-center gap-2">
-                    <Heart className="w-4 h-4" />
-                    Like outfits that match your style
-                  </p>
-                  <p className="flex items-center justify-center gap-2">
-                    <TrendingUp className="w-4 h-4" />
-                    Watch your style profile evolve over time
-                  </p>
-                </div>
-                <Button asChild size="lg" className="mt-4">
-                  <Link href="/style-check">
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    Get Started
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
-      </ProtectedRoute>
-    );
-  }
-
-  const accuracyScore = preferences.accuracyScore || 0;
-  const totalSelections = preferences.totalSelections || 0;
 
   return (
     <ProtectedRoute>
-      <main className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8 pb-24">
-        {/* Particles Background - Fixed Position covering entire page */}
-        <div className="fixed inset-0 -z-10">
-          {isMounted && (
-            <>
-              {/* SplashCursor removed for analytics page */}
-              <Particles
-                className="absolute inset-0"
-                particleColors={['#8B5CF6', '#A78BFA', '#C4B5FD']}
-                particleCount={500}
-                particleSpread={10}
-                speed={0.3}
-                particleBaseSize={150}
-                moveParticlesOnHover={true}
-                alphaParticles={false}
-                disableRotation={false}
-              />
-            </>
-          )}
-        </div>
-
-        <div className="container mx-auto max-w-7xl relative z-10">
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="visible"
-            className="space-y-8 pb-8"
-          >
-            {/* Header */}
-            <motion.div variants={itemVariants}>
-              <div className="text-center mb-8">
-                {isMounted && (
-                  <div className="mb-4">
-                    <TextPressure
-                      text="Style Analytics"
-                      stroke={true}
-                      width={false}
-                      weight={true}
-                      textColor="#C4B5FD"
-                      strokeColor="#5B21B6"
-                      minFontSize={48}
-                    />
-                  </div>
-                )}
-                <ShinyText
-                  className="text-lg text-muted-foreground max-w-2xl mx-auto"
-                  text="Your personalized fashion insights and style evolution"
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 relative overflow-hidden">
+        {/* Particles Background */}
+        {isMounted && (
+          <div className="absolute inset-0 opacity-40 pointer-events-none">
+            <Particles
+              className="absolute inset-0"
+              particleColors={['#7B68EE', '#00FFFF']}
+              particleCount={500}
+              particleSpread={10}
+              speed={0.3}
+              particleBaseSize={150}
+              moveParticlesOnHover={true}
+              alphaParticles={false}
+              disableRotation={false}
+            />
+          </div>
+        )}
+        
+        <div className="relative z-10 container mx-auto px-4 py-12">
+          {/* Header */}
+          <header className="text-center mb-16">
+            <div style={{ 
+              position: 'relative', 
+              height: '350px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center',
+              paddingTop: '90px', 
+              paddingBottom: '90px',
+              paddingLeft: '40px',
+              paddingRight: '40px'
+            }}>
+              {isMounted && (
+                <TextPressure
+                  text="Style-Analytics"
+                  stroke={true}
+                  width={false}
+                  weight={true}
+                  textColor="#C4B5FD"
+                  strokeColor="#5B21B6"
+                  minFontSize={32}
                 />
-                
-                <Button 
-                  onClick={loadAnalytics}
-                  variant="outline"
-                  size="sm"
-                  className="mt-6 gap-2"
-                >
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width="16" 
-                    height="16" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round"
-                  >
-                    <path d="M21 2v6h-6" />
-                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
-                    <path d="M3 22v-6h6" />
-                    <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
-                  </svg>
-                  Refresh
-                </Button>
+              )}
+            </div>
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto mt-4">
+              Track your fashion journey and discover your style patterns through personalized insights
+            </p>
+          </header>
+
+          {error && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4 }}
+            >
+              <Alert variant="destructive" className="mb-6 max-w-4xl mx-auto">
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            </motion.div>
+          )}
+
+          {loading ? (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 max-w-7xl mx-auto">
+              {[...Array(6)].map((_, i) => (
+                <Card key={i} className="bg-card/60 backdrop-blur-xl border border-border/20">
+                  <CardHeader>
+                    <Skeleton className="h-6 w-32" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-64 w-full" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <motion.div
+              variants={containerVariants}
+              initial="hidden"
+              animate="visible"
+              className="space-y-6 max-w-7xl mx-auto"
+            >
+              {/* Stats Overview */}
+              <motion.div variants={itemVariants} className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                <Card className="bg-gradient-to-br from-violet-500/10 to-violet-500/5 border-violet-500/20 backdrop-blur-xl">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Total Recommendations</CardTitle>
+                    <Sparkles className="h-4 w-4 text-violet-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold">{insights?.totalRecommendations || 0}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Outfits generated</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-pink-500/10 to-pink-500/5 border-pink-500/20 backdrop-blur-xl">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Liked Outfits</CardTitle>
+                    <Heart className="h-4 w-4 text-pink-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold">{insights?.totalLiked || 0}</div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {insights ? insights.likeRate.toFixed(0) : '0'}% like rate
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 border-blue-500/20 backdrop-blur-xl">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Feedback Given</CardTitle>
+                    <Star className="h-4 w-4 text-blue-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold">{insights?.totalFeedback || 0}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Ratings provided</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-emerald-500/10 to-emerald-500/5 border-emerald-500/20 backdrop-blur-xl">
+                  <CardHeader className="flex flex-row items-center justify-between pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">Active Period</CardTitle>
+                    <Activity className="h-4 w-4 text-emerald-500" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold">{insights?.mostActiveMonth || 'N/A'}</div>
+                    <p className="text-xs text-muted-foreground mt-1">Most active</p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              {/* Charts Grid */}
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* Top Colors */}
+                <motion.div variants={itemVariants}>
+                  <Card className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg">
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <Palette className="h-5 w-5 text-primary" />
+                        <CardTitle>Favorite Colors</CardTitle>
+                      </div>
+                      <CardDescription>Colors from your liked outfits</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {insights && insights.topColors.length > 0 ? (
+                        <SimpleBarChart data={insights.topColors.map(c => ({
+                          name: c.color,
+                          count: c.count,
+                          hex: c.hex
+                        }))} />
+                      ) : (
+                        <p className="text-muted-foreground text-center py-12">No data yet. Start liking recommendations!</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {/* Top Occasions */}
+                <motion.div variants={itemVariants}>
+                  <Card className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg">
+                    <CardHeader>
+                      <div className="flex items-center gap-2">
+                        <Award className="h-5 w-5 text-primary" />
+                        <CardTitle>Top Occasions</CardTitle>
+                      </div>
+                      <CardDescription>Events from your liked outfits</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {insights && insights.topOccasions.length > 0 ? (
+                        <SimpleBarChart data={insights.topOccasions.map(o => ({
+                          name: o.occasion,
+                          count: o.count
+                        }))} />
+                      ) : (
+                        <p className="text-muted-foreground text-center py-12">No data yet. Start liking recommendations!</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {/* Top Styles/Genres */}
+                {insights && insights.topStyles.length > 0 && (
+                  <motion.div variants={itemVariants}>
+                    <Card className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg">
+                      <CardHeader>
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-5 w-5 text-primary" />
+                          <CardTitle>Favorite Styles</CardTitle>
+                        </div>
+                        <CardDescription>Style genres from your liked outfits</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <SimpleBarChart data={insights.topStyles.map(s => ({
+                          name: s.style,
+                          count: s.count
+                        }))} />
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+
+                {/* Seasonal Distribution */}
+                {insights && insights.seasonalDistribution.length > 0 && (
+                  <motion.div variants={itemVariants} className={insights.topStyles.length > 0 ? '' : 'md:col-span-2'}>
+                    <Card className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg">
+                      <CardHeader>
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="h-5 w-5 text-primary" />
+                          <CardTitle>Seasonal Preferences</CardTitle>
+                        </div>
+                        <CardDescription>When you look for style advice</CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex justify-center">
+                        <SimplePieChart 
+                          data={insights.seasonalDistribution.map((s, i) => ({
+                            name: s.season,
+                            value: s.count,
+                            color: ['#8B5CF6', '#EC4899', '#3B82F6', '#10B981'][i % 4]
+                          }))}
+                        />
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Call to Action */}
+              <motion.div variants={itemVariants}>
+                <Card className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg">
+                  <CardContent className="py-8 text-center">
+                    <h3 className="text-2xl font-bold mb-2">Ready for More Style Insights?</h3>
+                    <p className="text-muted-foreground mb-6">Get personalized recommendations to discover your perfect style</p>
+                    <div className="flex gap-4 justify-center flex-wrap">
+                      <Link href="/style-check">
+                        <Button size="lg" className="gap-2">
+                          <Sparkles className="h-5 w-5" />
+                          Get Style Advice
+                        </Button>
+                      </Link>
+                      <Link href="/likes">
+                        <Button size="lg" variant="outline" className="gap-2">
+                          <Heart className="h-5 w-5" />
+                          View Liked Outfits
+                        </Button>
+                      </Link>
+                      <Button size="lg" variant="ghost" onClick={loadAnalytics} className="gap-2">
+                        <RefreshCw className="h-5 w-5" />
+                        Refresh Data
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </motion.div>
+          )}
+
+          {/* Empty State */}
+          {!loading && insights && insights.totalRecommendations === 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4 }}
+              className="text-center max-w-2xl mx-auto"
+            >
+              <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-16">
+                <BarChart3 className="w-20 h-20 text-muted-foreground/40 mx-auto mb-6" />
+                <h3 className="text-2xl font-bold mb-3">No Analytics Data Yet</h3>
+                <p className="text-muted-foreground mb-8 text-lg">
+                  Start your style journey by getting personalized outfit recommendations. 
+                  Your analytics will appear here as you explore different styles!
+                </p>
+                <Link href="/style-check">
+                  <Button size="lg" className="gap-2">
+                    <Sparkles className="h-5 w-5" />
+                    Get Your First Recommendation
+                  </Button>
+                </Link>
               </div>
             </motion.div>
-
-            {/* Key Metrics - 3 Cards */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
-              {/* Total Recommendations */}
-              <Card className="bg-gradient-to-br from-violet-500/10 to-purple-500/10 border-violet-500/20 backdrop-blur-xl">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <BarChart3 className="w-8 h-8 text-violet-500" />
-                    <Badge variant="secondary" className="bg-violet-500/10 text-violet-400 border-violet-500/20">
-                      Total
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-foreground">
-                    {insights?.totalRecommendations || 0}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Recommendations
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Liked Outfits */}
-              <Card className="bg-gradient-to-br from-pink-500/10 to-rose-500/10 border-pink-500/20 backdrop-blur-xl">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <Heart className="w-8 h-8 text-pink-500" />
-                    <Badge variant="secondary" className="bg-pink-500/10 text-pink-400 border-pink-500/20">
-                      Saved
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-foreground">
-                    {insights?.totalLiked || 0}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Liked Outfits
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Accuracy Score */}
-              <Card className="bg-gradient-to-br from-emerald-500/10 to-green-500/10 border-emerald-500/20 backdrop-blur-xl">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <Award className="w-8 h-8 text-emerald-500" />
-                    <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
-                      Score
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-foreground">
-                    {accuracyScore}%
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Match Rate
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Main Content Grid */}
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Color Preferences - Bar Chart */}
-              <motion.div variants={itemVariants}>
-                <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg h-full">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Palette className="w-5 h-5 text-accent" />
-                      Color Preferences
-                    </CardTitle>
-                    <CardDescription>
-                      Your most loved colors
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {insights && insights.topColors.length > 0 ? (
-                      <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <BarChart 
-                            data={insights.topColors.map(c => ({ 
-                              name: c.color.charAt(0).toUpperCase() + c.color.slice(1), 
-                              count: c.count,
-                              fill: c.hex
-                            }))}
-                            margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-                          >
-                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
-                            <XAxis 
-                              dataKey="name" 
-                              stroke="hsl(var(--muted-foreground))"
-                              fontSize={12}
-                              angle={-15}
-                              textAnchor="end"
-                              height={60}
-                            />
-                            <YAxis 
-                              stroke="hsl(var(--muted-foreground))"
-                              fontSize={12}
-                            />
-                            <Tooltip 
-                              content={<CustomTooltip />} 
-                              cursor={{ fill: 'hsl(var(--accent) / 0.1)' }}
-                            />
-                            <Bar 
-                              dataKey="count" 
-                              name="Outfits"
-                              radius={[8, 8, 0, 0]}
-                              animationDuration={1000}
-                              animationBegin={0}
-                            >
-                              {insights.topColors.map((entry, index) => (
-                                <Cell 
-                                  key={`cell-${index}`} 
-                                  fill={entry.hex}
-                                  className="transition-opacity hover:opacity-80"
-                                />
-                              ))}
-                            </Bar>
-                          </BarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-sm text-center py-20">
-                        No color preferences yet. Start liking outfits to build your palette!
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              {/* Style Preferences - Radar Chart */}
-              <motion.div variants={itemVariants}>
-                <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg h-full">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Star className="w-5 h-5 text-accent" />
-                      Style Profile
-                    </CardTitle>
-                    <CardDescription>
-                      Your fashion style breakdown
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {insights && insights.topStyles.length > 0 ? (
-                      <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <RadarChart 
-                            data={insights.topStyles.map(s => ({ 
-                              style: s.style.charAt(0).toUpperCase() + s.style.slice(1), 
-                              count: s.count 
-                            }))}
-                            margin={{ top: 20, right: 30, bottom: 20, left: 30 }}
-                          >
-                            <PolarGrid 
-                              stroke="hsl(var(--border))" 
-                              opacity={0.3}
-                              strokeDasharray="3 3"
-                            />
-                            <PolarAngleAxis 
-                              dataKey="style" 
-                              stroke="hsl(var(--muted-foreground))"
-                              fontSize={12}
-                              fontWeight={500}
-                            />
-                            <PolarRadiusAxis 
-                              stroke="hsl(var(--muted-foreground))"
-                              fontSize={10}
-                              angle={90}
-                            />
-                            <Tooltip 
-                              content={<CustomTooltip />}
-                            />
-                            <Radar 
-                              name="Outfits" 
-                              dataKey="count" 
-                              stroke={CHART_COLORS.violet[0]}
-                              fill={CHART_COLORS.violet[1]}
-                              fillOpacity={0.6}
-                              animationDuration={1000}
-                              animationBegin={200}
-                              dot={{ fill: CHART_COLORS.violet[0], r: 4 }}
-                              activeDot={{ r: 6, fill: CHART_COLORS.violet[0] }}
-                            />
-                          </RadarChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-sm text-center py-20">
-                        No style preferences yet. Explore different styles to find your favorites!
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              {/* Occasion Breakdown - Pie Chart */}
-              <motion.div variants={itemVariants}>
-                <Card className="bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg h-full">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <Award className="w-5 h-5 text-accent" />
-                      Occasion Breakdown
-                    </CardTitle>
-                    <CardDescription>
-                      Your style occasions distribution
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {insights && insights.topOccasions.length > 0 ? (
-                      <div className="h-80">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <PieChart>
-                            <Pie
-                              data={insights.topOccasions.map((o, idx) => ({ 
-                                name: o.occasion.charAt(0).toUpperCase() + o.occasion.slice(1), 
-                                value: o.count,
-                                fill: CHART_COLORS.pink[idx % CHART_COLORS.pink.length]
-                              }))}
-                              cx="50%"
-                              cy="50%"
-                              labelLine={true}
-                              label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                              outerRadius={100}
-                              innerRadius={40}
-                              dataKey="value"
-                              animationDuration={1000}
-                              animationBegin={400}
-                              paddingAngle={2}
-                            >
-                              {insights.topOccasions.map((_, index) => (
-                                <Cell 
-                                  key={`cell-${index}`} 
-                                  fill={CHART_COLORS.pink[index % CHART_COLORS.pink.length]}
-                                  className="transition-opacity hover:opacity-80"
-                                />
-                              ))}
-                            </Pie>
-                            <Tooltip content={<CustomTooltip />} />
-                          </PieChart>
-                        </ResponsiveContainer>
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground text-sm text-center py-20">
-                        No occasion data yet. Get recommendations for different events!
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-            </div>
-
-            {/* Quick Actions */}
-            <motion.div variants={itemVariants}>
-              <Card className="bg-gradient-to-r from-violet-500/10 via-purple-500/10 to-fuchsia-500/10 border-violet-500/20 backdrop-blur-xl">
-                <CardContent className="py-6">
-                  <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-accent/20 flex items-center justify-center">
-                        <Sparkles className="w-6 h-6 text-accent" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-lg">Ready for more style insights?</h3>
-                        <p className="text-sm text-muted-foreground">
-                          Continue building your personalized fashion profile
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex gap-3">
-                      <Button asChild variant="outline">
-                        <Link href="/likes">
-                          <Heart className="w-4 h-4 mr-2" />
-                          View Likes
-                        </Link>
-                      </Button>
-                      <Button asChild>
-                        <Link href="/style-check">
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          New Analysis
-                        </Link>
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          </motion.div>
+          )}
         </div>
-      </main>
+      </div>
     </ProtectedRoute>
   );
 }

@@ -126,8 +126,10 @@ export async function createInteractionSession(
     });
 
     logger.log('✅ [Interaction Tracker] Session created:', sessionId);
-  } catch (error) {
-    logger.error('❌ [Interaction Tracker] Failed to create session:', error);
+  } catch (error: any) {
+    if (error?.code !== 'permission-denied') {
+      logger.error('❌ [Interaction Tracker] Failed to create session:', error);
+    }
   }
 }
 
@@ -152,7 +154,9 @@ export async function trackAction(
 
     logger.log(`✅ [Interaction Tracker] Action tracked: ${action.type} at ${action.timestamp.toISOString()}`);
   } catch (error) {
-    logger.error('❌ [Interaction Tracker] Failed to track action:', error);
+    if ((error as any)?.code !== 'permission-denied') {
+      logger.error('❌ [Interaction Tracker] Failed to track action:', error);
+    }
   }
 }
 
@@ -174,7 +178,9 @@ export async function updateSessionOutcome(
 
     logger.log(`✅ [Interaction Tracker] Outcome updated: ${outcome.outcome}`);
   } catch (error) {
-    logger.error('❌ [Interaction Tracker] Failed to update outcome:', error);
+    if ((error as any)?.code !== 'permission-denied') {
+      logger.error('❌ [Interaction Tracker] Failed to update outcome:', error);
+    }
   }
 }
 
@@ -535,7 +541,9 @@ export async function batchUpdateSession(
 
     logger.log('✅ [Interaction Tracker] Batch update completed');
   } catch (error) {
-    logger.error('❌ [Interaction Tracker] Batch update failed:', error);
+    if ((error as any)?.code !== 'permission-denied') {
+      logger.error('❌ [Interaction Tracker] Batch update failed:', error);
+    }
   }
 }
 

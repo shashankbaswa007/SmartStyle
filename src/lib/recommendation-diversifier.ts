@@ -381,6 +381,31 @@ export function applyDiversificationRule(
   // Sort by match score (highest first)
   const sorted = [...outfitMatches].sort((a, b) => b.matchScore - a.matchScore);
 
+  // Check if all scores are identical or very close (no meaningful personalization)
+  const scoreRange = sorted[0].matchScore - sorted[sorted.length - 1].matchScore;
+  
+  if (scoreRange <= 5) {
+    // All scores essentially identical - user has no preferences yet
+    logger.log('ℹ️ All outfits have similar/identical scores (no personalization data).');
+    logger.log(`   Score range: ${sorted[0].matchScore} to ${sorted[sorted.length - 1].matchScore}`);
+    logger.log('   Assigning variety categories for display purposes.');
+    
+    // Return outfits with sequential categories for UX variety
+    // AI already generated diverse outfits, we just label them differently
+    const diversified = sorted.map((match, index) => ({
+      ...match,
+      matchCategory: (index === 0 ? 'perfect' : index === 1 ? 'great' : 'exploring') as 'perfect' | 'great' | 'exploring',
+    }));
+
+    logger.log('🎯 Diversification applied:', {
+      position1: diversified[0].matchScore,
+      position2: diversified[1].matchScore,
+      position3: diversified[2].matchScore,
+    });
+
+    return diversified;
+  }
+
   // Categorize outfits
   const perfectMatches = sorted.filter(m => m.matchScore >= 90);
   const greatMatches = sorted.filter(m => m.matchScore >= 70 && m.matchScore < 90);
@@ -467,8 +492,10 @@ export async function getAntiRepetitionCache(userId: string): Promise<AntiRepeti
     });
 
     return emptyCache;
-  } catch (error) {
-    logger.error('❌ Error getting anti-repetition cache:', error);
+  } catch (error: any) {
+    if (error?.code !== 'permission-denied') {
+      logger.error('❌ Error getting anti-repetition cache:', error);
+    }
     return {
       userId,
       recentColorCombos: [],
@@ -535,8 +562,10 @@ export async function addToAntiRepetitionCache(
     });
 
     logger.log('✅ Added to anti-repetition cache');
-  } catch (error) {
-    logger.error('❌ Error adding to anti-repetition cache:', error);
+  } catch (error: any) {
+    if (error?.code !== 'permission-denied') {
+      logger.error('❌ Error adding to anti-repetition cache:', error);
+    }
   }
 }
 

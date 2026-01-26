@@ -220,8 +220,9 @@ function buildStrategySection(confidence: number, interactions: number): string 
     section += `User has clear, established taste - respect it.\n\n`;
     
     section += `**MANDATORY REQUIREMENTS:**\n`;
-    section += `- ALL 3 recommendations MUST prominently feature user's top 3 favorite colors\n`;
-    section += `- ALL 3 recommendations MUST match user's preferred style category\n`;
+    section += `- AT LEAST 2 of 3 recommendations should prominently feature user's top 3 favorite colors\n`;
+    section += `- AT LEAST 2 of 3 recommendations should match user's preferred style category\n`;
+    section += `- IMPORTANT: Still ensure 3 DIFFERENT outfits with unique color combinations and variations\n`;
     section += `- Use proven color combinations when applicable\n`;
     section += `- Stay within user's comfortable price range\n\n`;
     
@@ -237,7 +238,7 @@ function buildStrategySection(confidence: number, interactions: number): string 
     section += `Balance personalization with controlled exploration.\n\n`;
     
     section += `**MANDATORY REQUIREMENTS:**\n`;
-    section += `- At least 2 of 3 recommendations MUST prominently feature user's top 3 favorite colors\n`;
+    section += `- At least 2 of 3 recommendations should feature user's favorite colors (but vary the combinations)\n`;
     section += `- ABSOLUTELY NEVER use any colors from the disliked list\n`;
     section += `- Match user's preferred style category for this occasion\n`;
     section += `- Consider user's proven color combinations\n\n`;

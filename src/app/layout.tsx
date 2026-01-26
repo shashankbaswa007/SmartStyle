@@ -32,7 +32,9 @@ export const metadata: Metadata = {
     title: 'SmartStyle',
   },
   icons: {
-    icon: '/favicon.ico',
+    icon: [
+      { url: '/icon', type: 'image/png', sizes: '32x32' },
+    ],
     apple: [
       { url: '/icons/icon-152x152.png', sizes: '152x152', type: 'image/png' },
       { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
@@ -92,7 +94,7 @@ export default function RootLayout({
           <AuthProvider>
             <ServiceWorkerRegister />
             <Header />
-            <main className="pt-16">
+            <main className="pt-16 page-enter-animation">
               {children}
             </main>
             <Toaster />

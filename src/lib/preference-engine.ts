@@ -18,6 +18,7 @@ import {
   limit as firestoreLimit,
   Timestamp,
   updateDoc,
+  setDoc,
   increment,
   arrayUnion,
   serverTimestamp,
@@ -264,8 +265,11 @@ export async function analyzeColorPreferences(userId: string): Promise<ColorPref
       temperaturePreference,
       confidence,
     };
-  } catch (error) {
-    logger.error('❌ [Preference Engine] Color analysis failed:', error);
+  } catch (error: any) {
+    // Suppress expected permission errors during development/setup
+    if (error?.code !== 'permission-denied') {
+      logger.error('❌ [Preference Engine] Color analysis failed:', error);
+    }
     return getDefaultColorPreferences();
   }
 }
@@ -437,8 +441,10 @@ export async function analyzeStylePreferences(userId: string): Promise<StylePref
       styleConsistency,
       confidence,
     };
-  } catch (error) {
-    logger.error('❌ [Preference Engine] Style analysis failed:', error);
+  } catch (error: any) {
+    if (error?.code !== 'permission-denied') {
+      logger.error('❌ [Preference Engine] Style analysis failed:', error);
+    }
     return getDefaultStylePreferences();
   }
 }
@@ -510,7 +516,9 @@ export async function analyzeSeasonalPreferences(userId: string): Promise<Season
       confidence,
     };
   } catch (error) {
-    logger.error('❌ [Preference Engine] Seasonal analysis failed:', error);
+    if ((error as any)?.code !== 'permission-denied') {
+      logger.error('❌ [Preference Engine] Seasonal analysis failed:', error);
+    }
     return getDefaultSeasonalPreferences();
   }
 }
@@ -828,32 +836,41 @@ function extractColors(outfit: {
 }): string[] {
   const colors: string[] = [];
   
-  // Primary source: colorPalette
-  if (outfit.colorPalette && Array.isArray(outfit.colorPalette)) {
-    colors.push(...outfit.colorPalette);
+  // Primary source: colorPalette (most reliable)
+  if (outfit.colorPalette && Array.isArray(outfit.colorPalette) && outfit.colorPalette.length > 0) {
+    colors.push(...outfit.colorPalette.filter(c => c && typeof c === 'string'));
   }
   
   // Fallback: colors field
-  if (outfit.colors && Array.isArray(outfit.colors)) {
-    colors.push(...outfit.colors);
+  if (outfit.colors && Array.isArray(outfit.colors) && outfit.colors.length > 0) {
+    colors.push(...outfit.colors.filter(c => c && typeof c === 'string'));
   }
   
   // Extract color names from items (e.g., "navy blue shirt" -> "navy blue")
   if (outfit.items && Array.isArray(outfit.items)) {
     const colorKeywords = ['black', 'white', 'red', 'blue', 'green', 'yellow', 'orange', 'purple', 'pink', 'brown', 
-                           'navy', 'gray', 'grey', 'beige', 'khaki', 'olive', 'maroon', 'burgundy', 'cream', 'ivory'];
+                           'navy', 'gray', 'grey', 'beige', 'khaki', 'olive', 'maroon', 'burgundy', 'cream', 'ivory',
+                           'tan', 'charcoal', 'teal', 'crimson', 'indigo'];
     
     outfit.items.forEach(item => {
-      const itemLower = item.toLowerCase();
-      colorKeywords.forEach(color => {
-        if (itemLower.includes(color)) {
-          colors.push(color);
-        }
-      });
+      if (typeof item === 'string') {
+        const itemLower = item.toLowerCase();
+        colorKeywords.forEach(color => {
+          if (itemLower.includes(color)) {
+            colors.push(color);
+          }
+        });
+      }
     });
   }
   
-  return [...new Set(colors)]; // Remove duplicates
+  const uniqueColors = [...new Set(colors.filter(c => c && c.trim()))];
+  
+  if (uniqueColors.length === 0) {
+    logger.warn('⚠️ No colors extracted from outfit. Outfit data may be incomplete.');
+  }
+  
+  return uniqueColors; // Remove duplicates and empty strings
 }
 
 /**
@@ -867,12 +884,19 @@ function extractStyles(outfit: {
 }): string[] {
   const styles: string[] = [];
   
-  if (outfit.styleType) styles.push(outfit.styleType.toLowerCase());
-  if (outfit.style) styles.push(outfit.style.toLowerCase());
+  if (outfit.styleType && typeof outfit.styleType === 'string') {
+    styles.push(outfit.styleType.toLowerCase().trim());
+  }
+  if (outfit.style && typeof outfit.style === 'string') {
+    styles.push(outfit.style.toLowerCase().trim());
+  }
   
   // Extract style keywords from description
-  const styleKeywords = ['casual', 'formal', 'business', 'smart', 'elegant', 'bohemian', 'minimalist', 
-                         'streetwear', 'vintage', 'modern', 'classic', 'trendy', 'chic', 'sporty'];
+  const styleKeywords = [
+    'casual', 'formal', 'business', 'smart', 'elegant', 'bohemian', 'minimalist', 
+    'streetwear', 'vintage', 'modern', 'classic', 'trendy', 'chic', 'sporty', 'athletic',
+    'preppy', 'edgy', 'romantic', 'artistic', 'professional', 'relaxed', 'sophisticated'
+  ];
   
   const description = (outfit.description || '').toLowerCase();
   styleKeywords.forEach(keyword => {
@@ -881,7 +905,13 @@ function extractStyles(outfit: {
     }
   });
   
-  return [...new Set(styles)];
+  const uniqueStyles = [...new Set(styles.filter(s => s && s.trim()))];
+  
+  if (uniqueStyles.length === 0) {
+    logger.warn('⚠️ No styles extracted from outfit. Outfit data may be incomplete.');
+  }
+  
+  return uniqueStyles;
 }
 
 /**
@@ -911,18 +941,44 @@ export async function updatePreferencesFromLike(
     }
 
     const prefsRef = doc(db, 'userPreferences', userId);
-    const prefsDoc = await getDoc(prefsRef);
+    let prefsDoc = await getDoc(prefsRef);
     
+    // AUTO-INITIALIZE if preferences don't exist (NEW USER or first interaction)
     if (!prefsDoc.exists()) {
-      return { success: false, message: 'User preferences not found' };
+      logger.log(`🆕 User preferences not found. Initializing for first-time like: ${userId}`);
+      
+      const initialPrefs = {
+        userId,
+        colorWeights: {},
+        styleWeights: {},
+        provenCombinations: [],
+        occasionPreferences: {},
+        seasonalPreferences: { summer: '', winter: '', monsoon: '' }, // Strings instead of arrays
+        totalRecommendations: 0,
+        totalLikes: 1,  // Starting with 1 since they're liking now
+        totalWears: 0,
+        totalSelections: 1,
+        accuracyScore: 50,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      
+      await setDoc(prefsRef, initialPrefs);
+      logger.log(`✅ Initial preferences created for ${userId}`);
+      
+      // Re-fetch to continue with update
+      prefsDoc = await getDoc(prefsRef);
+      if (!prefsDoc.exists()) {
+        throw new Error('Failed to initialize user preferences');
+      }
     }
 
-    const currentPrefs = prefsDoc.data();
+    const currentPrefs = prefsDoc.data()!; // Safe because we checked exists() above
     const colorWeights = currentPrefs.colorWeights || {};
     const styleWeights = currentPrefs.styleWeights || {};
     const provenCombinations = currentPrefs.provenCombinations || [];
     const occasionPreferences = currentPrefs.occasionPreferences || {};
-    const seasonalPreferences = currentPrefs.seasonalPreferences || { summer: [], winter: [], monsoon: [] };
+    const seasonalPreferences = currentPrefs.seasonalPreferences || { summer: '', winter: '', monsoon: '' };
 
     // Extract colors and increment weights by +2
     const colors = extractColors(outfit);
@@ -942,49 +998,78 @@ export async function updatePreferencesFromLike(
     if (colors.length >= 2) {
       const combo = colors.slice(0, 3).sort(); // Top 3 colors, sorted for consistency
       const comboString = combo.join(',');
-      if (!provenCombinations.some((c: string[]) => c.join(',') === comboString)) {
-        provenCombinations.push(combo);
+      if (!provenCombinations.some((c: string) => c === comboString)) {
+        provenCombinations.push(comboString);
       }
     }
 
     // Update occasion-specific preferences
+    // Store as comma-separated strings to avoid nested arrays
     if (context.occasion) {
       const occasion = context.occasion.toLowerCase();
       if (!occasionPreferences[occasion]) {
-        occasionPreferences[occasion] = { preferredItems: [], preferredColors: [], notes: '' };
+        occasionPreferences[occasion] = { 
+          preferredItems: '', 
+          preferredColors: '', 
+          notes: '' 
+        };
       }
       
-      // Add colors to occasion preferences
+      // Add colors to occasion preferences as comma-separated string
+      const existingColors = occasionPreferences[occasion].preferredColors 
+        ? occasionPreferences[occasion].preferredColors.split(',').filter((c: string) => c.trim()) 
+        : [];
       colors.forEach(color => {
         const normalizedColor = color.toLowerCase().trim();
-        if (!occasionPreferences[occasion].preferredColors.includes(normalizedColor)) {
-          occasionPreferences[occasion].preferredColors.push(normalizedColor);
+        if (!existingColors.includes(normalizedColor)) {
+          existingColors.push(normalizedColor);
         }
       });
+      occasionPreferences[occasion].preferredColors = existingColors.join(',');
       
-      // Add items to occasion preferences
-      if (outfit.items) {
+      // Add items to occasion preferences as comma-separated string
+      if (outfit.items && outfit.items.length > 0) {
+        const existingItems = occasionPreferences[occasion].preferredItems 
+          ? occasionPreferences[occasion].preferredItems.split(',').filter((i: string) => i.trim()) 
+          : [];
         outfit.items.forEach(item => {
-          if (!occasionPreferences[occasion].preferredItems.includes(item)) {
-            occasionPreferences[occasion].preferredItems.push(item);
+          const normalizedItem = item.toLowerCase().trim();
+          if (!existingItems.includes(normalizedItem)) {
+            existingItems.push(normalizedItem);
           }
         });
+        occasionPreferences[occasion].preferredItems = existingItems.join(',');
       }
     }
 
     // Update seasonal preferences
+    // Store as comma-separated string to avoid nested arrays
     if (context.season) {
       const season = context.season;
       if (!seasonalPreferences[season]) {
-        seasonalPreferences[season] = [];
+        seasonalPreferences[season] = '';
+      }
+      
+      // MIGRATION: Handle both old (array) and new (string) formats
+      let existingColors: string[] = [];
+      if (seasonalPreferences[season]) {
+        if (Array.isArray(seasonalPreferences[season])) {
+          // Old format: array - convert to string format
+          existingColors = seasonalPreferences[season].filter((c: string) => c && c.trim());
+          logger.log(`🔄 Migrating seasonalPreferences[${season}] from array to string format`);
+        } else if (typeof seasonalPreferences[season] === 'string') {
+          // New format: string - parse it
+          existingColors = seasonalPreferences[season].split(',').filter((c: string) => c.trim());
+        }
       }
       
       colors.forEach(color => {
         const normalizedColor = color.toLowerCase().trim();
-        if (!seasonalPreferences[season].includes(normalizedColor)) {
-          seasonalPreferences[season].push(normalizedColor);
+        if (!existingColors.includes(normalizedColor)) {
+          existingColors.push(normalizedColor);
         }
       });
+      seasonalPreferences[season] = existingColors.join(',');
     }
 
     // Recalculate accuracy score
@@ -992,6 +1077,15 @@ export async function updatePreferencesFromLike(
     const totalDislikes = currentPrefs.totalDislikes || 0;
     const totalRecommendations = currentPrefs.totalRecommendations || 1;
     const accuracyScore = Math.min(100, Math.round(((totalLikes - totalDislikes) / totalRecommendations) * 100));
+
+    // Validate data structure before update (prevent nested arrays)
+    const isValidProvenCombinations = Array.isArray(provenCombinations) && 
+      provenCombinations.every(item => typeof item === 'string');
+    
+    if (!isValidProvenCombinations) {
+      logger.error('❌ Invalid provenCombinations structure detected, resetting to empty array');
+      provenCombinations.length = 0;
+    }
 
     // Update Firestore with atomic operations
     await updateDoc(prefsRef, {
@@ -1041,18 +1135,45 @@ export async function updatePreferencesFromWear(
     }
 
     const prefsRef = doc(db, 'userPreferences', userId);
-    const prefsDoc = await getDoc(prefsRef);
+    let prefsDoc = await getDoc(prefsRef);
     
+    // AUTO-INITIALIZE if preferences don't exist (NEW USER or first interaction)
     if (!prefsDoc.exists()) {
-      return { success: false, message: 'User preferences not found' };
+      logger.log(`🆕 User preferences not found. Initializing for first-time wear: ${userId}`);
+      
+      // Create initial preferences document
+      const initialPrefs = {
+        userId,
+        colorWeights: {},
+        styleWeights: {},
+        provenCombinations: [],
+        occasionPreferences: {},
+        seasonalPreferences: { summer: '', winter: '', monsoon: '' }, // Strings instead of arrays
+        totalRecommendations: 0,
+        totalLikes: 0,
+        totalWears: 1,  // Starting with 1 since they're wearing now
+        totalSelections: 1,
+        accuracyScore: 50,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+      
+      await setDoc(prefsRef, initialPrefs);
+      logger.log(`✅ Initial preferences created for ${userId}`);
+      
+      // Re-fetch to continue with update
+      prefsDoc = await getDoc(prefsRef);
+      if (!prefsDoc.exists()) {
+        throw new Error('Failed to initialize user preferences');
+      }
     }
 
-    const currentPrefs = prefsDoc.data();
+    const currentPrefs = prefsDoc.data()!; // Safe because we checked exists() above
     const colorWeights = currentPrefs.colorWeights || {};
     const styleWeights = currentPrefs.styleWeights || {};
     const provenCombinations = currentPrefs.provenCombinations || [];
     const occasionPreferences = currentPrefs.occasionPreferences || {};
-    const seasonalPreferences = currentPrefs.seasonalPreferences || { summer: [], winter: [], monsoon: [] };
+    const seasonalPreferences = currentPrefs.seasonalPreferences || { summer: '', winter: '', monsoon: '' };
 
     // Extract colors and increment weights by +5 (WORE is strongest signal!)
     const colors = extractColors(outfit);
@@ -1069,56 +1190,101 @@ export async function updatePreferencesFromWear(
     });
 
     // Add color combination to proven combos (with higher priority)
+    // Store as comma-separated strings to avoid Firestore nested arrays issue
     if (colors.length >= 2) {
       const combo = colors.slice(0, 3).sort();
-      const comboString = combo.join(',');
+      const comboString = combo.join(',').toLowerCase();
       // Remove if exists and add to front (most recent wear)
-      const filteredCombos = provenCombinations.filter((c: string[]) => c.join(',') !== comboString);
-      provenCombinations.unshift(combo);
+      const filteredCombos = provenCombinations.filter((c: string) => c !== comboString);
+      filteredCombos.unshift(comboString);
+      provenCombinations.length = 0;
+      provenCombinations.push(...filteredCombos.slice(0, 20)); // Keep only top 20
     }
 
     // Update occasion-specific preferences (wore = strong signal)
+    // Store as comma-separated strings to avoid nested arrays
     if (context.occasion) {
       const occasion = context.occasion.toLowerCase();
       if (!occasionPreferences[occasion]) {
-        occasionPreferences[occasion] = { preferredItems: [], preferredColors: [], notes: 'Worn outfit' };
+        occasionPreferences[occasion] = { 
+          preferredItems: '', 
+          preferredColors: '', 
+          notes: 'Worn outfit' 
+        };
       }
       
+      // Add colors to front (most recent)
+      const existingColors = occasionPreferences[occasion].preferredColors 
+        ? occasionPreferences[occasion].preferredColors.split(',').filter((c: string) => c.trim()) 
+        : [];
       colors.forEach(color => {
         const normalizedColor = color.toLowerCase().trim();
-        if (!occasionPreferences[occasion].preferredColors.includes(normalizedColor)) {
-          occasionPreferences[occasion].preferredColors.unshift(normalizedColor); // Add to front
-        }
+        // Remove if exists, then add to front
+        const filtered = existingColors.filter((c: string) => c !== normalizedColor);
+        existingColors.length = 0;
+        existingColors.push(normalizedColor, ...filtered);
       });
+      occasionPreferences[occasion].preferredColors = existingColors.join(',');
       
-      if (outfit.items) {
+      // Add items to front (most recent)
+      if (outfit.items && outfit.items.length > 0) {
+        const existingItems = occasionPreferences[occasion].preferredItems 
+          ? occasionPreferences[occasion].preferredItems.split(',').filter((i: string) => i.trim()) 
+          : [];
         outfit.items.forEach(item => {
-          if (!occasionPreferences[occasion].preferredItems.includes(item)) {
-            occasionPreferences[occasion].preferredItems.unshift(item); // Add to front
-          }
+          const normalizedItem = item.toLowerCase().trim();
+          const filtered = existingItems.filter((i: string) => i !== normalizedItem);
+          existingItems.length = 0;
+          existingItems.push(normalizedItem, ...filtered);
         });
+        occasionPreferences[occasion].preferredItems = existingItems.join(',');
       }
     }
 
     // Update seasonal preferences (wore = strong seasonal signal)
+    // Store as comma-separated string to avoid nested arrays
     if (context.season) {
       const season = context.season;
       if (!seasonalPreferences[season]) {
-        seasonalPreferences[season] = [];
+        seasonalPreferences[season] = '';
+      }
+      
+      // MIGRATION: Handle both old (array) and new (string) formats
+      let existingColors: string[] = [];
+      if (seasonalPreferences[season]) {
+        if (Array.isArray(seasonalPreferences[season])) {
+          // Old format: array - convert to string format
+          existingColors = seasonalPreferences[season].filter((c: string) => c && c.trim());
+          logger.log(`🔄 Migrating seasonalPreferences[${season}] from array to string format`);
+        } else if (typeof seasonalPreferences[season] === 'string') {
+          // New format: string - parse it
+          existingColors = seasonalPreferences[season].split(',').filter((c: string) => c.trim());
+        }
       }
       
       colors.forEach(color => {
         const normalizedColor = color.toLowerCase().trim();
         // Remove and add to front (most recent wear)
-        const filtered = seasonalPreferences[season].filter((c: string) => c !== normalizedColor);
-        seasonalPreferences[season] = [normalizedColor, ...filtered];
+        const filtered = existingColors.filter((c: string) => c !== normalizedColor);
+        existingColors.length = 0;
+        existingColors.push(normalizedColor, ...filtered);
       });
+      seasonalPreferences[season] = existingColors.join(',');
     }
 
     // Recalculate accuracy score (wearing = ultimate acceptance)
     const totalSelections = (currentPrefs.totalSelections || 0) + 1;
     const totalRecommendations = currentPrefs.totalRecommendations || 1;
     const accuracyScore = Math.min(100, Math.round((totalSelections / totalRecommendations) * 100));
+
+    // Validate data structure before update (prevent nested arrays)
+    const isValidProvenCombinations = Array.isArray(provenCombinations) && 
+      provenCombinations.every(item => typeof item === 'string');
+    
+    if (!isValidProvenCombinations) {
+      logger.error('❌ Invalid provenCombinations structure detected in WEAR, resetting to empty array');
+      provenCombinations.length = 0;
+    }
 
     // Update Firestore with atomic operations
     await updateDoc(prefsRef, {
@@ -1128,6 +1294,7 @@ export async function updatePreferencesFromWear(
       occasionPreferences,
       seasonalPreferences,
       totalSelections: increment(1),
+      totalWears: increment(1),
       accuracyScore: Math.max(currentPrefs.accuracyScore || 0, accuracyScore), // Don't decrease
       updatedAt: serverTimestamp(),
     });

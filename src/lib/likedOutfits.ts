@@ -1,5 +1,5 @@
-import { db } from './firebase';
-import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc } from 'firebase/firestore';
+import { db, auth } from './firebase';
+import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { logDeletion } from './audit-log';
 
 export interface LikedOutfitData {
@@ -86,6 +86,17 @@ export async function saveLikedOutfit(
 
     console.log('📁 Creating Firestore reference: users/' + userId + '/likedOutfits');
     console.log('🔍 Firebase db object:', db);
+    console.log('🔍 Current auth user:', auth.currentUser?.uid);
+    
+    // Verify auth state
+    if (!auth.currentUser || auth.currentUser.uid !== userId) {
+      console.error('❌ Auth mismatch - current user:', auth.currentUser?.uid, 'expected:', userId);
+      return {
+        success: false,
+        message: 'Authentication mismatch. Please sign in again.',
+        isDuplicate: false,
+      };
+    }
 
     // Check for duplicates
     const likesRef = collection(db, 'users', userId, 'likedOutfits');
@@ -110,7 +121,11 @@ export async function saveLikedOutfit(
     console.log('💾 Saving outfit to Firestore directly...');
     console.log('📦 Data to save:', {
       ...outfitData,
-      imageUrl: outfitData.imageUrl.substring(0, 50) + '...',
+      imageUrl: outfitData.imageUrl.substring(0, 100) + '...',
+      hasItems: !!outfitData.items,
+      itemsLength: outfitData.items?.length,
+      hasColorPalette: !!outfitData.colorPalette,
+      colorPaletteLength: outfitData.colorPalette?.length,
     });
     
     // Save directly to Firestore without complex validation
@@ -121,8 +136,8 @@ export async function saveLikedOutfit(
       description: outfitData.description,
       items: outfitData.items || [],
       colorPalette: outfitData.colorPalette || [],
-      styleType: outfitData.styleType,
-      occasion: outfitData.occasion,
+      styleType: outfitData.styleType || '',
+      occasion: outfitData.occasion || '',
       shoppingLinks: outfitData.shoppingLinks || {
         amazon: null,
         tatacliq: null,
@@ -130,19 +145,35 @@ export async function saveLikedOutfit(
       },
       itemShoppingLinks: outfitData.itemShoppingLinks || [],
       likedAt: Date.now(),
-      recommendationId: outfitData.recommendationId,
+      recommendationId: outfitData.recommendationId || '',
     };
     
-    console.log('💾 Attempting to save to Firestore...');
-    const docRef = await addDoc(likesRef, dataToSave);
-    console.log('✅ Outfit saved successfully with ID:', docRef.id);
-    console.log('🔗 Document path: users/' + userId + '/likedOutfits/' + docRef.id);
+    console.log('💾 Attempting to save to Firestore at path: users/' + userId + '/likedOutfits');
+    console.log('💾 Data keys being saved:', Object.keys(dataToSave));
+    console.log('💾 Firestore collection reference created');
     
-    return {
-      success: true,
-      message: 'Outfit saved to likes successfully',
-      isDuplicate: false,
-    };
+    try {
+      const docRef = await addDoc(likesRef, dataToSave);
+      console.log('✅ Outfit saved successfully with ID:', docRef.id);
+      console.log('🔗 Document path: users/' + userId + '/likedOutfits/' + docRef.id);
+      
+      // Verify the save by reading it back
+      console.log('🔍 Verifying save by reading back...');
+      const verifyQuery = query(likesRef, where('title', '==', outfitData.title));
+      const verifySnapshot = await getDocs(verifyQuery);
+      console.log('✅ Verification: Found', verifySnapshot.size, 'documents with this title');
+      
+      return {
+        success: true,
+        message: 'Outfit saved to likes successfully',
+        isDuplicate: false,
+      };
+    } catch (firestoreError) {
+      console.error('❌ Firestore save failed:', firestoreError);
+      console.error('❌ Error code:', (firestoreError as any)?.code);
+      console.error('❌ Error message:', (firestoreError as any)?.message);
+      throw firestoreError; // Re-throw to be caught by outer catch
+    }
   } catch (error) {
     console.error('❌ Error saving liked outfit:', error);
     console.error('Error details:', {

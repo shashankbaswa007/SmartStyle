@@ -582,22 +582,45 @@ export async function tavilySearch(
     ) || cleanQuery.split(' ')[0];
 
     logger.log('🤖 Generating smart query with Gemini...');
-    const queryData = await generateShoppingQuery({
-      clothingType: detectedClothingType,
-      color: color,
-      gender: gender || '',
-      style: style,
-      occasion: occasion,
-    });
-
-    logger.log('✅ Smart query generated:', queryData);
+    let queryData;
+    
+    try {
+      queryData = await generateShoppingQuery({
+        clothingType: detectedClothingType,
+        color: color,
+        gender: gender || '',
+        style: style,
+        occasion: occasion,
+      });
+      logger.log('✅ Smart query generated:', queryData);
+    } catch (error: any) {
+      // Fallback to manual query generation if Gemini fails (quota exceeded, etc.)
+      logger.warn('⚠️ Gemini query generation failed, using fallback:', error.message);
+      
+      const genderPrefix = gender?.toLowerCase() === 'female' ? 'women' : gender?.toLowerCase() === 'male' ? 'men' : '';
+      const styleStr = style ? ` ${style}` : '';
+      const occasionStr = occasion ? ` ${occasion}` : '';
+      
+      queryData = {
+        primaryQuery: `${genderPrefix}${styleStr} ${color} ${detectedClothingType}${occasionStr}`.trim(),
+        fallbackQueries: [
+          `${color} ${detectedClothingType} for ${genderPrefix}`.trim(),
+          `${genderPrefix} ${detectedClothingType} ${color}`.trim(),
+        ],
+        keywords: [detectedClothingType, color, genderPrefix, style, occasion].filter(Boolean),
+        excludeTerms: ['pants', 'trousers', 'jeans', 'shorts', 'bottoms', 'joggers', 'leggings'],
+        tataCliqQuery: `${genderPrefix} ${detectedClothingType}`.trim(),
+      };
+      
+      logger.log('✅ Using fallback query:', queryData);
+    }
 
     // Search Amazon and Myntra with primary query
     const amazonMyntraResults = await searchMultiplePlatforms(
       queryData.primaryQuery,
       ['amazon.in', 'myntra.com'],
-      queryData.keywords,
-      queryData.excludeTerms
+      queryData.keywords.filter((k): k is string => k !== undefined),
+      queryData.excludeTerms.filter((t): t is string => t !== undefined)
     );
 
     // Search TATA CLiQ with AI-optimized simple query first
@@ -658,8 +681,8 @@ export async function tavilySearch(
         const fallbackResults = await searchMultiplePlatforms(
           fallbackQuery,
           ['amazon.in', 'myntra.com'],
-          queryData.keywords,
-          queryData.excludeTerms
+          queryData.keywords.filter((k): k is string => k !== undefined),
+          queryData.excludeTerms.filter((t): t is string => t !== undefined)
         );
         
         if (!result.amazon) result.amazon = fallbackResults.amazon;

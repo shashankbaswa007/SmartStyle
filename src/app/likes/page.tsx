@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { motion } from 'framer-motion';
-import { Heart, ShoppingCart, ExternalLink, Sparkles, Trash2 } from 'lucide-react';
+import { Heart, ShoppingCart, ExternalLink, Sparkles, Trash2, Shirt } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -26,6 +27,8 @@ interface LikedOutfit {
   title: string;
   description: string;
   items: string[];
+  occasion?: string;
+  styleType?: string;
   colorPalette: string[];
   shoppingLinks: {
     amazon: string | null;
@@ -46,19 +49,20 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.1,
+      staggerChildren: 0.05,
     },
   },
 };
 
 const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
+  hidden: { y: 10, opacity: 0 },
   visible: {
     y: 0,
     opacity: 1,
     transition: {
       type: "spring",
-      stiffness: 100,
+      stiffness: 80,
+      damping: 15,
     },
   },
 };
@@ -139,14 +143,16 @@ export default function LikesPage() {
       const outfitsData = await getLikedOutfits(uid);
       
       console.log('✅ Fetched outfits:', outfitsData.length, 'valid outfits');
-      console.log('📊 First outfit (if any):', outfitsData[0]);
-      console.log('📊 All outfit titles:', outfitsData.map(o => o.title));
+      if (outfitsData.length > 0) {
+        console.log('📊 First outfit:', outfitsData[0]);
+        console.log('📊 All outfit titles:', outfitsData.map(o => o.title));
+      }
       
       // Data already has the id field from getLikedOutfits
       setLikedOutfits(outfitsData as LikedOutfit[]);
       
       if (outfitsData.length === 0) {
-        console.log('ℹ️ No liked outfits found in database');
+        console.log('ℹ️ No liked outfits found in database - user may need to like some outfits first');
       }
     } catch (error) {
       console.error('❌ Error fetching liked outfits:', error);
@@ -197,14 +203,14 @@ export default function LikesPage() {
       <div className="absolute inset-0 -z-10" >
         {isMounted && (
           <>
-            <SplashCursor SPLAT_RADIUS={0.12} SPLAT_FORCE={2000} COLOR_UPDATE_SPEED={6} SIM_RESOLUTION={64} DYE_RESOLUTION={512} PRESSURE_ITERATIONS={8} />
+            <SplashCursor SPLAT_RADIUS={0.08} SPLAT_FORCE={1000} COLOR_UPDATE_SPEED={3} SIM_RESOLUTION={48} DYE_RESOLUTION={256} PRESSURE_ITERATIONS={4} />
             <Particles
               className="absolute inset-0"
               particleColors={['#7B68EE', '#E6E6FA']}
-              particleCount={500}
-              particleSpread={10}
-              speed={0.3}
-              particleBaseSize={150}
+              particleCount={150}
+              particleSpread={8}
+              speed={0.2}
+              particleBaseSize={120}
               moveParticlesOnHover={true}
               alphaParticles={false}
               disableRotation={false}
@@ -365,7 +371,7 @@ export default function LikesPage() {
                       <Button
                         size="icon"
                         variant="destructive"
-                        className="rounded-full shadow-lg hover:scale-110 transition-transform"
+                        className="rounded-full shadow-md hover:scale-105 transition-transform"
                         onClick={() => handleRemoveLike(outfit.id!, outfit.title)}
                         title="Remove from likes"
                       >
@@ -387,6 +393,22 @@ export default function LikesPage() {
                         {outfit.description}
                       </p>
                     )}
+
+                    {/* Occasion and Style Type Badges */}
+                    <div className="mb-4 flex flex-wrap gap-2">
+                      {outfit.occasion && (
+                        <Badge variant="secondary" className="text-xs">
+                          <Sparkles className="w-3 h-3 mr-1" />
+                          {outfit.occasion}
+                        </Badge>
+                      )}
+                      {outfit.styleType && (
+                        <Badge variant="outline" className="text-xs">
+                          <Shirt className="w-3 h-3 mr-1" />
+                          {outfit.styleType}
+                        </Badge>
+                      )}
+                    </div>
 
                     {/* Color Palette - Visual only */}
                     {outfit.colorPalette && outfit.colorPalette.length > 0 && (

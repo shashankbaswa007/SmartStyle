@@ -226,6 +226,16 @@ const prompt = ai.definePrompt({
 
   **2. STRATEGIC RECOMMENDATION RULES (CRITICAL FOR USER SATISFACTION):**
   
+  🚨 MANDATORY DIVERSITY REQUIREMENT 🚨
+  Your 3 outfit recommendations MUST be RADICALLY DIFFERENT from each other:
+  - Each must have a DIFFERENT styleType (casual vs formal vs streetwear vs bohemian vs minimalist vs vintage)
+  - Each must have COMPLETELY DIFFERENT color palettes (no more than 1 shared color between any two outfits)
+  - Each must have a DIFFERENT silhouette/fit (relaxed vs tailored vs oversized vs fitted)
+  - Each must have a DIFFERENT vibe (professional vs edgy vs romantic vs sporty vs casual)
+  - DO NOT repeat the same clothing items across outfits (e.g., if Outfit 1 has blazer, Outfit 2 should NOT)
+  
+  Think of each outfit as designed for a DIFFERENT PERSONALITY interpreting the same occasion.
+  
   **Priority Order for Recommendations:**
   1. **FIRST:** User's explicitly selected outfits (selectedOutfitHistory) - these are PROVEN winners
   2. **SECOND:** User's favorite colors (favoriteColors) - they love these
@@ -432,10 +442,10 @@ const GEMINI_MODEL_SEQUENCE: GeminiModelCandidate[] = [
 ];
 
 const GEMINI_MODEL_CONFIG = {
-  temperature: 0.5,        // Lower for faster, more deterministic responses
+  temperature: 0.9,        // INCREASED: Higher for more diverse, creative recommendations
   maxOutputTokens: 1800,   // Reduced further - 2-3 outfits don't need 2048 tokens
-  topK: 30,                // Lower for faster token sampling
-  topP: 0.9,               // Slightly lower for speed
+  topK: 40,                // INCREASED: Higher for more diverse token selection
+  topP: 0.95,              // INCREASED: Higher for more varied outputs
 };
 
 const RETRYABLE_ERROR_KEYWORDS = [
@@ -483,6 +493,18 @@ async function callModelWithRetry(
         config: GEMINI_MODEL_CONFIG,
       });
       console.log(`✅ Successfully received response from ${modelName} on attempt ${attempt}`);
+      
+      // Validate diversity of recommendations
+      if (output && output.outfitRecommendations) {
+        const diversity = validateGeminiDiversity(output.outfitRecommendations);
+        if (!diversity.isValid) {
+          console.warn(`⚠️ Low diversity detected (score: ${diversity.score}/100): ${diversity.reason}`);
+          // Log but don't fail - user gets something rather than error
+        } else {
+          console.log(`📊 Diversity validated: ${diversity.score}/100`);
+        }
+      }
+      
       // Add provider field to indicate Gemini was used
       const resultWithProvider = {
         ...output!,
@@ -675,8 +697,12 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
         };
 
         const convertedResult: AnalyzeImageAndProvideRecommendationsOutput = {
-          feedback: groqResult.styleAnalysis.currentStyle,
-          highlights: groqResult.styleAnalysis.strengths.slice(0, 3),
+          feedback: groqResult.styleAnalysis?.currentStyle || `Great style choices for ${input.occasion}! Here are some personalized recommendations.`,
+          highlights: groqResult.styleAnalysis?.strengths?.slice(0, 3) || [
+            `Perfect for ${input.occasion}`,
+            `Weather-appropriate styling`,
+            `Versatile color palette`
+          ],
           colorSuggestions: colorPalette.map((color, i) => ({
             name: color,
             hex: ensureHexColor(color),
@@ -697,7 +723,7 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
             isExistingMatch: rec.isExistingMatch || false,
             items: rec.items,
           })),
-          notes: groqResult.seasonalAdvice,
+          notes: groqResult.seasonalAdvice || `Perfect styling choices for ${input.occasion} in current weather conditions.`,
           imagePrompt: groqResult.outfitRecommendations[0]?.imagePrompt 
             || `${groqResult.outfitRecommendations[0]?.title}: ${groqResult.outfitRecommendations[0]?.description}`
             || 'Stylish outfit for ' + input.occasion,
@@ -761,3 +787,76 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
     );
   }
 );
+
+/**
+ * Validate diversity of Gemini outfit recommendations
+ */
+function validateGeminiDiversity(
+  outfits: Array<{
+    title: string;
+    styleType?: string;
+    colorPalette?: string[];
+    items?: string[];
+  }>
+): { isValid: boolean; score: number; reason?: string } {
+  if (outfits.length < 3) {
+    return { isValid: true, score: 100 }; // Can't compare if less than 3
+  }
+
+  let diversityScore = 100;
+  const reasons: string[] = [];
+
+  // Check 1: All outfits have different style types
+  const styleTypes = outfits.map(o => o.styleType?.toLowerCase() || '');
+  const uniqueStyles = new Set(styleTypes.filter(s => s !== ''));
+  if (uniqueStyles.size < Math.min(outfits.length, styleTypes.filter(s => s !== '').length)) {
+    diversityScore -= 30;
+    reasons.push('Some outfits have same styleType');
+  }
+
+  // Check 2: Color palettes are different
+  for (let i = 0; i < outfits.length; i++) {
+    for (let j = i + 1; j < outfits.length; j++) {
+      const colors1 = new Set(outfits[i].colorPalette?.map(c => c.toLowerCase()) || []);
+      const colors2 = new Set(outfits[j].colorPalette?.map(c => c.toLowerCase()) || []);
+      
+      // Count overlapping colors
+      const overlap = [...colors1].filter(c => colors2.has(c)).length;
+      const totalUnique = colors1.size + colors2.size;
+      const similarity = totalUnique > 0 ? (overlap / totalUnique) * 100 : 0;
+      
+      if (similarity > 60) { // More than 60% color overlap
+        diversityScore -= 20;
+        reasons.push(`Outfits ${i+1} and ${j+1} have ${similarity.toFixed(0)}% color overlap`);
+      }
+    }
+  }
+
+  // Check 3: Titles are different
+  const titles = outfits.map(o => o.title.toLowerCase());
+  const uniqueTitles = new Set(titles);
+  if (uniqueTitles.size < outfits.length) {
+    diversityScore -= 25;
+    reasons.push('Some outfits have identical titles');
+  }
+
+  // Check 4: Items are different (at least some variation)
+  for (let i = 0; i < outfits.length; i++) {
+    for (let j = i + 1; j < outfits.length; j++) {
+      const items1 = new Set(outfits[i].items?.map(item => item.toLowerCase()) || []);
+      const items2 = new Set(outfits[j].items?.map(item => item.toLowerCase()) || []);
+      
+      const overlap = [...items1].filter(item => items2.has(item)).length;
+      const maxSize = Math.max(items1.size, items2.size);
+      if (maxSize > 0 && overlap > maxSize * 0.7) { // More than 70% item overlap
+        diversityScore -= 15;
+        reasons.push(`Outfits ${i+1} and ${j+1} have very similar items`);
+      }
+    }
+  }
+
+  const isValid = diversityScore >= 50; // Threshold for acceptable diversity
+  const reason = reasons.length > 0 ? reasons.join('; ') : undefined;
+
+  return { isValid, score: Math.max(0, diversityScore), reason };
+}

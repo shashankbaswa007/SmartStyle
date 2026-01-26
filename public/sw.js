@@ -1,7 +1,7 @@
-const CACHE_NAME = 'smartstyle-v1';
-const STATIC_CACHE = 'smartstyle-static-v1';
-const DYNAMIC_CACHE = 'smartstyle-dynamic-v1';
-const IMAGE_CACHE = 'smartstyle-images-v1';
+const CACHE_NAME = 'smartstyle-v2';
+const STATIC_CACHE = 'smartstyle-static-v2';
+const DYNAMIC_CACHE = 'smartstyle-dynamic-v2';
+const IMAGE_CACHE = 'smartstyle-images-v2';
 
 // Assets to cache on install
 const STATIC_ASSETS = [

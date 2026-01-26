@@ -160,9 +160,9 @@ function getColorName(r: number, g: number, b: number): string {
 /**
  * Preload images and wait for them to fully load with retry logic
  * @param imageUrls - Array of image URLs to preload
- * @returns Promise that resolves when all images are loaded
+ * @returns Promise that resolves with results for each image (fulfilled or rejected)
  */
-function preloadImages(imageUrls: string[]): Promise<void[]> {
+function preloadImages(imageUrls: string[]): Promise<PromiseSettledResult<void>[]> {
   console.log('🖼️ Starting image preload for', imageUrls.length, 'images...');
   
   const imagePromises = imageUrls.map((url, index) => {
@@ -227,7 +227,8 @@ function preloadImages(imageUrls: string[]): Promise<void[]> {
     });
   });
 
-  return Promise.all(imagePromises);
+  // Use allSettled to allow partial success
+  return Promise.allSettled(imagePromises);
 }
 
 export function StyleAdvisor() {
@@ -976,66 +977,77 @@ export function StyleAdvisor() {
 
       // ✅ CRITICAL: Preload all images and wait for them to fully load
       updateStep('finalize', 'processing');
-      setLoadingMessage("Loading all images... Please wait, this ensures the best experience!");
-      console.log('💼 Preparing to preload', imageUrls.length, 'images...');
+      // 🚀 OPTIMIZATION 7: Progressive Image Loading - Show results immediately!
+      console.log('✨ [PROGRESSIVE] Displaying results immediately with progressive image loading');
+      console.log('💼 Images will load in background without blocking UI');
       
-      // Show user-friendly progress
-      const nonPlaceholderCount = imageUrls.filter((url: string) => !url.includes('placeholder')).length;
-      console.log(`🎯 ${nonPlaceholderCount} images need to be fully loaded before displaying results`);
-      
-      try {
-        console.log('⏳ Starting image preload process...');
-        await preloadImages(imageUrls);
-        console.log('✅ All images preloaded and verified!');
-        updateStep('finalize', 'complete');
-      } catch (imgError) {
-        console.error('❌ Critical: Image preload failed:', imgError);
-        updateStep('finalize', 'error', 'Some images failed to load');
-        
-        // Check if any images loaded successfully
-        const loadedCount = imageUrls.filter((url: string, index: number) => {
-          const img = document.createElement('img');
-          img.src = url;
-          return img.complete && img.naturalHeight !== 0;
-        }).length;
-        
-        console.log(`📊 Status: ${loadedCount}/${imageUrls.length} images loaded`);
-        
-        if (loadedCount === 0) {
-          // No images loaded - show error
-          throw new Error('Failed to load any images. Please try again.');
-        }
-        
-        // Some images loaded - continue with warning
-        console.warn(`⚠️ Proceeding with ${loadedCount}/${imageUrls.length} images loaded`);
-        toast({
-          variant: "default",
-          title: "Partial Success",
-          description: `${loadedCount} out of ${imageUrls.length} images loaded. Some images may still be loading.`,
-          duration: 5000,
-        });
-      }
-      
-      // ✅ NOW set the analysis result after EVERYTHING is verified
-      console.log('📦 Setting analysis result with complete data...');
+      // Show results immediately (pass the analysis object, not the full data)
       setAnalysisResult(result);
       setAllContentReady(true);
+      updateStep('finalize', 'complete');
+      setLoadingMessage("");
       
-      // Small delay to ensure smooth transition and DOM updates
-      console.log('⏳ Final preparation for display...');
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Load images progressively in background
+      const backgroundImageUrls = result.outfitRecommendations
+        .map((outfit: any) => outfit.imageUrl)
+        .filter((url: string) => url && !url.includes('placeholder'));
       
-      // ✅ FINAL STEP: Show results only after all images are loaded and ready
+      console.log(`🖼️ Loading ${backgroundImageUrls.length} images progressively in background...`);
+      
+      let loadedImageCount = 0;
+      backgroundImageUrls.forEach((url: string, index: number) => {
+        const img = document.createElement('img');
+        
+        img.onload = () => {
+          loadedImageCount++;
+          console.log(`✅ Image ${index + 1}/${backgroundImageUrls.length} loaded (${img.width}x${img.height})`);
+          
+          if (loadedImageCount === backgroundImageUrls.length) {
+            console.log('🎉 All images loaded in background!');
+          }
+        };
+        
+        img.onerror = () => {
+          console.warn(`⚠️ Image ${index + 1}/${backgroundImageUrls.length} failed to load (showing placeholder)`);
+        };
+        
+        img.src = url;
+      });
+      
+      // Wait longer to ensure DOM is ready and images are cached in browser
+      console.log('⏳ Final preparation - ensuring images are cached in browser...');
+      await new Promise(resolve => setTimeout(resolve, 1500)); // Increased from 500ms to 1500ms
+      
+      // Double-check that images are still available before showing results
+      const finalImageCheck = await Promise.all(imageUrls.map((url: string) => {
+        return new Promise<boolean>((resolve) => {
+          if (url.includes('placeholder')) {
+            resolve(true);
+            return;
+          }
+          const img = globalThis.Image ? new globalThis.Image() : document.createElement('img');
+          img.onload = () => resolve(true);
+          img.onerror = () => resolve(false);
+          img.src = url;
+          // If image loads instantly (cached), resolve immediately
+          if (img.complete) resolve(true);
+        });
+      }));
+      
+      const allImagesReady = finalImageCheck.every(ready => ready);
+      console.log(`🎨 Final image check: ${finalImageCheck.filter(r => r).length}/${finalImageCheck.length} images ready`);
+      
+      // ✅ FINAL STEP: Show results
       console.log('🎉 All content ready! Displaying results to user!');
       setShowResults(true);
 
-      console.log('✅ Full recommendation flow complete with all images loaded!');
+      console.log('✅ Full recommendation flow complete with progressive loading!');
       
       // Show success toast
       toast({
-        title: "Success!",
-        description: `Your personalized recommendations are ready with all ${nonPlaceholderCount} outfit images fully loaded!`,
-        duration: 4000,
+        title: "✨ Success!",
+        description: `Your personalized recommendations are ready!`,
+        duration: 3000,
       });
 
     } catch (e) {

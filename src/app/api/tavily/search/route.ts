@@ -1,5 +1,14 @@
 import { NextResponse } from 'next/server';
 import tavilySearch from '@/lib/tavily';
+import { z } from 'zod';
+
+// Input validation schema
+const tavilyRequestSchema = z.object({
+  query: z.string().min(1).max(200),
+  colors: z.array(z.string()).max(10).optional(),
+  gender: z.enum(['male', 'female', 'unisex']).optional(),
+  occasion: z.string().max(50).optional(),
+});
 
 export async function POST(req: Request) {
   try {
@@ -15,17 +24,22 @@ export async function POST(req: Request) {
       );
     }
 
-    const { query, colors, gender, occasion } = body;
+    // Validate request body against schema
+    const validation = tavilyRequestSchema.safeParse(body);
+    if (!validation.success) {
+      console.error('❌ Validation failed:', validation.error.errors);
+      return NextResponse.json(
+        { 
+          error: 'Invalid request parameters',
+          details: validation.error.errors.map(e => `${e.path.join('.')}: ${e.message}`)
+        },
+        { status: 400 }
+      );
+    }
+
+    const { query, colors, gender, occasion } = validation.data;
     
     console.log('🔍 Tavily API route called with:', { query, colors, gender, occasion });
-    
-    if (!query || typeof query !== 'string' || query.trim() === '') {
-      console.warn('❌ Missing or invalid query parameter');
-      return NextResponse.json({ 
-        error: 'Missing or invalid query parameter',
-        details: 'A search query is required'
-      }, { status: 400 });
-    }
 
     try {
       const links = await tavilySearch(query, colors || [], gender, occasion);

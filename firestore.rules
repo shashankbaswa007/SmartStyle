@@ -19,38 +19,62 @@ service cloud.firestore {
     }
     
     // User Preferences - Users can only read/write their own preferences
-    // Anonymous users can read (returns null gracefully) but cannot write
+    // Allow reads for authenticated users (including server-side with userId)
     match /userPreferences/{userId} {
-      allow read: if canReadAnonymously() || isOwner(userId);
-      allow write: if isOwner(userId);
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
     }
     
     // User Interactions - NEW: For personalization tracking
     // Users can only read/write their own interaction sessions
     match /userInteractions/{userId} {
-      allow read: if canReadAnonymously() || isOwner(userId);
-      allow write: if isOwner(userId);
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
       
       // Interaction sessions (nested under userInteractions)
       match /sessions/{sessionId} {
-        allow read: if canReadAnonymously() || isOwner(userId);
-        allow write: if isOwner(userId);
-        allow create: if isOwner(userId);
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        allow write: if isAuthenticated() && request.auth.uid == userId;
+        allow create: if isAuthenticated() && request.auth.uid == userId;
       }
     }
 
     // Anti-Repetition Cache - NEW: Prevent showing same outfits
     match /antiRepetitionCache/{userId} {
-      allow read: if canReadAnonymously() || isOwner(userId);
-      allow write: if isOwner(userId);
-      allow create: if isOwner(userId);
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
     }
 
     // Exploration Metrics - NEW: Track adaptive exploration success
     match /explorationMetrics/{userId} {
-      allow read: if canReadAnonymously() || isOwner(userId);
-      allow write: if isOwner(userId);
-      allow create: if isOwner(userId);
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Comprehensive Preferences - NEW: For preference engine (nested collections)
+    match /users/{userId}/preferences/{subcollection}/{docId} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // User interactions tracking (colors, styles, shopping)
+    match /users/{userId}/interactions/{interactionType} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Blocklists (hard, soft, temporary)
+    match /users/{userId}/blocklists/{blocklistType} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
     }
     
     // Recommendation History - Users can only read/write their own recommendations
@@ -123,6 +147,22 @@ service cloud.firestore {
     match /cleanupJobs/{jobId} {
       allow read: if isAuthenticated();
       allow write: if false; // Only Cloud Functions can write
+    }
+    
+    // API Cache - NEW: For caching API responses (server-side only)
+    match /apiCache/{cacheKey} {
+      allow read: if true; // Allow all reads for cache hits
+      allow create: if true; // Allow server to create cache entries
+      allow update: if true; // Allow server to update cache entries
+      allow delete: if false; // No deletions (let TTL expire naturally)
+    }
+    
+    // Rate Limits - NEW: For rate limiting per user (server-side tracking)
+    match /rateLimits/{userId} {
+      allow read: if true; // Allow server to check rate limits
+      allow create: if true; // Allow server to create rate limit entries
+      allow update: if true; // Allow server to update rate limit counters
+      allow delete: if false; // No deletions (let them expire naturally)
     }
     
     // Archive Collections - No direct access (admin only via Cloud Functions)

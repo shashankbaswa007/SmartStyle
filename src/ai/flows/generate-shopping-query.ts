@@ -9,6 +9,10 @@ const ShoppingQuerySchema = z.object({
   tataCliqQuery: z.string().describe('Simplified query specifically optimized for TATA CLiQ search (very simple, 2-4 words max)'),
 });
 
+// Simple in-memory cache for shopping queries (expires after 1 hour)
+const queryCache = new Map<string, { result: z.infer<typeof ShoppingQuerySchema>; timestamp: number }>();
+const CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
 export const generateShoppingQuery = ai.defineFlow(
   {
     name: 'generateShoppingQuery',
@@ -24,6 +28,16 @@ export const generateShoppingQuery = ai.defineFlow(
     outputSchema: ShoppingQuerySchema,
   },
   async (input) => {
+    // Create cache key from inputs (ignore brand/priceRange for broader caching)
+    const cacheKey = `${input.clothingType}_${input.color}_${input.gender}_${input.style || ''}_${input.occasion || ''}`;
+    
+    // Check cache first
+    const cached = queryCache.get(cacheKey);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      console.log('✅ Using cached shopping query');
+      return cached.result;
+    }
+    
     const prompt = `You are an expert e-commerce search query optimizer for fashion shopping.
 
 Given the following outfit details:
@@ -69,6 +83,12 @@ Return the optimized search queries.`;
       output: {
         schema: ShoppingQuerySchema,
       },
+    });
+
+    // Cache the successful result
+    queryCache.set(cacheKey, {
+      result: output!,
+      timestamp: Date.now(),
     });
 
     return output!;

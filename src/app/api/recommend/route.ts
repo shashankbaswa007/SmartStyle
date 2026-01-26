@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { analyzeImageAndProvideRecommendations } from '@/ai/flows/analyze-image-and-provide-recommendations';
 import { generateOutfitImage } from '@/ai/flows/generate-outfit-image';
 import { extractColorsFromUrl } from '@/lib/color-extraction';
-import tavilySearch from '@/lib/tavily';
+import { generateShoppingLinks, validateShoppingLinks } from '@/lib/shopping-link-generator';
 import saveRecommendation from '@/lib/firestoreRecommendations';
 import { withTimeout } from '@/lib/timeout-utils';
 import crypto from 'crypto';
@@ -13,6 +13,7 @@ import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
 import { logger } from '@/lib/logger';
 import { recommendationCache, createCacheKey } from '@/lib/request-cache';
 import { recommendRequestSchema, validateRequest, formatValidationError } from '@/lib/validation';
+import { quickValidateImageDataUri } from '@/lib/server-image-validation';
 import { 
   calculateOutfitMatchScore, 
   applyDiversificationRule, 
@@ -20,36 +21,30 @@ import {
   addToAntiRepetitionCache,
   detectPatternLock 
 } from '@/lib/recommendation-diversifier';
+import pLimit from 'p-limit';
+import { FirestoreCache } from '@/lib/firestore-cache';
+import { checkDuplicateImage, generateImageHash } from '@/lib/image-deduplication';
+import { checkRateLimit as checkFirestoreRateLimit } from '@/lib/firestore-rate-limiter';
+import { generateImageWithRetry } from '@/lib/smart-image-generation';
+
+/**
+ * Sanitize error messages to prevent XSS
+ */
+function sanitizeErrorMessage(message: string): string {
+  if (!message || typeof message !== 'string') return 'An error occurred';
+  
+  return message
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;')
+    .replace(/\//g, '&#x2F;')
+    .substring(0, 200); // Limit length to prevent log flooding
+}
 
 export async function POST(req: Request) {
   const startTime = Date.now();
   logger.log('⏱️ [PERF] API request started at', new Date().toISOString());
-  
-  // Rate limiting: 10 requests per minute per client
-  const clientId = getClientIdentifier(req);
-  const rateLimit = checkRateLimit(clientId, {
-    windowMs: 60 * 1000, // 1 minute
-    maxRequests: 10,
-  });
-
-  if (!rateLimit.success) {
-    const retryAfter = Math.ceil((rateLimit.resetTime - Date.now()) / 1000);
-    return NextResponse.json(
-      { 
-        error: 'Too many requests. Please try again later.',
-        retryAfter,
-      },
-      { 
-        status: 429,
-        headers: {
-          'X-RateLimit-Limit': rateLimit.limit.toString(),
-          'X-RateLimit-Remaining': rateLimit.remaining.toString(),
-          'X-RateLimit-Reset': new Date(rateLimit.resetTime).toISOString(),
-          'Retry-After': retryAfter.toString(),
-        },
-      }
-    );
-  }
   
   try {
     // Parse and validate request body with Zod
@@ -77,40 +72,88 @@ export async function POST(req: Request) {
     // Use validated data (type-safe!)
     const { photoDataUri, occasion, genre, gender, weather, skinTone, dressColors, previousRecommendation, userId } = validation.data;
 
+    // Additional server-side security validation for image
+    const imageValidation = quickValidateImageDataUri(photoDataUri);
+    if (!imageValidation.isValid) {
+      logger.error('❌ Image validation failed:', imageValidation.error);
+      return NextResponse.json(
+        { error: imageValidation.error },
+        { status: 400 }
+      );
+    }
+
+    // 🚀 OPTIMIZATION 1: Firestore Rate Limiting (20 req/hour per user)
+    const effectiveUserId = userId || 'anonymous';
+    const rateLimitCheck = await checkFirestoreRateLimit(effectiveUserId);
+    
+    if (!rateLimitCheck.allowed) {
+      logger.warn(`⚠️ Rate limit exceeded for user ${effectiveUserId}`);
+      return NextResponse.json(
+        { 
+          error: rateLimitCheck.message,
+          remaining: 0,
+          resetAt: rateLimitCheck.resetAt,
+        },
+        { 
+          status: 429,
+          headers: {
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': rateLimitCheck.resetAt.toISOString(),
+          },
+        }
+      );
+    }
+    
+    logger.log(`✅ Rate limit OK: ${rateLimitCheck.remaining} requests remaining`);
+
     logger.log('🎯 Starting recommendation flow:', {
       hasPhoto: !!photoDataUri,
       occasion: occasion || 'not specified',
       gender,
       hasUserId: !!userId,
+      remaining: rateLimitCheck.remaining,
     });
 
-    // Generate cache key from image hash and preferences
-    const imageHash = crypto
-      .createHash('sha256')
-      .update(photoDataUri)
-      .digest('hex')
-      .substring(0, 16);
+    // Generate image hash for caching and deduplication
+    const imageHash = generateImageHash(photoDataUri);
     
-    const cacheKey = createCacheKey('recommend', {
+    // 🚀 OPTIMIZATION 2: Image Deduplication (check last 24h)
+    if (userId && userId !== 'anonymous') {
+      const duplicateResult = await checkDuplicateImage(userId, imageHash);
+      if (duplicateResult) {
+        logger.log('🎯 Returning duplicate image result from 24h history');
+        return NextResponse.json({
+          ...duplicateResult,
+          message: 'You recently uploaded this photo. Here are your previous recommendations.',
+          performance: {
+            cached: true,
+            source: '24h-history',
+            savedTime: '~10s',
+          }
+        });
+      }
+    }
+    
+    // 🚀 OPTIMIZATION 3: Firestore Cache Check  
+    const firestoreCache = new FirestoreCache();
+    const cacheParams = {
       imageHash,
-      occasion,
+      colors: Array.isArray(dressColors) ? dressColors : (dressColors ? [dressColors] : []),
       gender,
-      weather: weather || 'any',
-      userId: userId || 'anonymous',
-    });
-    logger.log('🔑 [PERF] Cache key:', cacheKey);
-
-    // ✨ Check cache first to avoid expensive AI calls
-    const cachedResult = recommendationCache.get(cacheKey);
+      occasion: occasion || 'casual',
+    };
+    
+    const cachedResult = await firestoreCache.get(cacheParams);
     if (cachedResult) {
       const totalTime = Date.now() - startTime;
-      logger.log(`✅ [CACHE HIT] Returning cached result (saved ${totalTime}ms)`);
-      logger.log(`📊 [CACHE STATS] Hit rate: ${(recommendationCache.getHitRate() * 100).toFixed(1)}%`);
+      logger.log(`✅ [FIRESTORE CACHE HIT] Returning cached result (saved ~10s and API calls!)`);
       
       return NextResponse.json({
         ...cachedResult,
         cached: true,
+        cacheSource: 'firestore',
         performanceMs: totalTime,
+        message: 'Results from recent similar request (saves your rate limit)',
       });
     }
     
@@ -156,7 +199,7 @@ export async function POST(req: Request) {
           gender, 
           weather: weather || '', 
           skinTone: skinTone || '', 
-          dressColors: dressColors?.join(', ') || '', 
+          dressColors: Array.isArray(dressColors) ? dressColors.join(', ') : (dressColors || ''), 
           previousRecommendation: previousRecommendation || '',
           userId: userId || '', // Pass userId to enable personalization in AI flow
         }),
@@ -170,96 +213,136 @@ export async function POST(req: Request) {
       throw new Error('Failed to analyze image. Please try again with a clearer photo.');
     }
 
-    // Step 2: Process ALL 3 outfits in PARALLEL (NOT sequential!)
+    // Step 2: Process outfits IN PARALLEL with controlled concurrency (2 concurrent max)
     const outfitsStart = Date.now();
     const outfitsToProcess = analysis.outfitRecommendations.slice(0, 3);
     
-    logger.log('🚀 [PERF] Processing 3 outfits in PARALLEL...');
+    logger.log('🔄 [PERF] Processing 3 outfits with PARALLEL processing (2 concurrent)...');
+    
+    // Create a concurrency limiter - max 2 outfits generating at once
+    const limit = pLimit(2);
     
     let enrichedOutfits = await Promise.all(
-      outfitsToProcess.map(async (outfit, index) => {
-        const outfitStart = Date.now();
-        const outfitNumber = index + 1;
-        logger.log(`⚡ [PERF] Starting outfit ${outfitNumber}/3`);
+      outfitsToProcess.map((outfit, index) =>
+        limit(async () => {
+          const outfitStart = Date.now();
+          const outfitNumber = index + 1;
+          logger.log(`⚡ [PERF] Starting outfit ${outfitNumber}/3`);
 
-        try {
-          // Extract color hex codes
-          const colorHexCodes = outfit.colorPalette?.map(c => {
-            if (typeof c === 'string') return c;
-            const colorObj = c as { hex?: string; name?: string };
-            return colorObj.hex || '#000000';
-          }) || [];
+          // Track generated image URL across scopes
+          let generatedImageUrl: string | null = null;
 
-          // STEP 1: Generate image first
-          const imageUrl = await withTimeout(
-            generateOutfitImage(
-              outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`,
-              colorHexCodes
-            ),
-            10000, // 10 second timeout
-            `Outfit ${outfitNumber} image generation timed out`
-          ) as string;
-
-          logger.log(`✅ [OUTFIT ${outfitNumber}] Image generated`);
-
-          // STEP 2: Extract ACTUAL colors from generated image for accurate shopping
-          let extractedColors: any = null;
           try {
-            extractedColors = await withTimeout(
-              extractColorsFromUrl(imageUrl),
-              5000, // 5 second timeout for color extraction
-              `Color extraction timeout`
+            // 🚀 OPTIMIZATION 4: Faster stagger (500ms instead of 1000ms)
+            if (index > 0) {
+              const delayMs = index * 500; // 500ms stagger (faster!)
+              logger.log(`⏳ Staggered start: waiting ${delayMs}ms for outfit ${outfitNumber}...`);
+              await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+
+            // Extract color hex codes from AI recommendation
+            const colorHexCodes = outfit.colorPalette?.map(c => {
+              if (typeof c === 'string') return c;
+              const colorObj = c as { hex?: string; name?: string };
+              return colorObj.hex || '#000000';
+            }) || [];
+            
+            logger.log(`🎨 Using AI-generated color palette: ${colorHexCodes.join(', ')}`);
+            
+            // 🚀 OPTIMIZATION 5: Smart image generation with retry logic
+            generatedImageUrl = await generateImageWithRetry(
+              outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`,
+              colorHexCodes,
+              2 // Max 2 retries
             );
-            logger.log(`✅ [OUTFIT ${outfitNumber}] Extracted ${extractedColors.dominantColors.length} colors from generated image`);
-          } catch (colorError) {
-            logger.warn(`⚠️ [OUTFIT ${outfitNumber}] Color extraction failed, using AI colors:`, (colorError as Error).message);
-          }
+            logger.log(`✅ [OUTFIT ${outfitNumber}] Image generated`);
 
-          // Use extracted colors from image if available, otherwise fallback to AI colors
-          const accurateColorPalette = extractedColors?.dominantColors?.slice(0, 5) || outfit.colorPalette || [];
-          
-          // STEP 3: Search for shopping links using ACTUAL image colors
-          const shoppingLinks = await withTimeout(
-            tavilySearch(
-              `${outfit.title} ${outfit.items.join(' ')}`,
-              accurateColorPalette,
+            // STEP 2: Try to extract colors from generated image (optional enhancement)
+            // PRIMARY: Use AI colors (more reliable and match the recommendation)
+            // SECONDARY: Extract from image (for validation/enhancement only)
+            let extractedColors: any = null;
+            try {
+              extractedColors = await withTimeout(
+                extractColorsFromUrl(generatedImageUrl),
+                10000, // 10 second timeout
+                `Color extraction timeout`
+              );
+              logger.log(`✅ [OUTFIT ${outfitNumber}] Extracted ${extractedColors.dominantColors.length} colors from generated image`);
+            } catch (colorError) {
+              logger.warn(`⚠️ [OUTFIT ${outfitNumber}] Color extraction failed, using AI colors:`, (colorError as Error).message);
+            }
+
+            // PRIMARY: Use AI colors (they match the recommendation text)
+            // FALLBACK: Use extracted colors only if AI colors unavailable
+            const accurateColorPalette = colorHexCodes.length > 0 
+              ? colorHexCodes.slice(0, 5)
+              : (extractedColors?.dominantColors?.slice(0, 5) || ['#000000', '#FFFFFF', '#808080']);
+            
+            logger.log(`🎨 Final color palette: ${accurateColorPalette.join(', ')}`);
+            
+            // STEP 3: Generate shopping links INSTANTLY using pattern-based URLs (< 5ms)
+            const shoppingLinksData = generateShoppingLinks({
               gender,
-              occasion,
-              outfit.styleType,
-              outfit.items[0]
-            ),
-            8000, // 8 second timeout for shopping
-            `Shopping search timeout`
-          );
+              items: outfit.items,
+              colorPalette: accurateColorPalette,
+              style: outfit.styleType || 'casual',
+              description: outfit.description
+            });
 
-          logger.log(`⏱️ [PERF] Outfit ${outfitNumber} completed: ${Date.now() - outfitStart}ms`);
+            // Convert to expected format (take first link for each platform)
+            const shoppingLinks = {
+              amazon: shoppingLinksData.byPlatform.amazon[0]?.url || null,
+              myntra: shoppingLinksData.byPlatform.myntra[0]?.url || null,
+              tatacliq: shoppingLinksData.byPlatform.tataCliq[0]?.url || null,
+            };
 
-          // Return outfit with accurate colors and matching shopping links
-          return {
-            ...outfit,
-            imageUrl,
-            colorPalette: accurateColorPalette,
-            generatedImageColors: extractedColors?.colorPalette?.slice(0, 6) || null,
-            shoppingLinks
-          };
+            logger.log(`⏱️ [PERF] Outfit ${outfitNumber} completed: ${Date.now() - outfitStart}ms`);
 
-        } catch (error: any) {
-          logger.error(`❌ Outfit ${outfitNumber} failed:`, error.message);
-          logger.log(`⏱️ [PERF] Outfit ${outfitNumber} failed after: ${Date.now() - outfitStart}ms`);
-          
-          return {
-            ...outfit,
-            imageUrl: `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
-            colorPalette: outfit.colorPalette || [],
-            generatedImageColors: null,
-            shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
-            error: error.message || 'Generation failed'
-          };
-        }
-      })
+            // Return enriched outfit
+            return {
+              ...outfit,
+              imageUrl: generatedImageUrl,
+              colorPalette: accurateColorPalette,
+              generatedImageColors: extractedColors?.colorPalette?.slice(0, 6) || null,
+              shoppingLinks
+            };
+
+          } catch (error: any) {
+            // Check if error is from shopping search timeout vs image generation
+            const isShoppingError = error.message?.includes('Shopping search timeout');
+            const isColorError = error.message?.includes('Color extraction timeout');
+            
+            if (isShoppingError || isColorError) {
+              logger.warn(`⚠️ Outfit ${outfitNumber} - ${isShoppingError ? 'shopping' : 'color extraction'} failed but image OK`);
+              // Image generated successfully, only secondary features failed
+              return {
+                ...outfit,
+                imageUrl: generatedImageUrl || `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
+                colorPalette: outfit.colorPalette || ['#000000', '#FFFFFF', '#808080'],
+                generatedImageColors: null,
+                shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
+                shoppingError: isShoppingError ? 'Shopping links temporarily unavailable' : undefined
+              };
+            }
+            
+            logger.error(`❌ Outfit ${outfitNumber} failed:`, error.message);
+            logger.log(`⏱️ [PERF] Outfit ${outfitNumber} failed after: ${Date.now() - outfitStart}ms`);
+            
+            // Return failed outfit with placeholder
+            return {
+              ...outfit,
+              imageUrl: `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
+              colorPalette: outfit.colorPalette || ['#000000', '#FFFFFF', '#808080'],
+              generatedImageColors: null,
+              shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
+              error: error.message || 'Generation failed'
+            };
+          }
+        })
+      )
     );
 
-    logger.log(`⏱️ [PERF] All outfits processed in parallel: ${Date.now() - outfitsStart}ms`);
+    logger.log(`⏱️ [PERF] All outfits processed with parallel execution: ${Date.now() - outfitsStart}ms`);
     logger.log('✅ All outfits processed!');
 
     // ✨ Apply diversification if user is authenticated and has preferences
@@ -363,10 +446,22 @@ export async function POST(req: Request) {
     // This can be done client-side or in a background job
     let recommendationId: string | null = null;
     if (userId && userId !== 'anonymous') {
-      // Fire and forget - don't wait for save
+      // Fire and forget with proper error handling to prevent unhandled rejections
       saveRecommendation(userId, payload)
-        .then(id => logger.log(`✅ [ASYNC] Recommendation saved: ${id}`))
-        .catch(err => logger.error('⚠️ [ASYNC] Save failed:', err));
+        .then(id => {
+          try {
+            logger.log(`✅ [ASYNC] Recommendation saved: ${id}`);
+          } catch (logError) {
+            console.error('Logger error:', logError);
+          }
+        })
+        .catch(err => {
+          try {
+            logger.error('⚠️ [ASYNC] Save failed:', err);
+          } catch (logError) {
+            console.error('Logger error:', logError);
+          }
+        });
     }
 
     const totalTime = Date.now() - startTime;
@@ -379,13 +474,13 @@ export async function POST(req: Request) {
       payload,
       recommendationId,
       performanceMs: totalTime,
-      cached: false
+      cached: false,
+      imageHash, // Include for deduplication
     };
 
-    // ✨ Store in cache for future requests (5 minute TTL)
-    recommendationCache.set(cacheKey, response);
-    logger.log(`✅ [CACHE] Result stored for 5 minutes`);
-    logger.log(`📊 [CACHE STATS] Size: ${recommendationCache.getStats().size}, Hit rate: ${(recommendationCache.getHitRate() * 100).toFixed(1)}%`);
+    // 🚀 OPTIMIZATION 6: Store in Firestore cache for future similar requests (1 hour TTL)
+    await firestoreCache.set(cacheParams, response, 3600);
+    logger.log(`✅ [FIRESTORE CACHE] Result stored for 1 hour`);
 
     return NextResponse.json(response);
   } catch (err: any) {
@@ -404,7 +499,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ 
-      error: err?.message || 'Failed to generate recommendations. Please try again.',
+      error: sanitizeErrorMessage(err?.message || 'Failed to generate recommendations. Please try again.'),
       details: 'An unexpected error occurred while processing your request.'
     }, { status: 500 });
   }
