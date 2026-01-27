@@ -24,6 +24,7 @@ export default function Home() {
             alt="Fashion flat lay background"
             data-ai-hint="fashion flat lay"
             fill
+            sizes="100vw"
             style={{ objectFit: 'cover' }}
             className="-z-10"
             priority
@@ -89,7 +90,7 @@ export default function Home() {
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
               <div className="relative w-full h-96 rounded-lg overflow-hidden shadow-2xl">
-                <Image src="https://images.pexels.com/photos/8306370/pexels-photo-8306370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" alt="Fashion model silhouette" fill style={{ objectFit: 'cover' }} data-ai-hint="fashion model" />
+                <Image src="https://images.pexels.com/photos/8306370/pexels-photo-8306370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" alt="Fashion model silhouette" fill sizes="(max-width: 768px) 100vw, 50vw" style={{ objectFit: 'cover' }} data-ai-hint="fashion model" />
               </div>
               <div>
                 <h2 className="text-4xl font-headline font-bold mb-6">From Upload to Upgrade</h2>
@@ -166,6 +167,7 @@ export default function Home() {
             src="https://images.pexels.com/photos/322207/pexels-photo-322207.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
             alt="Stylish accessories flat lay"
             fill
+            sizes="100vw"
             style={{ objectFit: 'cover' }}
             className="-z-10"
             data-ai-hint="fashion accessories"

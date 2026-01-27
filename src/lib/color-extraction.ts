@@ -267,6 +267,11 @@ export async function extractColorsFromImage(
         const proximityWeight = Math.max(1, Math.floor(8 * (1 - normalizedDist)));
         const weight = proximityWeight;
 
+        // Defensive check for invalid RGB values BEFORE any operation
+        if (isNaN(r) || isNaN(g) || isNaN(b) || r === undefined || g === undefined || b === undefined) {
+          continue; // Skip silently - this is expected for transparent/invalid pixels
+        }
+        
         const existing = colorMap.get(colorKey);
         if (existing) {
           const oldWeight = existing.count;
@@ -277,11 +282,6 @@ export async function extractColorsFromImage(
           existing.g = (existing.g * oldWeight + g * weight) / newWeight;
           existing.b = (existing.b * oldWeight + b * weight) / newWeight;
         } else {
-          // Defensive check for invalid RGB values
-          if (isNaN(r) || isNaN(g) || isNaN(b)) {
-            console.warn(`⚠️ Invalid RGB detected: r=${r}, g=${g}, b=${b} at (${x},${y})`);
-            continue;
-          }
           colorMap.set(colorKey, { count: weight, r, g, b });
         }
       }

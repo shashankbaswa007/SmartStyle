@@ -26,6 +26,8 @@ import { FirestoreCache } from '@/lib/firestore-cache';
 import { checkDuplicateImage, generateImageHash } from '@/lib/image-deduplication';
 import { checkRateLimit as checkFirestoreRateLimit } from '@/lib/firestore-rate-limiter';
 import { generateImageWithRetry } from '@/lib/smart-image-generation';
+import { getCachedImage, cacheImage } from '@/lib/image-cache';
+import { generateWithReplicate, isReplicateAvailable } from '@/lib/replicate-image';
 
 /**
  * Sanitize error messages to prevent XSS
@@ -249,25 +251,64 @@ export async function POST(req: Request) {
             
             logger.log(`🎨 Using AI-generated color palette: ${colorHexCodes.join(', ')}`);
             
-            // 🚀 OPTIMIZATION 5: Smart image generation with retry logic
-            generatedImageUrl = await generateImageWithRetry(
-              outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`,
-              colorHexCodes,
-              2 // Max 2 retries
-            );
-            logger.log(`✅ [OUTFIT ${outfitNumber}] Image generated`);
+            const imagePrompt = outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`;
+            
+            // 🚀 OPTIMIZATION 5: Check image cache first
+            const cachedImageUrl = await getCachedImage(imagePrompt, colorHexCodes);
+            if (cachedImageUrl) {
+              generatedImageUrl = cachedImageUrl;
+              logger.log(`✅ [OUTFIT ${outfitNumber}] Using cached image (saved generation cost!)`);
+            } else {
+              // 🚀 OPTIMIZATION 6: Hybrid generation strategy with fallbacks
+              // Try Replicate first (if available), then fall back to free services
+              
+              let imageGenerated = false;
+              
+              // Strategy 1: Try Replicate (premium quality) - prioritize for ALL positions if free services fail
+              if (isReplicateAvailable()) {
+                logger.log(`💎 [OUTFIT ${outfitNumber}] Trying Replicate for premium quality...`);
+                const replicateUrl = await generateWithReplicate(imagePrompt, colorHexCodes);
+                if (replicateUrl) {
+                  generatedImageUrl = replicateUrl;
+                  logger.log(`✅ [OUTFIT ${outfitNumber}] Premium image generated via Replicate`);
+                  imageGenerated = true;
+                }
+              }
+              
+              // Strategy 2: Try free service (Pollinations.ai / alternatives)
+              if (!imageGenerated) {
+                logger.log(`🎨 [OUTFIT ${outfitNumber}] Trying free image generation...`);
+                generatedImageUrl = await generateImageWithRetry(imagePrompt, colorHexCodes, 2);
+                imageGenerated = true;
+              }
+              
+              // Cache the generated image for future use (skip data URIs and placeholders)
+              if (generatedImageUrl && !generatedImageUrl.includes('placeholder') && !generatedImageUrl.startsWith('data:')) {
+                try {
+                  generatedImageUrl = await cacheImage(imagePrompt, colorHexCodes, generatedImageUrl);
+                  logger.log(`✅ [OUTFIT ${outfitNumber}] Image cached to Firebase Storage`);
+                } catch (cacheError) {
+                  logger.log(`⚠️ [OUTFIT ${outfitNumber}] Failed to cache image, using original URL`);
+                }
+              }
+              
+              logger.log(`✅ [OUTFIT ${outfitNumber}] Image generation complete`);
+            }
 
             // STEP 2: Try to extract colors from generated image (optional enhancement)
             // PRIMARY: Use AI colors (more reliable and match the recommendation)
             // SECONDARY: Extract from image (for validation/enhancement only)
             let extractedColors: any = null;
             try {
-              extractedColors = await withTimeout(
-                extractColorsFromUrl(generatedImageUrl),
-                10000, // 10 second timeout
-                `Color extraction timeout`
-              );
-              logger.log(`✅ [OUTFIT ${outfitNumber}] Extracted ${extractedColors.dominantColors.length} colors from generated image`);
+              // Only extract colors if we have a valid image URL (not data URI or placeholder)
+              if (generatedImageUrl && !generatedImageUrl.startsWith('data:') && !generatedImageUrl.includes('placeholder')) {
+                extractedColors = await withTimeout(
+                  extractColorsFromUrl(generatedImageUrl),
+                  10000, // 10 second timeout
+                  `Color extraction timeout`
+                );
+                logger.log(`✅ [OUTFIT ${outfitNumber}] Extracted ${extractedColors.dominantColors.length} colors from generated image`);
+              }
             } catch (colorError) {
               logger.warn(`⚠️ [OUTFIT ${outfitNumber}] Color extraction failed, using AI colors:`, (colorError as Error).message);
             }

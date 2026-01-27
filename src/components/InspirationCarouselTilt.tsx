@@ -40,6 +40,7 @@ export function InspirationCarouselTilt() {
                           src={item.src}
                           alt={item.alt}
                           fill
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                           style={{ objectFit: 'cover' }}
                           className="transition-transform duration-300 group-hover:scale-105"
                           data-ai-hint={item.hint}
