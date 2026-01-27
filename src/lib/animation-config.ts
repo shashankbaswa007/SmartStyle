@@ -37,17 +37,19 @@ export const EASING = {
 export const buttonVariants: Variants = {
   initial: { scale: 1 },
   tap: {
-    scale: 0.95,
+    scale: 0.96,
     transition: {
-      duration: ANIMATION_DURATION.instant,
-      ease: EASING.sharpOut,
+      type: 'spring',
+      stiffness: 500,
+      damping: 30,
     },
   },
   hover: {
     scale: 1.02,
     transition: {
-      duration: ANIMATION_DURATION.fast,
-      ease: EASING.smooth,
+      type: 'spring',
+      stiffness: 400,
+      damping: 25,
     },
   },
 };
@@ -64,15 +66,17 @@ export const cardVariants: Variants = {
     opacity: 1,
     y: 0,
     transition: {
-      duration: ANIMATION_DURATION.normal,
-      ease: EASING.smooth,
+      type: 'spring',
+      stiffness: 300,
+      damping: 30,
     },
   },
   hover: {
     y: -8,
     transition: {
-      duration: ANIMATION_DURATION.normal,
-      ease: EASING.spring,
+      type: 'spring',
+      stiffness: 400,
+      damping: 25,
     },
   },
 };
@@ -96,8 +100,12 @@ export const imageZoomVariants: Variants = {
   hover: {
     scale: 1.05,
     transition: {
-      duration: ANIMATION_DURATION.normal,
-      ease: EASING.smooth,
+      type: 'spring',
+      stiffness: 300,
+      damping: 25,
+    },
+  },
+};
     },
   },
 };
@@ -124,7 +132,7 @@ export const modalBackdropVariants: Variants = {
 export const modalContentVariants: Variants = {
   hidden: {
     opacity: 0,
-    scale: 0.9,
+    scale: 0.95,
     y: 20,
   },
   visible: {
@@ -132,15 +140,17 @@ export const modalContentVariants: Variants = {
     scale: 1,
     y: 0,
     transition: {
-      duration: ANIMATION_DURATION.normal,
-      ease: EASING.spring,
+      type: 'spring',
+      stiffness: 400,
+      damping: 30,
     },
   },
   exit: {
     opacity: 0,
-    scale: 0.9,
+    scale: 0.95,
     transition: {
       duration: ANIMATION_DURATION.fast,
+      ease: EASING.smooth,
     },
   },
 };
@@ -186,14 +196,16 @@ export const pageTransitionVariants: Variants = {
     opacity: 1,
     y: 0,
     transition: {
-      duration: ANIMATION_DURATION.normal,
-      ease: EASING.smooth,
+      type: 'spring',
+      stiffness: 300,
+      damping: 30,
     },
   },
   exit: {
     opacity: 0,
     transition: {
       duration: ANIMATION_DURATION.fast,
+      ease: EASING.smooth,
     },
   },
 };

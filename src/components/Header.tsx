@@ -14,7 +14,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { UserProfileDropdown } from '@/components/auth/UserProfileDropdown';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { Wand2, Heart, Palette } from 'lucide-react';
+import { Wand2, Heart, Palette, Shirt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import StarBorder from '@/components/StarBorder';
@@ -56,13 +56,13 @@ export function Header() {
                 <StarBorder
                   as={Link}
                   href="/style-check"
-                  className="cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/50"
-                  color="#10b981"
+                  className="cursor-pointer transition-all duration-500 ease-out hover:scale-105 hover:shadow-lg hover:shadow-blue-500/50 will-change-transform"
+                  color="#3b82f6"
                   speed="3s"
                   thickness={10}
                 >
                   <div className="flex items-center gap-2 group">
-                    <Wand2 className="w-4 h-4 group-hover:rotate-12 transition-transform duration-300" />
+                    <Wand2 className="w-4 h-4 group-hover:rotate-12 transition-transform duration-500 ease-out will-change-transform" />
                     <span className="font-medium">Style Check</span>
                   </div>
                 </StarBorder>
@@ -70,13 +70,13 @@ export function Header() {
                 <StarBorder
                   as={Link}
                   href="/color-match"
-                  className="cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/50"
+                  className="cursor-pointer transition-all duration-500 ease-out hover:scale-105 hover:shadow-lg hover:shadow-purple-500/50 will-change-transform"
                   color="#a855f7"
                   speed="3s"
                   thickness={10}
                 >
                   <div className="flex items-center gap-2 group">
-                    <Palette className="w-4 h-4 group-hover:rotate-12 group-hover:fill-purple-500 transition-transform duration-300" />
+                    <Palette className="w-4 h-4 group-hover:rotate-12 group-hover:fill-purple-500 transition-all duration-500 ease-out will-change-transform" />
                     <span className="font-medium">Color Match</span>
                   </div>
                 </StarBorder>
@@ -84,14 +84,28 @@ export function Header() {
                 <StarBorder
                   as={Link}
                   href="/likes"
-                  className="cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-red-500/50"
+                  className="cursor-pointer transition-all duration-500 ease-out hover:scale-105 hover:shadow-lg hover:shadow-red-500/50 will-change-transform"
                   color="#ef4444"
                   speed="3s"
                   thickness={10}
                 >
                   <div className="flex items-center gap-2 group">
-                    <Heart className="w-4 h-4 group-hover:scale-110 group-hover:fill-red-500 transition-all duration-300" />
+                    <Heart className="w-4 h-4 group-hover:scale-110 group-hover:fill-red-500 transition-all duration-500 ease-out will-change-transform" />
                     <span className="font-medium">Likes</span>
+                  </div>
+                </StarBorder>
+
+                <StarBorder
+                  as={Link}
+                  href="/wardrobe"
+                  className="cursor-pointer transition-all duration-500 ease-out hover:scale-105 hover:shadow-lg hover:shadow-teal-500/50 will-change-transform"
+                  color="#14b8a6"
+                  speed="3s"
+                  thickness={10}
+                >
+                  <div className="flex items-center gap-2 group">
+                    <Shirt className="w-4 h-4 group-hover:scale-110 transition-all duration-500 ease-out will-change-transform" />
+                    <span className="font-medium">Wardrobe</span>
                   </div>
                 </StarBorder>
               </nav>
@@ -140,6 +154,17 @@ export function Header() {
                 >
                   <Link href="/likes" title="Your Likes">
                     <Heart className="w-5 h-5 text-red-500" />
+                  </Link>
+                </Button>
+
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="icon"
+                  className="hover:bg-teal-500/10 transition-colors"
+                >
+                  <Link href="/wardrobe" title="Your Wardrobe">
+                    <Shirt className="w-5 h-5 text-teal-500" />
                   </Link>
                 </Button>
               </div>

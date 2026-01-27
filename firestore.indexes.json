@@ -19,16 +19,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "likedAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "likedOutfits",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
           "fieldPath": "userId",
           "order": "ASCENDING"
         },
@@ -84,6 +74,37 @@
         },
         {
           "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]    },
+    {
+      "collectionGroup": "wardrobeItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "addedDate",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "wardrobeItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "itemType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "isActive",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "addedDate",
           "order": "DESCENDING"
         }
       ]

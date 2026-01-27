@@ -116,6 +116,22 @@ service cloud.firestore {
         allow create: if isOwner(userId);
         allow delete: if isOwner(userId);
       }
+      
+      // User's wardrobe items (nested under users)
+      match /wardrobeItems/{itemId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
+      
+      // User's saved wardrobe outfit combinations (nested under users)
+      match /wardrobeOutfits/{outfitId} {
+        allow read: if isOwner(userId);
+        allow write: if isOwner(userId);
+        allow create: if isOwner(userId);
+        allow delete: if isOwner(userId);
+      }
     }
     
     // System Logs - Allow write from anywhere (error logging), no reads

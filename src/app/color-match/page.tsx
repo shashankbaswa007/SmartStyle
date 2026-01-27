@@ -118,7 +118,7 @@ export default function ColorMatchPage() {
         <div className="absolute inset-0 opacity-40 pointer-events-none">
           <Particles
               className="absolute inset-0"
-              particleColors={['#7B68EE', '#00FFFF']}
+              particleColors={['#a855f7', '#c4b5fd']}
               particleCount={500}
               particleSpread={10}
               speed={0.3}
@@ -150,8 +150,8 @@ export default function ColorMatchPage() {
                 stroke={true}
                 width={false}
                 weight={true}
-                textColor="#C4B5FD"
-                strokeColor="#5B21B6"
+                textColor="#c4b5fd"
+                strokeColor="#7c3aed"
                 minFontSize={32}
               />
             )}
@@ -316,9 +316,12 @@ export default function ColorMatchPage() {
                 <motion.div
                   key={index}
                   variants={itemVariants}
-                  whileHover={{ scale: 1.05, y: -5 }}
-                  transition={{ duration: 0.2 }}
-                  className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-4 cursor-pointer hover:shadow-xl"
+                  whileHover={{ 
+                    scale: 1.03, 
+                    y: -8,
+                    transition: { type: 'spring', stiffness: 400, damping: 25 }
+                  }}
+                  className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-4 cursor-pointer hover:shadow-xl will-change-transform"
                 >
                   <div className="flex flex-col items-center text-center">
                     {/* Color Swatch - Larger for better visibility */}

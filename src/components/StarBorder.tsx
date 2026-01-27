@@ -46,7 +46,7 @@ const StarBorder = <T extends React.ElementType = 'button'>({
       ></div>
       
       {/* Inner content container with glassmorphism */}
-      <div className="relative z-10 bg-gradient-to-br from-gray-900/95 via-black/95 to-gray-900/95 backdrop-blur-xl border border-gray-700/50 text-white text-center text-sm font-medium py-3 px-6 rounded-2xl transition-all duration-300 hover:border-gray-600/70 hover:bg-gradient-to-br hover:from-gray-800/95 hover:via-black/95 hover:to-gray-800/95">
+      <div className="relative z-10 bg-gradient-to-br from-gray-900/95 via-black/95 to-gray-900/95 backdrop-blur-xl border border-gray-700/50 text-white text-center text-sm font-medium py-3 px-6 rounded-2xl transition-all duration-500 ease-out hover:border-gray-600/70 hover:bg-gradient-to-br hover:from-gray-800/95 hover:via-black/95 hover:to-gray-800/95 will-change-transform">
         {children}
       </div>
     </Component>

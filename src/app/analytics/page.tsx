@@ -439,7 +439,7 @@ export default function AnalyticsPage() {
           <div className="absolute inset-0 opacity-40 pointer-events-none">
             <Particles
               className="absolute inset-0"
-              particleColors={['#7B68EE', '#00FFFF']}
+              particleColors={['#a855f7', '#c4b5fd']}
               particleCount={500}
               particleSpread={10}
               speed={0.3}
@@ -471,8 +471,8 @@ export default function AnalyticsPage() {
                   stroke={true}
                   width={false}
                   weight={true}
-                  textColor="#C4B5FD"
-                  strokeColor="#5B21B6"
+                  textColor="#c4b5fd"
+                  strokeColor="#7c3aed"
                   minFontSize={32}
                 />
               )}

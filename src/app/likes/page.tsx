@@ -13,7 +13,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import Particles from '@/components/Particles';
 import ShinyText from '@/components/ShinyText';
 import TextPressure from '@/components/TextPressure';
-import SplashCursor from '@/components/SplashCursor';
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { getLikedOutfits, removeLikedOutfit } from '@/lib/likedOutfits';
@@ -202,20 +201,17 @@ export default function LikesPage() {
       {/* Particles Background */}
       <div className="absolute inset-0 -z-10" >
         {isMounted && (
-          <>
-            <SplashCursor SPLAT_RADIUS={0.08} SPLAT_FORCE={1000} COLOR_UPDATE_SPEED={3} SIM_RESOLUTION={48} DYE_RESOLUTION={256} PRESSURE_ITERATIONS={4} />
-            <Particles
-              className="absolute inset-0"
-              particleColors={['#7B68EE', '#E6E6FA']}
-              particleCount={150}
-              particleSpread={8}
-              speed={0.2}
-              particleBaseSize={120}
-              moveParticlesOnHover={true}
-              alphaParticles={false}
-              disableRotation={false}
-            />
-          </>
+          <Particles
+            className="absolute inset-0"
+            particleColors={['#ef4444', '#fca5a5']}
+            particleCount={500}
+            particleSpread={8}
+            speed={0.2}
+            particleBaseSize={120}
+            moveParticlesOnHover={true}
+            alphaParticles={false}
+            disableRotation={false}
+          />
         )}
       </div>
 
@@ -239,9 +235,9 @@ export default function LikesPage() {
                 stroke={true}
                 width={false}
                 weight={true}
-                textColor="#C4B5FD"
-                strokeColor="#5B21B6"
-                minFontSize={56}
+                textColor="#fca5a5"
+                strokeColor="#dc2626"
+                minFontSize={32}
               />
             )}
             {/* Refresh button - only show when there are liked outfits */}
