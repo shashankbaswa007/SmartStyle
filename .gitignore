@@ -94,11 +94,26 @@ next-env.d.ts
 # Test scripts (if they contain sensitive data)
 test-*.js
 *-test-local.js
+check-*.js
+diagnose-*.js
+verify-*.js
+comprehensive-*.js
+diagnostic-*.js
+*.sh
+
+# Development documentation (optional - keep only essential docs)
+*_SUMMARY.md
+*_REPORT.md
+*_FIXES.md
+*_IMPROVEMENTS.md
+TESTING_*.md
+VERIFICATION_*.md
 
 # Temporary files
 *.tmp
 *.temp
 .cache/
+.modified
 
 # ========================================
 # IMPORTANT NOTES
