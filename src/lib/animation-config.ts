@@ -106,9 +106,6 @@ export const imageZoomVariants: Variants = {
     },
   },
 };
-    },
-  },
-};
 
 // ============================================================================
 // MODAL/DIALOG ANIMATIONS

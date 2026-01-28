@@ -13,7 +13,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import Particles from '@/components/Particles';
 import ShinyText from '@/components/ShinyText';
 import TextPressure from '@/components/TextPressure';
-import SplashCursor from '@/components/SplashCursor';
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { getWardrobeItems, deleteWardrobeItem, markItemAsWorn, WardrobeItemData } from '@/lib/wardrobeService';
