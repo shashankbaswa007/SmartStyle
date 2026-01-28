@@ -114,11 +114,11 @@ export default function ColorMatchPage() {
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 relative overflow-hidden">
       {/* Particles Background */}
+      <div className="absolute inset-0 z-0 pointer-events-none">
       {isMounted && (
-        <div className="absolute inset-0 opacity-40 pointer-events-none">
           <Particles
               className="absolute inset-0"
-              particleColors={['#a855f7', '#c4b5fd']}
+              particleColors={['#3b82f6', '#f63b82']}
               particleCount={500}
               particleSpread={10}
               speed={0.3}
@@ -127,15 +127,15 @@ export default function ColorMatchPage() {
               alphaParticles={false}
               disableRotation={false}
             />
-        </div>
       )}
+      </div>
 
       <div className="relative z-10 container mx-auto px-4 py-12">
         {/* Header */}
         <header className="text-center mb-16">
           <div style={{ 
             position: 'relative', 
-            height: '350px', 
+            height: '300px', 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
@@ -150,8 +150,8 @@ export default function ColorMatchPage() {
                 stroke={true}
                 width={false}
                 weight={true}
-                textColor="#c4b5fd"
-                strokeColor="#7c3aed"
+                textColor="#93c5fd"
+                strokeColor="#1d4ed8"
                 minFontSize={32}
               />
             )}

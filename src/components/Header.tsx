@@ -56,13 +56,13 @@ export function Header() {
                 <StarBorder
                   as={Link}
                   href="/style-check"
-                  className="cursor-pointer transition-all duration-500 ease-out hover:scale-105 hover:shadow-lg hover:shadow-blue-500/50 will-change-transform"
-                  color="#3b82f6"
+                  className="cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/50"
+                  color="#a855f7"
                   speed="3s"
                   thickness={10}
                 >
                   <div className="flex items-center gap-2 group">
-                    <Wand2 className="w-4 h-4 group-hover:rotate-12 transition-transform duration-500 ease-out will-change-transform" />
+                    <Wand2 className="w-4 h-4 group-hover:rotate-12 transition-transform duration-500 ease-out will-change-transform" style={{ color: '#a855f7' }} />
                     <span className="font-medium">Style Check</span>
                   </div>
                 </StarBorder>
@@ -70,13 +70,13 @@ export function Header() {
                 <StarBorder
                   as={Link}
                   href="/color-match"
-                  className="cursor-pointer transition-all duration-500 ease-out hover:scale-105 hover:shadow-lg hover:shadow-purple-500/50 will-change-transform"
-                  color="#a855f7"
+                  className="cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/50"
+                  color="#3b82f6"
                   speed="3s"
                   thickness={10}
                 >
                   <div className="flex items-center gap-2 group">
-                    <Palette className="w-4 h-4 group-hover:rotate-12 group-hover:fill-purple-500 transition-all duration-500 ease-out will-change-transform" />
+                    <Palette className="w-4 h-4 group-hover:rotate-12 transition-all duration-500 ease-out will-change-transform" style={{ color: '#3b82f6' }} />
                     <span className="font-medium">Color Match</span>
                   </div>
                 </StarBorder>
@@ -90,7 +90,7 @@ export function Header() {
                   thickness={10}
                 >
                   <div className="flex items-center gap-2 group">
-                    <Heart className="w-4 h-4 group-hover:scale-110 group-hover:fill-red-500 transition-all duration-500 ease-out will-change-transform" />
+                    <Heart className="w-4 h-4 group-hover:scale-110 transition-all duration-500 ease-out will-change-transform" style={{ color: '#ef4444' }} />
                     <span className="font-medium">Likes</span>
                   </div>
                 </StarBorder>
@@ -104,7 +104,7 @@ export function Header() {
                   thickness={10}
                 >
                   <div className="flex items-center gap-2 group">
-                    <Shirt className="w-4 h-4 group-hover:scale-110 transition-all duration-500 ease-out will-change-transform" />
+                    <Shirt className="w-4 h-4 group-hover:scale-110 transition-all duration-500 ease-out will-change-transform" style={{ color: '#14b8a6' }} />
                     <span className="font-medium">Wardrobe</span>
                   </div>
                 </StarBorder>

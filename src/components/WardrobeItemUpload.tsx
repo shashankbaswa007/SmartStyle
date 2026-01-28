@@ -46,17 +46,18 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       toast({
         variant: 'destructive',
         title: 'Invalid File',
-        description: 'Please select an image file.',
+        description: 'Please select a valid image file (JPEG, PNG, WebP, or HEIC).',
       });
       return;
     }
 
     // Check file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
+      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
       toast({
         variant: 'destructive',
         title: 'File Too Large',
-        description: 'Please select an image under 5MB.',
+        description: `Image size is ${sizeMB}MB. Please select an image under 5MB.`,
       });
       return;
     }
@@ -81,8 +82,17 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
   const handleCameraCapture = () => {
     // Trigger file input with camera capture
     if (fileInputRef.current) {
+      // Remove any existing capture attribute first
+      fileInputRef.current.removeAttribute('capture');
+      // Set capture for rear camera on mobile devices
       fileInputRef.current.setAttribute('capture', 'environment');
       fileInputRef.current.click();
+      // Remove capture attribute after click so file upload still works normally
+      setTimeout(() => {
+        if (fileInputRef.current) {
+          fileInputRef.current.removeAttribute('capture');
+        }
+      }, 100);
     }
   };
 
@@ -141,10 +151,15 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
 
     // Validate required fields
     if (!imagePreview || !itemType || !description) {
+      const missing = [];
+      if (!imagePreview) missing.push('image');
+      if (!itemType) missing.push('item type');
+      if (!description) missing.push('description');
+      
       toast({
         variant: 'destructive',
         title: 'Missing Information',
-        description: 'Please provide an image, item type, and description.',
+        description: `Please provide: ${missing.join(', ')}`,
       });
       return;
     }
@@ -255,7 +270,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/jpg,image/png,image/webp,image/heic"
                     onChange={handleFileInputChange}
                     className="hidden"
                   />

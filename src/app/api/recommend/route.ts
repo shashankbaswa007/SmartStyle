@@ -21,7 +21,6 @@ import {
   addToAntiRepetitionCache,
   detectPatternLock 
 } from '@/lib/recommendation-diversifier';
-import pLimit from 'p-limit';
 import { FirestoreCache } from '@/lib/firestore-cache';
 import { checkDuplicateImage, generateImageHash } from '@/lib/image-deduplication';
 import { checkRateLimit as checkFirestoreRateLimit } from '@/lib/firestore-rate-limiter';
@@ -215,32 +214,24 @@ export async function POST(req: Request) {
       throw new Error('Failed to analyze image. Please try again with a clearer photo.');
     }
 
-    // Step 2: Process outfits IN PARALLEL with controlled concurrency (2 concurrent max)
+    // Step 2: Process outfits SEQUENTIALLY (one at a time for stability)
     const outfitsStart = Date.now();
     const outfitsToProcess = analysis.outfitRecommendations.slice(0, 3);
     
-    logger.log('🔄 [PERF] Processing 3 outfits with PARALLEL processing (2 concurrent)...');
+    logger.log('🔄 [PERF] Processing 3 outfits SEQUENTIALLY (one at a time for stability)...');
     
-    // Create a concurrency limiter - max 2 outfits generating at once
-    const limit = pLimit(2);
+    let enrichedOutfits = [];
     
-    let enrichedOutfits = await Promise.all(
-      outfitsToProcess.map((outfit, index) =>
-        limit(async () => {
-          const outfitStart = Date.now();
-          const outfitNumber = index + 1;
-          logger.log(`⚡ [PERF] Starting outfit ${outfitNumber}/3`);
+    for (let index = 0; index < outfitsToProcess.length; index++) {
+      const outfit = outfitsToProcess[index];
+      const outfitStart = Date.now();
+      const outfitNumber = index + 1;
+      logger.log(`⚡ [PERF] Starting outfit ${outfitNumber}/3`);
 
-          // Track generated image URL across scopes
-          let generatedImageUrl: string | null = null;
+      // Track generated image URL across scopes
+      let generatedImageUrl: string | null = null;
 
-          try {
-            // 🚀 OPTIMIZATION 4: Faster stagger (500ms instead of 1000ms)
-            if (index > 0) {
-              const delayMs = index * 500; // 500ms stagger (faster!)
-              logger.log(`⏳ Staggered start: waiting ${delayMs}ms for outfit ${outfitNumber}...`);
-              await new Promise(resolve => setTimeout(resolve, delayMs));
-            }
+      try {
 
             // Extract color hex codes from AI recommendation
             const colorHexCodes = outfit.colorPalette?.map(c => {
@@ -339,14 +330,14 @@ export async function POST(req: Request) {
 
             logger.log(`⏱️ [PERF] Outfit ${outfitNumber} completed: ${Date.now() - outfitStart}ms`);
 
-            // Return enriched outfit
-            return {
+            // Add enriched outfit to results
+            enrichedOutfits.push({
               ...outfit,
               imageUrl: generatedImageUrl,
               colorPalette: accurateColorPalette,
               generatedImageColors: extractedColors?.colorPalette?.slice(0, 6) || null,
               shoppingLinks
-            };
+            });
 
           } catch (error: any) {
             // Check if error is from shopping search timeout vs image generation
@@ -356,34 +347,42 @@ export async function POST(req: Request) {
             if (isShoppingError || isColorError) {
               logger.warn(`⚠️ Outfit ${outfitNumber} - ${isShoppingError ? 'shopping' : 'color extraction'} failed but image OK`);
               // Image generated successfully, only secondary features failed
-              return {
+              enrichedOutfits.push({
                 ...outfit,
                 imageUrl: generatedImageUrl || `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
                 colorPalette: outfit.colorPalette || ['#000000', '#FFFFFF', '#808080'],
                 generatedImageColors: null,
                 shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
                 shoppingError: isShoppingError ? 'Shopping links temporarily unavailable' : undefined
-              };
-            }
-            
-            logger.error(`❌ Outfit ${outfitNumber} failed:`, error.message);
+              });
+            } else {
+              logger.error(`❌ Outfit ${outfitNumber} failed:`, error.message);
             logger.log(`⏱️ [PERF] Outfit ${outfitNumber} failed after: ${Date.now() - outfitStart}ms`);
             
             // Return failed outfit with placeholder
-            return {
+            enrichedOutfits.push({
               ...outfit,
               imageUrl: `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
               colorPalette: outfit.colorPalette || ['#000000', '#FFFFFF', '#808080'],
               generatedImageColors: null,
               shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
               error: error.message || 'Generation failed'
-            };
+            });
           }
-        })
-      )
-    );
+        } catch (error: any) {
+          logger.error(`❌ Outfit ${outfitNumber} failed unexpectedly:`, error.message);
+          enrichedOutfits.push({
+            ...outfit,
+            imageUrl: `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
+            colorPalette: outfit.colorPalette || ['#000000', '#FFFFFF', '#808080'],
+            generatedImageColors: null,
+            shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
+            error: error.message || 'Generation failed'
+          });
+        }
+      }
 
-    logger.log(`⏱️ [PERF] All outfits processed with parallel execution: ${Date.now() - outfitsStart}ms`);
+    logger.log(`⏱️ [PERF] All outfits processed sequentially: ${Date.now() - outfitsStart}ms`);
     logger.log('✅ All outfits processed!');
 
     // ✨ Apply diversification if user is authenticated and has preferences

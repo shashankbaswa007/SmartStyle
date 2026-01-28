@@ -217,11 +217,11 @@ export default function WardrobePage() {
           {isMounted && (
             <Particles
               className="absolute inset-0"
-              particleColors={['#14b8a6', '#5eead4']}
+              particleColors={['#14b8a6', '#b81426']}
               particleCount={500}
-              particleSpread={8}
-              speed={0.2}
-              particleBaseSize={120}
+              particleSpread={10}
+              speed={0.3}
+              particleBaseSize={150}
               moveParticlesOnHover={true}
               alphaParticles={false}
               disableRotation={false}
@@ -234,11 +234,11 @@ export default function WardrobePage() {
           <header className="text-center mb-16 relative">
             <div style={{ 
               position: 'relative', 
-              height: '350px', 
+              height: '300px', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',
-              paddingTop: '90px', 
+              paddingTop: '90px',
               paddingBottom: '90px',
               paddingLeft: '40px',
               paddingRight: '40px'

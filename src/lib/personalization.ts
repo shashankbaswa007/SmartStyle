@@ -386,7 +386,8 @@ export async function saveRecommendation(
   recommendation: Omit<RecommendationHistory, 'id' | 'userId' | 'createdAt'>
 ): Promise<string> {
   try {
-    const historyRef = collection(db, 'recommendationHistory');
+    // Save to subcollection under user document (consistent with firestoreRecommendations.ts)
+    const historyRef = collection(db, 'users', userId, 'recommendationHistory');
     const docRef = doc(historyRef);
 
     const historyEntry: RecommendationHistory = {
@@ -400,10 +401,23 @@ export async function saveRecommendation(
 
     // Update user stats
     const prefsRef = doc(db, 'userPreferences', userId);
-    await updateDoc(prefsRef, {
-      totalRecommendations: increment(1),
-      updatedAt: Timestamp.now(),
-    });
+    try {
+      await updateDoc(prefsRef, {
+        totalRecommendations: increment(1),
+        updatedAt: Timestamp.now(),
+      });
+    } catch (prefsError) {
+      // If preferences don't exist, initialize them
+      console.log('📝 Initializing user preferences during recommendation save');
+      await initializeUserPreferences(userId);
+      await updateDoc(prefsRef, {
+        totalRecommendations: increment(1),
+        updatedAt: Timestamp.now(),
+      });
+    }
+
+    // Clear cache for this user
+    clearQueryCache(userId);
 
     return docRef.id;
   } catch (error) {
@@ -452,21 +466,47 @@ export async function getRecommendationHistory(
       return cached;
     }
 
+    // Try reading from subcollection first (new structure)
+    const userHistoryRef = collection(db, 'users', userId, 'recommendationHistory');
+    const userQuery = query(
+      userHistoryRef,
+      orderBy('createdAt', 'desc'),
+      limit(limitCount)
+    );
+
+    const userSnapshot = await getDocs(userQuery);
+    
+    if (!userSnapshot.empty) {
+      const results = userSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        userId
+      } as RecommendationHistory));
+      
+      // Cache results for 5 minutes
+      setCachedQuery(cacheKey, results);
+      console.log(`✅ Fetched ${results.length} recommendation history items from subcollection (cached for 5min)`);
+      return results;
+    }
+    
+    // Fallback to root collection (legacy structure)
     const historyRef = collection(db, 'recommendationHistory');
-    // OPTIMIZED: Limit to 50 items for better performance (~20ms vs ~200ms)
-    const q = query(
+    const rootQuery = query(
       historyRef,
       where('userId', '==', userId),
       orderBy('createdAt', 'desc'),
       limit(limitCount)
     );
 
-    const snapshot = await getDocs(q);
-    const results = snapshot.docs.map(doc => doc.data() as RecommendationHistory);
+    const rootSnapshot = await getDocs(rootQuery);
+    const results = rootSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as RecommendationHistory));
     
     // Cache results for 5 minutes
     setCachedQuery(cacheKey, results);
-    console.log(`✅ Fetched ${results.length} recommendation history items (cached for 5min)`);
+    console.log(`✅ Fetched ${results.length} recommendation history items from root collection (cached for 5min)`);
     
     return results;
   } catch (error) {

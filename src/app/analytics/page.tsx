@@ -456,7 +456,7 @@ export default function AnalyticsPage() {
           <header className="text-center mb-16">
             <div style={{ 
               position: 'relative', 
-              height: '350px', 
+              height: '300px', 
               display: 'flex', 
               alignItems: 'center', 
               justifyContent: 'center',

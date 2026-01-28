@@ -119,11 +119,21 @@ export default function WardrobeSuggestPage() {
       });
     } catch (err) {
       console.error('Error getting outfit suggestions:', err);
-      setError(err instanceof Error ? err.message : 'Failed to generate suggestions');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to generate suggestions';
+      setError(errorMessage);
+      
+      // Provide more helpful error messages
+      let toastDescription = errorMessage;
+      if (errorMessage.includes('Empty wardrobe') || errorMessage.includes('add items')) {
+        toastDescription = 'Add items to your wardrobe first, then come back for outfit suggestions!';
+      } else if (errorMessage.includes('Insufficient items') || errorMessage.includes('at least')) {
+        toastDescription = 'Add a few more items to your wardrobe to create better outfit combinations.';
+      }
+      
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to generate suggestions',
+        title: 'Cannot Generate Outfits',
+        description: toastDescription,
       });
     } finally {
       setLoading(false);
@@ -152,9 +162,9 @@ export default function WardrobeSuggestPage() {
               className="absolute inset-0"
               particleColors={['#14b8a6', '#5eead4']}
               particleCount={500}
-              particleSpread={8}
-              speed={0.2}
-              particleBaseSize={120}
+              particleSpread={10}
+              speed={0.3}
+              particleBaseSize={150}
               moveParticlesOnHover={true}
               alphaParticles={false}
               disableRotation={false}
@@ -269,7 +279,19 @@ export default function WardrobeSuggestPage() {
           {error && (
             <Alert variant="destructive" className="max-w-2xl mx-auto mb-8">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription>
+                {error}
+                {(error.includes('Empty wardrobe') || error.includes('Insufficient items')) && (
+                  <div className="mt-3">
+                    <Link href="/wardrobe">
+                      <Button variant="outline" size="sm" className="bg-white hover:bg-gray-50">
+                        <Shirt className="h-4 w-4 mr-2" />
+                        Go to Wardrobe
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </AlertDescription>
             </Alert>
           )}
 

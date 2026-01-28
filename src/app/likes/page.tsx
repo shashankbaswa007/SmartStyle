@@ -203,11 +203,11 @@ export default function LikesPage() {
         {isMounted && (
           <Particles
             className="absolute inset-0"
-            particleColors={['#ef4444', '#fca5a5']}
+            particleColors={['#ef4444', '#44efef']}
             particleCount={500}
-            particleSpread={8}
-            speed={0.2}
-            particleBaseSize={120}
+            particleSpread={10}
+            speed={0.3}
+            particleBaseSize={150}
             moveParticlesOnHover={true}
             alphaParticles={false}
             disableRotation={false}
@@ -220,7 +220,7 @@ export default function LikesPage() {
         <header className="text-center mb-16 relative">
           <div style={{ 
             position: 'relative', 
-            height: '350px', 
+            height: '300px', 
             display: 'flex', 
             alignItems: 'center', 
             justifyContent: 'center',
