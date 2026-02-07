@@ -20,6 +20,7 @@ interface ColorWorkerResponse {
 
 export const useColorWorker = () => {
   const workerRef = useRef<Worker | null>(null);
+  const [workerAvailable, setWorkerAvailable] = useState(false);
 
   useEffect(() => {
     // Initialize worker
@@ -28,8 +29,28 @@ export const useColorWorker = () => {
         new URL('/workers/color-extraction.worker.ts', import.meta.url),
         { type: 'module' }
       );
+      
+      // Test worker availability
+      workerRef.current.postMessage({ type: 'ping' });
+      
+      const handleInit = (event: MessageEvent) => {
+        if (event.data.type === 'pong' || event.data.type === 'success' || event.data.type === 'error') {
+          setWorkerAvailable(true);
+          workerRef.current?.removeEventListener('message', handleInit);
+        }
+      };
+      
+      workerRef.current.addEventListener('message', handleInit);
+      
+      // Set timeout for worker initialization
+      setTimeout(() => {
+        if (!workerAvailable) {
+          console.warn('Color worker initialization timeout - worker may not be available');
+        }
+      }, 2000);
     } catch (error) {
       console.error('Failed to initialize color worker:', error);
+      setWorkerAvailable(false);
     }
 
     // Cleanup
@@ -49,7 +70,14 @@ export const useColorWorker = () => {
           return;
         }
 
+        // Set timeout for worker response
+        const timeoutId = setTimeout(() => {
+          workerRef.current?.removeEventListener('message', handleMessage);
+          reject(new Error('Color extraction timeout - operation took too long'));
+        }, 10000); // 10 second timeout
+
         const handleMessage = (event: MessageEvent<ColorWorkerResponse>) => {
+          clearTimeout(timeoutId);
           const { type, data, error } = event.data;
           
           if (type === 'success') {
@@ -84,7 +112,13 @@ export const useColorWorker = () => {
           return;
         }
 
+        const timeoutId = setTimeout(() => {
+          workerRef.current?.removeEventListener('message', handleMessage);
+          reject(new Error('Color harmony analysis timeout'));
+        }, 5000); // 5 second timeout
+
         const handleMessage = (event: MessageEvent<ColorWorkerResponse>) => {
+          clearTimeout(timeoutId);
           const { type, data, error } = event.data;
           
           if (type === 'success') {
@@ -106,5 +140,5 @@ export const useColorWorker = () => {
     []
   );
 
-  return { extractColors, analyzeColorHarmony };
+  return { extractColors, analyzeColorHarmony, workerAvailable };
 };

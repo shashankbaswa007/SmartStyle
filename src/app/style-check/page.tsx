@@ -1,13 +1,16 @@
 
 'use client';
 
-import { StyleAdvisor } from '@/components/style-advisor';
-import ShinyText from '@/components/ShinyText';
-import TextPressure from '@/components/TextPressure';
-import SplashCursor from '@/components/SplashCursor';
+import { lazy, Suspense } from 'react';
 import { useMounted } from '@/hooks/useMounted';
-import Particles from '@/components/Particles';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+
+// Lazy load heavy components for better performance
+const StyleAdvisor = lazy(() => import('@/components/style-advisor').then(mod => ({ default: mod.StyleAdvisor })));
+const ShinyText = lazy(() => import('@/components/ShinyText'));
+const TextPressure = lazy(() => import('@/components/TextPressure'));
+const SplashCursor = lazy(() => import('@/components/SplashCursor'));
+const Particles = lazy(() => import('@/components/Particles'));
 
 export default function StyleCheckPage() {
   const isMounted = useMounted();
@@ -18,18 +21,22 @@ export default function StyleCheckPage() {
       <div className="absolute inset-0 -z-10">
         {isMounted && (
           <>
-            <SplashCursor SPLAT_RADIUS={0.12} SPLAT_FORCE={2000} COLOR_UPDATE_SPEED={6} SIM_RESOLUTION={64} DYE_RESOLUTION={512} PRESSURE_ITERATIONS={8} />
-            <Particles
-              className="absolute inset-0"
-              particleColors={['#a855f7', '#c4b5fd']}
-              particleCount={500}
-              particleSpread={10}
-              speed={0.3}
-              particleBaseSize={150}
-              moveParticlesOnHover={true}
-              alphaParticles={false}
-              disableRotation={false}
-            />
+            <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-indigo-500/10" />}>
+              <SplashCursor SPLAT_RADIUS={0.12} SPLAT_FORCE={2000} COLOR_UPDATE_SPEED={6} SIM_RESOLUTION={64} DYE_RESOLUTION={512} PRESSURE_ITERATIONS={8} />
+            </Suspense>
+            <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-purple-500/10" />}>
+              <Particles
+                className="absolute inset-0"
+                particleColors={['#a855f7', '#c4b5fd']}
+                particleCount={50}
+                particleSpread={10}
+                speed={0.2}
+                particleBaseSize={120}
+                moveParticlesOnHover={false}
+                alphaParticles={false}
+                disableRotation={true}
+              />
+            </Suspense>
           </>
         )}
       </div>
@@ -37,24 +44,30 @@ export default function StyleCheckPage() {
         <header className="text-center mb-16">
           <div style={{ position: 'relative', height: '300px' }}>
             {isMounted && (
-              <TextPressure
-                text="Style-Check"
-                stroke={true}
-                width={false}
-                weight={true}
-                textColor="#c4b5fd"
-                strokeColor="#7c3aed"
-                minFontSize={32}
-              />
+              <Suspense fallback={<h1 className="text-6xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent pt-24">Style-Check</h1>}>
+                <TextPressure
+                  text="Style-Check"
+                  stroke={true}
+                  width={false}
+                  weight={true}
+                  textColor="#c4b5fd"
+                  strokeColor="#7c3aed"
+                  minFontSize={32}
+                />
+              </Suspense>
             )}
           </div>
-          <ShinyText
-            className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto"
-            text="Get instant feedback on your outfit. Upload a photo and let our AI-powered style advisor give you personalized recommendations."
-          />
+          <Suspense fallback={<p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">Get instant feedback on your outfit. Upload a photo and let our AI-powered style advisor give you personalized recommendations.</p>}>
+            <ShinyText
+              className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto"
+              text="Get instant feedback on your outfit. Upload a photo and let our AI-powered style advisor give you personalized recommendations."
+            />
+          </Suspense>
         </header>
 
-        <StyleAdvisor />
+        <Suspense fallback={<div className="flex justify-center items-center min-h-[400px]"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div><p className="text-muted-foreground">Loading style advisor...</p></div></div>}>
+          <StyleAdvisor />
+        </Suspense>
       </div>
     </main>
     </ProtectedRoute>

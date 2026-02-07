@@ -1,5 +1,5 @@
 import { db, auth } from './firebase';
-import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, updateDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, updateDoc, serverTimestamp, increment, onSnapshot } from 'firebase/firestore';
 import { logDeletion } from './audit-log';
 
 export interface WardrobeItemData {
@@ -19,6 +19,8 @@ export interface WardrobeItemData {
   tags?: string[];
   notes?: string;
   isActive: boolean;
+  colorsProcessed?: boolean; // Indicates if colors were extracted (vs placeholder)
+  lastUpdated?: number; // Timestamp of last update
 }
 
 export interface WardrobeOutfitData {
@@ -191,6 +193,79 @@ export async function getWardrobeItems(
 }
 
 /**
+ * Subscribe to wardrobe items for real-time updates (multi-tab/device consistency)
+ * @param userId - The user's ID
+ * @param filters - Optional filters for itemType, season, occasion
+ * @param onItems - Callback invoked with updated items
+ * @param onError - Optional error callback
+ * @returns Unsubscribe function
+ */
+export function subscribeToWardrobeItems(
+  userId: string,
+  filters: {
+    itemType?: WardrobeItemData['itemType'];
+    season?: string;
+    occasion?: string;
+    isActive?: boolean;
+  } | undefined,
+  onItems: (items: WardrobeItemData[]) => void,
+  onError?: (error: Error) => void
+): () => void {
+  if (!userId || userId.trim() === '' || userId === 'anonymous') {
+    console.error('❌ Invalid userId provided to subscribeToWardrobeItems:', userId);
+    onItems([]);
+    return () => undefined;
+  }
+
+  const itemsRef = collection(db, 'users', userId, 'wardrobeItems');
+  let q = query(itemsRef, where('isActive', '==', filters?.isActive ?? true), orderBy('addedDate', 'desc'));
+
+  if (filters?.itemType) {
+    q = query(itemsRef, where('itemType', '==', filters.itemType), where('isActive', '==', true), orderBy('addedDate', 'desc'));
+  }
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const items: WardrobeItemData[] = [];
+
+      snapshot.forEach((docSnap) => {
+        try {
+          const data = docSnap.data() as WardrobeItemData;
+
+          // Apply client-side filters for arrays (season, occasion)
+          if (filters?.season && data.season && !data.season.includes(filters.season as any)) {
+            return;
+          }
+          if (filters?.occasion && data.occasions && !data.occasions.includes(filters.occasion as any)) {
+            return;
+          }
+
+          if (data && data.imageUrl && data.itemType) {
+            items.push({
+              ...data,
+              id: docSnap.id,
+            });
+          } else {
+            console.warn('⚠️ Incomplete item data found:', docSnap.id);
+          }
+        } catch (err) {
+          console.error('❌ Error parsing item document:', docSnap.id, err);
+        }
+      });
+
+      onItems(items);
+    },
+    (error) => {
+      console.error('❌ Error subscribing to wardrobe items:', error);
+      onError?.(error as Error);
+    }
+  );
+
+  return unsubscribe;
+}
+
+/**
  * Update worn status for a wardrobe item
  * @param userId - The user's ID
  * @param itemId - The item's ID
@@ -216,7 +291,17 @@ export async function markItemAsWorn(
     return { success: true, message: 'Item marked as worn' };
   } catch (error) {
     console.error('❌ Error marking item as worn:', error);
-    return { success: false, message: 'Failed to update item' };
+    
+    let errorMessage = 'Failed to update item';
+    if (error && typeof error === 'object' && 'code' in error) {
+      if (error.code === 'not-found') {
+        errorMessage = 'Item not found';
+      } else if (error.code === 'permission-denied') {
+        errorMessage = 'Permission denied. Please sign in again.';
+      }
+    }
+    
+    return { success: false, message: errorMessage };
   }
 }
 
@@ -237,22 +322,39 @@ export async function deleteWardrobeItem(
 
     const itemRef = doc(db, 'users', userId, 'wardrobeItems', itemId);
     
-    // Soft delete - mark as inactive
+    // Soft delete - mark as inactive with deletion timestamp
     await updateDoc(itemRef, {
       isActive: false,
+      deletedAt: serverTimestamp(),
+      deletedTimestamp: Date.now(), // Client-side timestamp for offline support
     });
 
-    // Log deletion for audit
-    await logDeletion(userId, 'wardrobeItem', itemId, {
-      collection: 'wardrobeItems',
-      timestamp: new Date().toISOString(),
-    });
+    // Log deletion for audit (non-critical, fail gracefully)
+    try {
+      await logDeletion(userId, 'wardrobeItem', itemId, {
+        collection: 'wardrobeItems',
+        timestamp: new Date().toISOString(),
+      });
+    } catch (logError) {
+      console.warn('⚠️ Failed to log deletion (non-critical):', logError);
+      // Continue - deletion succeeded even if logging failed
+    }
 
     console.log('✅ Wardrobe item deleted:', itemId);
     return { success: true, message: 'Item removed from wardrobe' };
   } catch (error) {
     console.error('❌ Error deleting wardrobe item:', error);
-    return { success: false, message: 'Failed to delete item' };
+    
+    let errorMessage = 'Failed to delete item';
+    if (error && typeof error === 'object' && 'code' in error) {
+      if (error.code === 'not-found') {
+        errorMessage = 'Item not found or already deleted';
+      } else if (error.code === 'permission-denied') {
+        errorMessage = 'Permission denied. Please sign in again.';
+      }
+    }
+    
+    return { success: false, message: errorMessage };
   }
 }
 

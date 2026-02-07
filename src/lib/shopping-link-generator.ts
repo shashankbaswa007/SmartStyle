@@ -256,7 +256,7 @@ function buildSearchQuery(
   
   // Build query based on platform
   if (platform === 'amazon') {
-    // Amazon: gender + color + fabric + item + style
+    // Amazon: Simple query with just gender + color + item
     const gender = outfit.gender.toLowerCase().includes('women') 
       ? 'women' 
       : outfit.gender.toLowerCase().includes('men') 
@@ -264,23 +264,18 @@ function buildSearchQuery(
         : '';
     
     if (gender) parts.push(gender);
-    if (primaryColor) parts.push(primaryColor);
-    if (fabric) parts.push(fabric);
+    if (primaryColor && primaryColor !== 'multicolor') parts.push(primaryColor);
     parts.push(itemType);
-    if (styleKeywords.length > 0) parts.push(styleKeywords[0]);
     
   } else if (platform === 'myntra') {
-    // Myntra: color + item + style (gender handled separately)
-    if (primaryColor) parts.push(primaryColor);
+    // Myntra: Simple query with just color + item (gender in URL)
+    if (primaryColor && primaryColor !== 'multicolor') parts.push(primaryColor);
     parts.push(itemType);
-    if (styleKeywords.length > 0) parts.push(styleKeywords[0]);
     
   } else if (platform === 'tatacliq') {
-    // Tata CLiQ: color + fabric + item + style
-    if (primaryColor) parts.push(primaryColor);
-    if (fabric) parts.push(fabric);
+    // Tata CLiQ: Simple query with just color + item
+    if (primaryColor && primaryColor !== 'multicolor') parts.push(primaryColor);
     parts.push(itemType);
-    if (styleKeywords.length > 0) parts.push(styleKeywords[0]);
   }
   
   // Clean and validate
@@ -291,13 +286,13 @@ function buildSearchQuery(
   const uniqueWords = [...new Set(words)];
   query = uniqueWords.join(' ');
   
-  // Ensure minimum 2 words
-  if (uniqueWords.length < 2) {
-    query = `${primaryColor || 'stylish'} ${itemType}`;
+  // Ensure we have at least the item type
+  if (uniqueWords.length < 1) {
+    query = itemType;
   }
   
-  // Limit to 6 words maximum
-  const finalWords = query.split(' ').slice(0, 6);
+  // Limit to 3 words maximum for best e-commerce results
+  const finalWords = query.split(' ').slice(0, 3);
   
   return finalWords.join(' ');
 }
@@ -420,6 +415,12 @@ export function generateShoppingLinks(outfit: OutfitData): ShoppingLinks {
     const amazonQuery = buildSearchQuery(outfit, item, 'amazon');
     const myntraQuery = buildSearchQuery(outfit, item, 'myntra');
     const tataCliqQuery = buildSearchQuery(outfit, item, 'tatacliq');
+    
+    console.log(`🛒 Shopping queries for "${item}":`, {
+      amazon: amazonQuery,
+      myntra: myntraQuery,
+      tataCliq: tataCliqQuery
+    });
     
     // Build URLs
     const amazonUrl = buildAmazonURL(amazonQuery, outfit.gender);

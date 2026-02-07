@@ -57,6 +57,16 @@ service firebase.storage {
       // Note: Set up Cloud Functions to auto-delete temp files after 24 hours
     }
     
+    // Wardrobe images - user's clothing item photos
+    match /wardrobe/{userId}/{allPaths=**} {
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId 
+                   && isImage() 
+                   && isValidSize();
+      // Private wardrobe photos - only owner can access
+    }
+    
     // Generated images cache - server-side caching of AI-generated images
     match /generated-images/{imageHash} {
       allow read: if true; // Public read for cached images

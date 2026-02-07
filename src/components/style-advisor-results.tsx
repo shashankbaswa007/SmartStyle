@@ -1065,7 +1065,10 @@ export function StyleAdvisorResults({
 
                 {/* Image and Description Side by Side */}
                 <div className="grid md:grid-cols-2 gap-6 mb-6">
-                  {/* Left: Generated Image */}
+                  {/* Left: Generated Image - Only show if valid generation (not placeholder) */}
+                  {generatedImageUrls[index] && 
+                   !generatedImageUrls[index].includes('placeholder') && 
+                   !generatedImageUrls[index].startsWith('data:') && (
                   <div className="relative">
                     {/* Check for image error (not shopping error) */}
                     {(outfit as any).error && !(outfit as any).shoppingError ? (
@@ -1123,9 +1126,14 @@ export function StyleAdvisorResults({
                       </div>
                     )}
                   </div>
+                  )}
 
-                  {/* Right: Outfit Details */}
-                  <div className="space-y-4">
+                  {/* Right: Outfit Details - Full width if no image */}
+                  <div className={generatedImageUrls[index] && 
+                                 !generatedImageUrls[index].includes('placeholder') && 
+                                 !generatedImageUrls[index].startsWith('data:') 
+                                 ? "space-y-4" 
+                                 : "space-y-4 md:col-span-2"}>
                     {/* Description */}
                     {outfit.description && (
                       <div>

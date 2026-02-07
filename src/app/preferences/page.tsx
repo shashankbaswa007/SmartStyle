@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { 
   Palette, 
@@ -38,7 +38,7 @@ interface UserPreferences {
   totalLikes: number;
   totalWears: number;
   totalShoppingClicks: number;
-  lastUpdated: any;
+  lastUpdated: number | null;
 }
 
 interface BlocklistData {
@@ -56,13 +56,13 @@ interface BlocklistData {
     color?: string;
     style?: string;
     item?: string;
-    expiresAt: any;
+    expiresAt: number | null;
     reason: string;
   }>;
 }
 
 export default function PreferencesPage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [blocklists, setBlocklists] = useState<BlocklistData | null>(null);

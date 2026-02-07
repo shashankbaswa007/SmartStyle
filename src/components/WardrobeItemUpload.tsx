@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { auth } from '@/lib/firebase';
+import { useState, useRef, useEffect } from 'react';
+import { auth, storage } from '@/lib/firebase';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,8 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from '@/hooks/use-toast';
-import { Upload, Camera, X, Loader2 } from 'lucide-react';
+import { Upload, Camera, X, Loader2, Info, Shield, Shirt } from 'lucide-react';
 import Image from 'next/image';
 import { addWardrobeItem } from '@/lib/wardrobeService';
 import { extractColorsFromUrl } from '@/lib/color-extraction';
@@ -29,7 +33,19 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [extractingColors, setExtractingColors] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'processing' | 'complete'>('idle');
+  const [retryCount, setRetryCount] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [cameraAvailable, setCameraAvailable] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [suggestionsApplied, setSuggestionsApplied] = useState(false);
+  const [showSuggestionBadge, setShowSuggestionBadge] = useState(false);
+  const [backgroundProcessing, setBackgroundProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTaskRef = useRef<any>(null);
+  const submissionIdRef = useRef(0);
+  const backgroundProcessingRef = useRef<string | null>(null);
 
   // Form state
   const [itemType, setItemType] = useState<string>('');
@@ -40,6 +56,44 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
   const [selectedOccasions, setSelectedOccasions] = useState<string[]>([]);
   const [notes, setNotes] = useState('');
   const [purchaseDate, setPurchaseDate] = useState('');
+
+  // Detect camera availability and cleanup on unmount
+  useEffect(() => {
+    let mounted = true;
+
+    const checkCameraAvailability = async () => {
+      try {
+        // Check if mediaDevices API is available
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          if (mounted) setCameraAvailable(false);
+          return;
+        }
+        
+        // Check if camera permission is available (without requesting)
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasCamera = devices.some(device => device.kind === 'videoinput');
+        if (mounted) setCameraAvailable(hasCamera);
+      } catch (error) {
+        // If we can't check, assume camera might be available
+        if (mounted) setCameraAvailable(true);
+      }
+    };
+    
+    checkCameraAvailability();
+
+    return () => {
+      mounted = false;
+      // Cancel any ongoing upload on unmount
+      if (uploadTaskRef.current) {
+        try {
+          uploadTaskRef.current.cancel();
+        } catch (e) {
+          // Ignore cancel errors
+        }
+        uploadTaskRef.current = null;
+      }
+    };
+  }, []);
 
   const handleImageSelect = (file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -120,7 +174,225 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     );
   };
 
+  // Smart suggestions based on image analysis
+  const generateSmartSuggestions = async (file: File) => {
+    try {
+      // Only apply suggestions once
+      if (suggestionsApplied) return;
+
+      // Create temporary URL for quick analysis
+      const tempUrl = URL.createObjectURL(file);
+      
+      // Extract colors to help with suggestions
+      const colorData = await extractColorsFromUrl(tempUrl).catch(() => null);
+      URL.revokeObjectURL(tempUrl);
+
+      const fileName = file.name.toLowerCase();
+      const suggestions: any = {};
+
+      // Suggest item type based on filename patterns (extended)
+      if (!itemType) {
+        const patterns = {
+          top: ['shirt', 'tshirt', 't-shirt', 'blouse', 'top', 'tee', 'polo', 'tank', 'cami'],
+          bottom: ['pant', 'jean', 'trouser', 'short', 'skirt', 'legging', 'jogger'],
+          dress: ['dress', 'gown', 'frock', 'maxi', 'midi'],
+          shoes: ['shoe', 'sneaker', 'boot', 'sandal', 'heel', 'flat', 'loafer', 'oxford'],
+          outerwear: ['jacket', 'coat', 'sweater', 'cardigan', 'hoodie', 'blazer', 'vest'],
+          accessory: ['bag', 'purse', 'belt', 'scarf', 'hat', 'cap', 'watch', 'jewelry']
+        };
+
+        for (const [type, keywords] of Object.entries(patterns)) {
+          if (keywords.some(keyword => fileName.includes(keyword))) {
+            suggestions.itemType = type;
+            break;
+          }
+        }
+      }
+
+      // Suggest seasons based on colors
+      if (selectedSeasons.length === 0 && colorData) {
+        const colors = colorData.dominantColors || [];
+        const hasWarmColors = colors.some((c: string) => 
+          c.toLowerCase().includes('red') || c.toLowerCase().includes('orange') || c.toLowerCase().includes('yellow')
+        );
+        const hasCoolColors = colors.some((c: string) => 
+          c.toLowerCase().includes('blue') || c.toLowerCase().includes('green') || c.toLowerCase().includes('cyan')
+        );
+        const hasDarkColors = colors.some((c: string) => 
+          c.toLowerCase().includes('black') || c.toLowerCase().includes('gray') || c.toLowerCase().includes('navy')
+        );
+        const hasBrightColors = colors.some((c: string) => 
+          !c.toLowerCase().includes('black') && !c.toLowerCase().includes('gray') && !c.toLowerCase().includes('white')
+        );
+
+        const suggestedSeasons: string[] = [];
+        
+        if (hasWarmColors || hasBrightColors) {
+          suggestedSeasons.push('spring', 'summer');
+        }
+        if (hasCoolColors || hasDarkColors) {
+          suggestedSeasons.push('fall', 'winter');
+        }
+        
+        // If all colors are neutral, suggest all seasons
+        if (suggestedSeasons.length === 0) {
+          suggestedSeasons.push('spring', 'summer', 'fall', 'winter');
+        }
+
+        suggestions.seasons = suggestedSeasons;
+      }
+
+      // Suggest occasions based on item type and colors
+      if (selectedOccasions.length === 0) {
+        const suggestedOccasions: string[] = [];
+        const currentType = suggestions.itemType || itemType;
+
+        if (currentType === 'outerwear' || currentType === 'dress') {
+          suggestedOccasions.push('formal', 'business');
+        }
+        if (currentType === 'top' || currentType === 'bottom') {
+          suggestedOccasions.push('casual', 'business');
+        }
+        if (currentType === 'shoes') {
+          suggestedOccasions.push('casual', 'formal');
+        }
+        if (currentType === 'accessory') {
+          suggestedOccasions.push('party', 'formal');
+        }
+
+        // Always add casual as a fallback
+        if (suggestedOccasions.length === 0) {
+          suggestedOccasions.push('casual');
+        }
+
+        suggestions.occasions = suggestedOccasions;
+      }
+
+      // Suggest category based on item type and filename
+      if (!category) {
+        const currentType = suggestions.itemType || itemType;
+        let suggestedCategory = '';
+
+        if (currentType === 'top') {
+          if (fileName.includes('tshirt') || fileName.includes('t-shirt')) {
+            suggestedCategory = 'T-Shirt';
+          } else if (fileName.includes('shirt')) {
+            suggestedCategory = 'Shirt';
+          } else if (fileName.includes('blouse')) {
+            suggestedCategory = 'Blouse';
+          } else if (fileName.includes('sweater') || fileName.includes('jumper')) {
+            suggestedCategory = 'Sweater';
+          }
+        } else if (currentType === 'bottom') {
+          if (fileName.includes('jean')) {
+            suggestedCategory = 'Jeans';
+          } else if (fileName.includes('short')) {
+            suggestedCategory = 'Shorts';
+          } else if (fileName.includes('pant') || fileName.includes('trouser')) {
+            suggestedCategory = 'Pants';
+          }
+        } else if (currentType === 'shoes') {
+          if (fileName.includes('sneaker')) {
+            suggestedCategory = 'Sneakers';
+          } else if (fileName.includes('boot')) {
+            suggestedCategory = 'Boots';
+          } else if (fileName.includes('sandal')) {
+            suggestedCategory = 'Sandals';
+          }
+        } else if (currentType === 'outerwear') {
+          if (fileName.includes('jacket')) {
+            suggestedCategory = 'Jacket';
+          } else if (fileName.includes('coat')) {
+            suggestedCategory = 'Coat';
+          } else if (fileName.includes('hoodie')) {
+            suggestedCategory = 'Hoodie';
+          }
+        }
+
+        if (suggestedCategory) {
+          suggestions.category = suggestedCategory;
+        }
+      }
+
+      // Apply suggestions if we have any
+      if (Object.keys(suggestions).length > 0) {
+        if (suggestions.itemType) setItemType(suggestions.itemType);
+        if (suggestions.category) setCategory(suggestions.category);
+        if (suggestions.seasons) setSelectedSeasons(suggestions.seasons);
+        if (suggestions.occasions) setSelectedOccasions(suggestions.occasions);
+        
+        setSuggestionsApplied(true);
+        setShowSuggestionBadge(true);
+        
+        // Hide badge after 3 seconds
+        setTimeout(() => setShowSuggestionBadge(false), 3000);
+
+        // Build specific message about what was suggested
+        const suggestedFields = [];
+        if (suggestions.itemType) suggestedFields.push('type');
+        if (suggestions.category) suggestedFields.push('category');
+        if (suggestions.seasons) suggestedFields.push('seasons');
+        if (suggestions.occasions) suggestedFields.push('occasions');
+
+        toast({
+          title: 'Smart suggestions applied ✨',
+          description: `Pre-filled ${suggestedFields.join(', ')} based on your image. Feel free to adjust!`,
+          duration: 3000,
+        });
+      }
+    } catch (error) {
+      console.error('Error generating suggestions:', error);
+      // Silently fail - suggestions are optional
+    }
+  };
+
+  // Trigger suggestions when image is selected
+  useEffect(() => {
+    if (imageFile && !suggestionsApplied) {
+      generateSmartSuggestions(imageFile);
+    }
+  }, [imageFile]);
+
+  // Process colors in background after item is saved
+  const processColorsInBackground = async (itemId: string, imageUrl: string, userId: string) => {
+    try {
+      console.log('🎨 Starting background color extraction for item:', itemId);
+      backgroundProcessingRef.current = itemId;
+      
+      const extractedColors = await extractColorsFromUrl(imageUrl);
+      const dominantColors = extractedColors.dominantColors;
+
+      // Update the item with extracted colors
+      const { db } = await import('@/lib/firebase');
+      const { doc, updateDoc } = await import('firebase/firestore');
+      const itemRef = doc(db, 'users', userId, 'wardrobeItems', itemId);
+      
+      await updateDoc(itemRef, {
+        dominantColors,
+        colorsProcessed: true,
+        lastUpdated: Date.now(),
+      });
+
+      console.log('✅ Background color extraction completed for item:', itemId);
+      backgroundProcessingRef.current = null;
+    } catch (error) {
+      console.error('❌ Background color extraction failed:', error);
+      // Silently fail - item is already saved with default colors
+      backgroundProcessingRef.current = null;
+    }
+  };
+
   const resetForm = () => {
+    // Cancel ongoing upload if any
+    if (uploadTaskRef.current) {
+      try {
+        uploadTaskRef.current.cancel();
+      } catch (e) {
+        // Ignore cancel errors
+      }
+      uploadTaskRef.current = null;
+    }
+
     setImageFile(null);
     setImagePreview(null);
     setItemType('');
@@ -131,13 +403,112 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     setSelectedOccasions([]);
     setNotes('');
     setPurchaseDate('');
+    setUploadProgress(0);
+    setUploadStatus('idle');
+    setRetryCount(0);
+    setUploadError(null);
+    setLoading(false);
+    setExtractingColors(false);
+    setIsSubmitting(false);
+    setSuggestionsApplied(false);
+    setShowSuggestionBadge(false);
+    setBackgroundProcessing(false);
+    submissionIdRef.current++; // Invalidate any in-flight submissions
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
+  const handleModalOpenChange = (newOpen: boolean) => {
+    if (!newOpen && isSubmitting) {
+      // Warn user if they try to close during submission
+      toast({
+        title: 'Upload in progress',
+        description: 'Please wait for the upload to complete.',
+        variant: 'default',
+      });
+      return;
+    }
+    
+    if (!newOpen) {
+      resetForm();
+    }
+    onOpenChange(newOpen);
+  };
+
+  const uploadImageToStorage = async (file: File, userId: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+      const storageRef = ref(storage, `wardrobe/${userId}/${fileName}`);
+
+      const uploadTask = uploadBytesResumable(storageRef, file, {
+        contentType: file.type,
+        customMetadata: {
+          uploadedAt: new Date().toISOString(),
+          originalName: file.name,
+        },
+      });
+
+      uploadTaskRef.current = uploadTask;
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          setUploadProgress(Math.round(progress));
+          
+          switch (snapshot.state) {
+            case 'running':
+              setUploadStatus('uploading');
+              break;
+            case 'paused':
+              console.log('Upload paused');
+              break;
+          }
+        },
+        (error) => {
+          console.error('Upload error:', error);
+          uploadTaskRef.current = null;
+          
+          let errorMessage = 'Failed to upload image';
+          if (error.code === 'storage/canceled') {
+            errorMessage = 'Upload was canceled';
+          } else if (error.code === 'storage/unauthorized') {
+            errorMessage = 'Permission denied. Please sign in again.';
+          } else if (error.code === 'storage/quota-exceeded') {
+            errorMessage = 'Storage quota exceeded';
+          } else if (error.code === 'storage/retry-limit-exceeded') {
+            errorMessage = 'Upload failed after multiple retries';
+          }
+          
+          reject(new Error(errorMessage));
+        },
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            uploadTaskRef.current = null;
+            resolve(downloadURL);
+          } catch (error) {
+            uploadTaskRef.current = null;
+            reject(error);
+          }
+        }
+      );
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Prevent duplicate submissions
+    if (isSubmitting) {
+      toast({
+        title: 'Upload in progress',
+        description: 'Please wait for the current upload to complete.',
+      });
+      return;
+    }
 
     const user = auth.currentUser;
     if (!user) {
@@ -150,9 +521,9 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     }
 
     // Validate required fields
-    if (!imagePreview || !itemType || !description) {
+    if (!imageFile || !itemType || !description) {
       const missing = [];
-      if (!imagePreview) missing.push('image');
+      if (!imageFile) missing.push('image');
       if (!itemType) missing.push('item type');
       if (!description) missing.push('description');
       
@@ -164,29 +535,70 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       return;
     }
 
+    const submissionId = submissionIdRef.current;
+    const MAX_RETRIES = 3;
+    let uploadUrl: string | null = null;
+
     try {
+      setIsSubmitting(true);
       setLoading(true);
+      setUploadStatus('uploading');
+      setUploadError(null);
 
-      // Extract colors from image
-      setExtractingColors(true);
-      let dominantColors: string[] = [];
-      try {
-        const extractedColors = await extractColorsFromUrl(imagePreview);
-        dominantColors = extractedColors.dominantColors;
-      } catch (colorError) {
-        console.error('Color extraction failed:', colorError);
-        // Continue without colors - not critical
+      // Check if submission was cancelled
+      if (submissionId !== submissionIdRef.current) {
+        return;
       }
-      setExtractingColors(false);
 
-      // Prepare item data
+      // Step 1: Upload image to Firebase Storage with retry logic
+      let uploadAttempt = 0;
+      while (uploadAttempt < MAX_RETRIES && !uploadUrl) {
+        // Check if submission was cancelled
+        if (submissionId !== submissionIdRef.current) {
+          return;
+        }
+
+        try {
+          uploadUrl = await uploadImageToStorage(imageFile, user.uid);
+        } catch (uploadError) {
+          uploadAttempt++;
+          setRetryCount(uploadAttempt);
+          
+          if (uploadAttempt >= MAX_RETRIES) {
+            const errorMsg = uploadError instanceof Error 
+              ? uploadError.message 
+              : `Upload failed after ${MAX_RETRIES} attempts`;
+            setUploadError(errorMsg);
+            throw new Error(errorMsg);
+          }
+          
+          console.warn(`Upload attempt ${uploadAttempt} failed, retrying...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * uploadAttempt)); // Exponential backoff
+        }
+      }
+
+      if (!uploadUrl) {
+        throw new Error('Failed to upload image');
+      }
+
+      // Check cancellation after upload
+      if (submissionId !== submissionIdRef.current) {
+        return;
+      }
+
+      // Step 2: Save immediately with placeholder colors for fast response
+      setUploadStatus('processing');
+      
+      // Use neutral placeholder colors - will be updated in background
+      const placeholderColors = ['#808080', '#A0A0A0'];
+      
       const itemData = {
-        imageUrl: imagePreview, // In production, upload to Firebase Storage first
+        imageUrl: uploadUrl,
         itemType: itemType as any,
         description: description.trim(),
         category: category.trim() || undefined,
         brand: brand.trim() || undefined,
-        dominantColors,
+        dominantColors: placeholderColors,
         season: selectedSeasons.length > 0 ? selectedSeasons as any : undefined,
         occasions: selectedOccasions.length > 0 ? selectedOccasions as any : undefined,
         purchaseDate: purchaseDate || undefined,
@@ -194,78 +606,190 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
         addedDate: Date.now(),
         wornCount: 0,
         isActive: true,
+        colorsProcessed: false,
       };
 
-      // Add to wardrobe
-      const result = await addWardrobeItem(user.uid, itemData);
-
-      if (result.success) {
-        toast({
-          title: 'Item Added! 🎉',
-          description: 'Your wardrobe item has been saved successfully.',
-        });
-
-        resetForm();
-        onOpenChange(false);
-        onItemAdded?.();
-      } else {
-        throw new Error(result.message || 'Failed to add item');
+      // Step 4: Add to Firestore with retry
+      let saveAttempt = 0;
+      let saveResult = null;
+      
+      while (saveAttempt < MAX_RETRIES && !saveResult?.success) {
+        try {
+          saveResult = await addWardrobeItem(user.uid, itemData);
+          
+          if (!saveResult.success) {
+            throw new Error(saveResult.message);
+          }
+        } catch (saveError) {
+          saveAttempt++;
+          
+          if (saveAttempt >= MAX_RETRIES) {
+            throw new Error('Failed to save item after multiple attempts');
+          }
+          
+          console.warn(`Save attempt ${saveAttempt} failed, retrying...`);
+          await new Promise(resolve => setTimeout(resolve, 1000 * saveAttempt));
+        }
       }
+
+      // Check cancellation after save
+      if (submissionId !== submissionIdRef.current) {
+        return;
+      }
+
+      setUploadStatus('complete');
+      
+      // Start background color processing (non-blocking)
+      if (saveResult?.itemId) {
+        setBackgroundProcessing(true);
+        processColorsInBackground(saveResult.itemId, uploadUrl, user.uid).finally(() => {
+          setBackgroundProcessing(false);
+        });
+      }
+      
+      toast({
+        title: 'Item Added! 🎉',
+        description: 'Colors are being analyzed in the background.',
+        duration: 2000,
+      });
+
+      resetForm();
+      onOpenChange(false);
+      onItemAdded?.();
+      
     } catch (error) {
       console.error('Error adding wardrobe item:', error);
+      
+      setUploadStatus('idle');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add item to wardrobe. Please try again.';
+      setUploadError(errorMessage);
+      
       toast({
         variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to add item to wardrobe',
+        title: 'Upload Failed',
+        description: errorMessage,
       });
+      
+      // Don't reset form on error - preserve user's input for retry
     } finally {
       setLoading(false);
       setExtractingColors(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleModalOpenChange}>
+      <TooltipProvider delayDuration={200}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-teal-900">
+          <DialogTitle className="text-2xl font-bold text-teal-900 flex items-center gap-2">
             Add Wardrobe Item
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Info className="h-4 w-4 text-teal-600 cursor-help" />
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs">
+                <p className="text-sm">Upload clear photos on a solid background for best color detection</p>
+              </TooltipContent>
+            </Tooltip>
           </DialogTitle>
-          <DialogDescription>
-            Upload a photo and add details about your clothing item.
+          <DialogDescription className="space-y-2">
+            <p>Upload a photo and add details about your clothing item.</p>
+            <div className="flex items-start gap-2 text-xs text-teal-800 bg-teal-50/80 rounded-lg px-3 py-2 border border-teal-200">
+              <Shield className="h-4 w-4 flex-shrink-0 mt-0.5 text-teal-600" />
+              <div>
+                <p className="font-semibold mb-0.5">Your Privacy is Protected</p>
+                <p className="text-teal-700">Images are stored securely with your account. Only you can access them. AI color detection happens automatically to help categorize your items.</p>
+              </div>
+            </div>
           </DialogDescription>
+          {imageFile && suggestionsApplied && (
+            <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded-lg flex items-start gap-2">
+              <Info className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-purple-800">
+                Smart suggestions have been applied based on your image. You can edit any field to customize.
+              </p>
+            </div>
+          )}
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 mt-2 sm:mt-4">
           {/* Image Upload Section */}
           <div className="space-y-4">
-            <Label>Item Photo *</Label>
+            <div className="flex items-center justify-between">
+              <Label>Item Photo *</Label>
+              {!imagePreview && (
+                <span className="text-xs text-gray-500">Max 5MB</span>
+              )}
+            </div>
             {!imagePreview ? (
-              <div className="border-2 border-dashed border-teal-300 rounded-lg p-8 text-center space-y-4">
-                <div className="flex flex-col items-center gap-4">
-                  <Upload className="h-12 w-12 text-teal-400" />
-                  <p className="text-sm text-gray-600">
-                    Upload a photo of your clothing item
+              <div className="border-2 border-dashed border-teal-300 rounded-lg p-4 sm:p-8 text-center space-y-4">
+                <div className="flex flex-col items-center gap-3 sm:gap-4">
+                  <Upload className="h-10 w-10 sm:h-12 sm:w-12 text-teal-400" aria-hidden="true" />
+                  <p className="text-sm sm:text-base text-gray-600 font-medium">
+                    Add your clothing photo
                   </p>
-                  <div className="flex gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="border-teal-300"
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Choose File
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleCameraCapture}
-                      className="border-teal-300"
-                    >
-                      <Camera className="h-4 w-4 mr-2" />
-                      Take Photo
-                    </Button>
+                  
+                  {/* Mobile-first: Camera as primary action on mobile, side-by-side on desktop */}
+                  <div className="flex flex-col sm:grid sm:grid-cols-2 gap-3 w-full max-w-md">
+                    {/* Camera button - Primary on mobile (first), larger touch target */}
+                    {cameraAvailable ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="default"
+                            onClick={handleCameraCapture}
+                            className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white h-auto py-5 sm:py-4 px-6 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-2 shadow-lg hover:shadow-xl transition-all touch-manipulation active:scale-95"
+                            aria-label="Take a photo with your camera"
+                          >
+                            <Camera className="h-8 w-8 sm:h-6 sm:w-6" aria-hidden="true" />
+                            <div className="text-center sm:text-left">
+                              <div className="font-semibold text-base sm:text-sm">Take Photo</div>
+                              <div className="text-xs opacity-90 sm:hidden">Best for mobile</div>
+                            </div>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="text-sm">Open camera to capture your item</p>
+                          <p className="text-xs opacity-80 mt-1">Quick and easy on mobile</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ) : null}
+                    
+                    {/* File upload button - Secondary on mobile */}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant={cameraAvailable ? "outline" : "default"}
+                          onClick={() => fileInputRef.current?.click()}
+                          className={cameraAvailable 
+                            ? "border-2 border-teal-300 text-teal-700 hover:bg-teal-50 h-auto py-5 sm:py-4 px-6 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-2 touch-manipulation active:scale-95"
+                            : "bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white h-auto py-5 sm:py-4 px-6 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-2 shadow-lg hover:shadow-xl transition-all touch-manipulation active:scale-95"}
+                          aria-label="Choose a file from your device"
+                        >
+                          <Upload className="h-8 w-8 sm:h-6 sm:w-6" aria-hidden="true" />
+                          <div className="text-center sm:text-left">
+                            <div className="font-semibold text-base sm:text-sm">Choose File</div>
+                            <div className="text-xs opacity-75 sm:hidden">From gallery</div>
+                          </div>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="text-sm">Select an existing photo</p>
+                        <p className="text-xs opacity-80 mt-1">From your gallery or files</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    
+                    {/* Show camera unavailable message only on desktop */}
+                    {!cameraAvailable && (
+                      <div className="hidden sm:block text-xs text-gray-500 col-span-2 text-center mt-2">
+                        <Camera className="h-4 w-4 inline mr-1" aria-hidden="true" />
+                        Camera not available on this device
+                      </div>
+                    )}
                   </div>
                   <input
                     ref={fileInputRef}
@@ -273,11 +797,12 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
                     accept="image/jpeg,image/jpg,image/png,image/webp,image/heic"
                     onChange={handleFileInputChange}
                     className="hidden"
+                    aria-label="File input for image upload"
                   />
                 </div>
               </div>
             ) : (
-              <div className="relative">
+              <div className="space-y-3">
                 <div className="relative w-full h-64 rounded-lg overflow-hidden border-2 border-teal-200">
                   <Image
                     src={imagePreview}
@@ -286,27 +811,48 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
                     className="object-cover"
                   />
                 </div>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="icon"
-                  onClick={handleRemoveImage}
-                  className="absolute top-2 right-2"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleRemoveImage}
+                    className="flex-shrink-0"
+                  >
+                    <X className="h-4 w-4 mr-1" />
+                    Remove
+                  </Button>
+                  {!suggestionsApplied && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => imageFile && generateSmartSuggestions(imageFile)}
+                      className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                    >
+                      ✨ Get Suggestions
+                    </Button>
+                  )}
+                </div>
               </div>
             )}
           </div>
 
           {/* Item Type */}
           <div className="space-y-2">
-            <Label htmlFor="itemType">Item Type *</Label>
-            <Select value={itemType} onValueChange={setItemType}>
-              <SelectTrigger id="itemType" className="border-teal-300">
+            <div className="flex items-center justify-between">
+              <Label htmlFor="itemType">Item Type *</Label>
+              {showSuggestionBadge && itemType && (
+                <Badge className="bg-purple-100 text-purple-700 text-xs animate-pulse">
+                  ✨ Suggested
+                </Badge>
+              )}
+            </div>
+            <Select value={itemType} onValueChange={setItemType} required>
+              <SelectTrigger id="itemType" className="border-teal-300" aria-required="true" aria-label="Select item type">
                 <SelectValue placeholder="Select item type..." />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent role="listbox">
                 <SelectItem value="top">👕 Top</SelectItem>
                 <SelectItem value="bottom">👖 Bottom</SelectItem>
                 <SelectItem value="dress">👗 Dress</SelectItem>
@@ -333,7 +879,14 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
           {/* Category & Brand */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="category">Category</Label>
+                {showSuggestionBadge && category && (
+                  <Badge className="bg-purple-100 text-purple-700 text-xs animate-pulse">
+                    ✨ Suggested
+                  </Badge>
+                )}
+              </div>
               <Input
                 id="category"
                 value={category}
@@ -356,7 +909,14 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
 
           {/* Seasons */}
           <div className="space-y-2">
-            <Label>Seasons</Label>
+            <div className="flex items-center justify-between">
+              <Label>Seasons</Label>
+              {showSuggestionBadge && selectedSeasons.length > 0 && (
+                <Badge className="bg-purple-100 text-purple-700 text-xs animate-pulse">
+                  ✨ Suggested
+                </Badge>
+              )}
+            </div>
             <div className="flex flex-wrap gap-3">
               {SEASONS.map((season) => (
                 <div key={season} className="flex items-center space-x-2">
@@ -376,7 +936,14 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
 
           {/* Occasions */}
           <div className="space-y-2">
-            <Label>Occasions</Label>
+            <div className="flex items-center justify-between">
+              <Label>Occasions</Label>
+              {showSuggestionBadge && selectedOccasions.length > 0 && (
+                <Badge className="bg-purple-100 text-purple-700 text-xs animate-pulse">
+                  ✨ Suggested
+                </Badge>
+              )}
+            </div>
             <div className="flex flex-wrap gap-3">
               {OCCASIONS.map((occasion) => (
                 <div key={occasion} className="flex items-center space-x-2">
@@ -419,34 +986,81 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
             />
           </div>
 
+          {/* Upload Progress */}
+          {uploadStatus !== 'idle' && uploadStatus !== 'complete' && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm text-gray-600">
+                <span>
+                  {uploadStatus === 'uploading' && `Uploading... ${retryCount > 0 ? `(Retry ${retryCount})` : ''}`}
+                  {uploadStatus === 'processing' && 'Saving item...'}
+                </span>
+                <span>{uploadProgress}%</span>
+              </div>
+              <Progress value={uploadProgress} className="h-2" />
+            </div>
+          )}
+
+          {/* Error Display */}
+          {uploadError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-start gap-2">
+              <svg className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-red-900">Upload Failed</p>
+                <p className="text-sm text-red-700 mt-1">{uploadError}</p>
+                <p className="text-xs text-red-600 mt-2">Your changes have been preserved. You can try again.</p>
+              </div>
+            </div>
+          )}
+
           {/* Submit Buttons */}
           <div className="flex gap-3 pt-4">
-            <Button
-              type="submit"
-              disabled={loading || extractingColors}
-              className="flex-1 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {extractingColors ? 'Analyzing Colors...' : 'Adding Item...'}
-                </>
-              ) : (
-                'Add to Wardrobe'
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="submit"
+                  disabled={loading || !imageFile || !itemType || !description}
+                  className="flex-1 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white disabled:opacity-50"
+                  aria-label="Add item to wardrobe"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      {uploadStatus === 'uploading' && 'Uploading...'}
+                      {uploadStatus === 'processing' && 'Saving...'}
+                      {uploadStatus === 'idle' && 'Saving...'}
+                    </>
+                  ) : (
+                    'Add to Wardrobe'
+                  )}
+                </Button>
+              </TooltipTrigger>
+              {(!imageFile || !itemType || !description) && (
+                <TooltipContent>
+                  <p>Please complete required fields: photo, type, and description</p>
+                </TooltipContent>
               )}
-            </Button>
+            </Tooltip>
             <Button
               type="button"
               variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
+              onClick={() => {
+                if (uploadTaskRef.current) {
+                  uploadTaskRef.current.cancel();
+                }
+                onOpenChange(false);
+              }}
+              disabled={loading && uploadStatus === 'processing'}
               className="border-teal-300"
+              aria-label="Cancel and close dialog"
             >
-              Cancel
+              {loading && uploadStatus === 'uploading' ? 'Cancel Upload' : 'Cancel'}
             </Button>
           </div>
         </form>
       </DialogContent>
+      </TooltipProvider>
     </Dialog>
   );
 }

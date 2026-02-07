@@ -42,11 +42,19 @@ export async function generateWardrobeOutfits(
   console.log('👔 Generating wardrobe outfits for:', userId, 'occasion:', occasion);
 
   try {
-    // Fetch user's wardrobe items
+    // Fetch user's wardrobe items - only active items
     const wardrobeItems = await getWardrobeItems(userId);
+    
+    // Filter only active items to exclude deleted/inactive items
+    const activeItems = wardrobeItems.filter(item => item.isActive !== false);
 
-    if (wardrobeItems.length === 0) {
+    if (activeItems.length === 0) {
       throw new Error('No wardrobe items found. Please add items to your wardrobe first.');
+    }
+    
+    // Provide guidance for sparse wardrobes
+    if (activeItems.length < 5) {
+      console.warn('⚠️ Sparse wardrobe detected:', activeItems.length, 'items');
     }
 
     // Fetch user preferences
@@ -62,7 +70,7 @@ export async function generateWardrobeOutfits(
       outerwear: [],
     };
 
-    wardrobeItems.forEach(item => {
+    activeItems.forEach(item => {
       if (itemsByType[item.itemType]) {
         itemsByType[item.itemType].push(item);
       }
@@ -70,7 +78,7 @@ export async function generateWardrobeOutfits(
 
     // Calculate stats
     const wardrobeStats = {
-      totalItems: wardrobeItems.length,
+      totalItems: activeItems.length,
       itemsByType: {
         top: itemsByType.top.length,
         bottom: itemsByType.bottom.length,
@@ -121,17 +129,46 @@ export async function generateWardrobeOutfits(
       const validatedItems: OutfitCombination['items'] = [];
 
       for (const itemRef of outfit.items || []) {
-        // Find the item in wardrobe
-        const wardrobeItem = wardrobeItems.find(
-          item => item.id === itemRef.itemId || item.description.toLowerCase().includes(itemRef.description?.toLowerCase())
-        );
+        // Try multiple matching strategies
+        let wardrobeItem = null;
+        
+        // Strategy 1: Exact ID match
+        if (itemRef.itemId) {
+          wardrobeItem = wardrobeItems.find(item => item.id === itemRef.itemId);
+        }
+        
+        // Strategy 2: Fuzzy description match
+        if (!wardrobeItem && itemRef.description) {
+          const searchTerms: string[] = itemRef.description.toLowerCase().split(' ');
+          wardrobeItem = wardrobeItems.find(item => {
+            const itemDesc = item.description.toLowerCase();
+            // Item matches if description contains at least 2 search terms
+            const matchCount = searchTerms.filter(term => 
+              term.length > 2 && itemDesc.includes(term)
+            ).length;
+            return matchCount >= Math.min(2, searchTerms.length);
+          });
+        }
+        
+        // Strategy 3: Type and color match as fallback
+        if (!wardrobeItem && itemRef.type) {
+          wardrobeItem = wardrobeItems.find(item => 
+            item.itemType === itemRef.type && 
+            (!itemRef.description || item.description.includes(itemRef.description.split(' ')[0]))
+          );
+        }
 
         if (wardrobeItem) {
-          validatedItems.push({
-            itemId: wardrobeItem.id!,
-            description: wardrobeItem.description,
-            type: wardrobeItem.itemType,
-          });
+          // Avoid duplicate items in same outfit
+          if (!validatedItems.some(vi => vi.itemId === wardrobeItem!.id)) {
+            validatedItems.push({
+              itemId: wardrobeItem.id!,
+              description: wardrobeItem.description,
+              type: wardrobeItem.itemType,
+            });
+          }
+        } else {
+          console.warn('Could not match AI-suggested item:', itemRef);
         }
       }
 
@@ -141,10 +178,16 @@ export async function generateWardrobeOutfits(
           name: outfit.name || 'Outfit',
           items: validatedItems,
           reasoning: outfit.reasoning || 'This combination works well together.',
-          confidence: outfit.confidence || 85,
+          confidence: Math.min(100, Math.max(0, outfit.confidence || 85)),
           occasion,
         });
+      } else {
+        console.warn('Skipping outfit with insufficient valid items:', outfit.name);
       }
+    }
+
+    if (validatedOutfits.length === 0) {
+      throw new Error('Could not generate valid outfit combinations. Try adding more items to your wardrobe.');
     }
 
     console.log('✅ Generated', validatedOutfits.length, 'valid outfit combinations');

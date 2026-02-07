@@ -257,6 +257,9 @@ export function StyleAdvisor() {
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const analysisAbortRef = React.useRef<AbortController | null>(null);
+  const activeRequestIdRef = React.useRef(0);
+  const isMountedRef = React.useRef(true);
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -293,6 +296,7 @@ export function StyleAdvisor() {
   }, []);
 
   React.useEffect(() => {
+    isMountedRef.current = true;
     // Request browser location for weather
     console.log('🌤️ Requesting browser location for weather...');
     
@@ -318,7 +322,9 @@ export function StyleAdvisor() {
             description: "Using default weather.",
           });
         } finally {
-          setIsFetchingWeather(false);
+          if (isMountedRef.current) {
+            setIsFetchingWeather(false);
+          }
         }
       },
       (geoError) => {
@@ -332,14 +338,18 @@ export function StyleAdvisor() {
           title: "Location access needed",
           description: "Enable location access in your browser for weather-based recommendations. Using default weather for now.",
         });
-        setIsFetchingWeather(false);
+        if (isMountedRef.current) {
+          setIsFetchingWeather(false);
+        }
       }
     );
   }, [toast]);
 
-  // Cleanup camera on unmount
+  // Cleanup camera and in-flight analysis on unmount
   React.useEffect(() => {
     return () => {
+      isMountedRef.current = false;
+      analysisAbortRef.current?.abort();
       stopCamera();
     };
   }, []);
@@ -837,6 +847,14 @@ export function StyleAdvisor() {
   };
 
   const performAnalysis = async (request: AnalyzeImageAndProvideRecommendationsInput) => {
+    const requestId = ++activeRequestIdRef.current;
+    const isStale = () => !isMountedRef.current || requestId !== activeRequestIdRef.current;
+
+    analysisAbortRef.current?.abort();
+    const controller = new AbortController();
+    analysisAbortRef.current = controller;
+    const timeoutId = window.setTimeout(() => controller.abort(), 70000);
+
     setIsLoading(true);
     setAllContentReady(false);
     setShowResults(false); // Hide previous results immediately
@@ -895,7 +913,10 @@ export function StyleAdvisor() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(request),
+        signal: controller.signal,
       });
+
+      if (isStale()) return;
 
       if (!response.ok) {
         let errorData: { error?: string } = { error: 'Unknown error' };
@@ -910,6 +931,8 @@ export function StyleAdvisor() {
       }
 
       const data = await response.json();
+      if (isStale()) return;
+
       console.log('✅ API response received:', {
         success: data.success,
         hasPayload: !!data.payload,
@@ -982,6 +1005,8 @@ export function StyleAdvisor() {
       console.log('💼 Images will load in background without blocking UI');
       
       // Show results immediately (pass the analysis object, not the full data)
+      if (isStale()) return;
+
       setAnalysisResult(result);
       setAllContentReady(true);
       updateStep('finalize', 'complete');
@@ -1017,6 +1042,7 @@ export function StyleAdvisor() {
       // Wait longer to ensure DOM is ready and images are cached in browser
       console.log('⏳ Final preparation - ensuring images are cached in browser...');
       await new Promise(resolve => setTimeout(resolve, 1500)); // Increased from 500ms to 1500ms
+      if (isStale()) return;
       
       // Double-check that images are still available before showing results
       const finalImageCheck = await Promise.all(imageUrls.map((url: string) => {
@@ -1037,6 +1063,8 @@ export function StyleAdvisor() {
       const allImagesReady = finalImageCheck.every(ready => ready);
       console.log(`🎨 Final image check: ${finalImageCheck.filter(r => r).length}/${finalImageCheck.length} images ready`);
       
+      if (isStale()) return;
+
       // ✅ FINAL STEP: Show results
       console.log('🎉 All content ready! Displaying results to user!');
       setShowResults(true);
@@ -1051,6 +1079,16 @@ export function StyleAdvisor() {
       });
 
     } catch (e) {
+      if (!isMountedRef.current) return;
+      if (controller.signal.aborted) {
+        toast({
+          title: "Request cancelled",
+          description: "The analysis was stopped. You can try again anytime.",
+          duration: 3000,
+        });
+        return;
+      }
+
       console.error('❌ Analysis error:', e);
       const errorMessage = e instanceof Error ? e.message : 'An unexpected error occurred';
       
@@ -1089,12 +1127,32 @@ export function StyleAdvisor() {
         duration: errorMessage.includes('high demand') ? 8000 : 5000, // Show longer for overload errors
       });
     } finally {
-      setIsLoading(false);
+      window.clearTimeout(timeoutId);
+      if (!isStale()) {
+        setIsLoading(false);
+      }
       // Don't set allContentReady on error - it should only be true when everything is ready
     }
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (isLoading) {
+      toast({
+        title: "Analysis in progress",
+        description: "Please wait for the current analysis to finish.",
+      });
+      return;
+    }
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast({
+        variant: "destructive",
+        title: "You're offline",
+        description: "Reconnect to the internet to analyze your outfit.",
+      });
+      return;
+    }
+
     if (!weather) {
       toast({
         variant: "destructive",
@@ -1143,6 +1201,13 @@ export function StyleAdvisor() {
               userId,
             });
         }
+    };
+    imageElement.onerror = () => {
+      toast({
+        variant: "destructive",
+        title: "Image failed to load",
+        description: "Please try a different image or re-upload your photo.",
+      });
     };
     imageElement.onerror = () => {
         toast({ variant: 'destructive', title: 'Image Load Error', description: 'Could not load the selected image for analysis.' });

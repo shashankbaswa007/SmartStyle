@@ -8,8 +8,8 @@ declare module 'canvas' {
   }
 
   export interface CanvasRenderingContext2D {
-    drawImage(image: any, dx: number, dy: number): void;
-    drawImage(image: any, dx: number, dy: number, dw: number, dh: number): void;
+    drawImage(image: CanvasImageSource, dx: number, dy: number): void;
+    drawImage(image: CanvasImageSource, dx: number, dy: number, dw: number, dh: number): void;
     getImageData(sx: number, sy: number, sw: number, sh: number): ImageData;
   }
 

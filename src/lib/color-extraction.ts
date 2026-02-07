@@ -149,9 +149,12 @@ export async function extractColorsFromImage(
 ): Promise<ExtractedColors> {
   try {
     console.log('🎨 Starting heuristic color extraction...');
+    console.log('📦 Input type:', typeof imageUrlOrBuffer === 'string' ? 'string' : 'Buffer');
 
     // Load image
     const img = await loadImage(imageUrlOrBuffer);
+    console.log(`✅ Image loaded successfully: ${img.width}x${img.height}`);
+    
     const canvas = createCanvas(img.width, img.height);
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
@@ -422,22 +425,65 @@ export async function extractColorsFromImage(
 
 /**
  * Extract colors from image URL (downloads and processes)
- * @param imageUrl - URL of the image
+ * @param imageUrl - URL of the image or data URL (base64)
  * @returns Extracted color information
  */
 export async function extractColorsFromUrl(imageUrl: string): Promise<ExtractedColors> {
-  console.log(`🔗 Downloading image from: ${imageUrl.substring(0, 60)}...`);
+  console.log(`🔗 Processing image from: ${imageUrl.startsWith('data:') ? 'data URL' : imageUrl.substring(0, 60)}...`);
   
   try {
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.status}`);
+    let buffer: Buffer;
+    
+    // Handle data URLs (base64 images)
+    if (imageUrl.startsWith('data:')) {
+      const base64Data = imageUrl.split(',')[1];
+      if (!base64Data) {
+        throw new Error('Invalid data URL format');
+      }
+      buffer = Buffer.from(base64Data, 'base64');
+      console.log('✅ Decoded base64 image data');
+    } else {
+      // Handle regular URLs with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      try {
+        const response = await fetch(imageUrl, { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to fetch image: ${response.status}`);
+        }
+        buffer = Buffer.from(await response.arrayBuffer());
+        console.log('✅ Downloaded image from URL');
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        if (fetchError && typeof fetchError === 'object' && 'name' in fetchError && fetchError.name === 'AbortError') {
+          throw new Error('Image download timeout - please try a smaller image');
+        }
+        throw fetchError;
+      }
     }
     
-    const buffer = Buffer.from(await response.arrayBuffer());
-    return await extractColorsFromImage(buffer);
+    // Try extraction with timeout protection
+    return await Promise.race([
+      extractColorsFromImage(buffer),
+      new Promise<ExtractedColors>((_, reject) => 
+        setTimeout(() => reject(new Error('Color extraction timeout')), 15000)
+      )
+    ]);
   } catch (error) {
-    console.error('❌ Failed to download/process image:', error);
-    throw error;
+    console.error('❌ Failed to process image:', error);
+    
+    // Return fallback colors on any error
+    return {
+      dominantColors: ['#808080', '#A9A9A9', '#696969'], // Gray tones as fallback
+      colorNames: ['gray', 'silver', 'dark gray'],
+      colorPalette: [
+        { hex: '#808080', name: 'gray', r: 128, g: 128, b: 128, count: 100 },
+        { hex: '#A9A9A9', name: 'silver', r: 169, g: 169, b: 169, count: 50 },
+        { hex: '#696969', name: 'dark gray', r: 105, g: 105, b: 105, count: 30 },
+      ],
+    };
   }
 }

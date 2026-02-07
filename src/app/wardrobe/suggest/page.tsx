@@ -206,7 +206,7 @@ export default function WardrobeSuggestPage() {
             <CardContent className="space-y-6">
               {/* Occasion Input */}
               <div className="space-y-2">
-                <Label htmlFor="occasion" className="text-teal-700">What's the occasion?</Label>
+                <Label htmlFor="occasion" className="text-teal-700">What&apos;s the occasion?</Label>
                 <Input
                   id="occasion"
                   value={occasion}
@@ -245,7 +245,7 @@ export default function WardrobeSuggestPage() {
                     </div>
                   </PopoverContent>
                 </Popover>
-                <p className="text-sm text-teal-600">We'll check the weather forecast for that day!</p>
+                <p className="text-sm text-teal-600">We&apos;ll check the weather forecast for that day!</p>
               </div>
 
               <Button 
@@ -440,7 +440,7 @@ export default function WardrobeSuggestPage() {
                   Not Enough Items
                 </h3>
                 <p className="text-teal-700 mb-6">
-                  We couldn't create outfit combinations with your current wardrobe items.
+                  We couldn&apos;t create outfit combinations with your current wardrobe items.
                   Try adding more items to get personalized suggestions!
                 </p>
                 <Link href="/wardrobe">

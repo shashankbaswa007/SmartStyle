@@ -357,29 +357,19 @@ export async function POST(req: Request) {
               });
             } else {
               logger.error(`❌ Outfit ${outfitNumber} failed:`, error.message);
-            logger.log(`⏱️ [PERF] Outfit ${outfitNumber} failed after: ${Date.now() - outfitStart}ms`);
-            
-            // Return failed outfit with placeholder
-            enrichedOutfits.push({
-              ...outfit,
-              imageUrl: `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
-              colorPalette: outfit.colorPalette || ['#000000', '#FFFFFF', '#808080'],
-              generatedImageColors: null,
-              shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
-              error: error.message || 'Generation failed'
-            });
+              logger.log(`⏱️ [PERF] Outfit ${outfitNumber} failed after: ${Date.now() - outfitStart}ms`);
+              
+              // Return failed outfit with placeholder
+              enrichedOutfits.push({
+                ...outfit,
+                imageUrl: `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
+                colorPalette: outfit.colorPalette || ['#000000', '#FFFFFF', '#808080'],
+                generatedImageColors: null,
+                shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
+                error: error.message || 'Generation failed'
+              });
+            }
           }
-        } catch (error: any) {
-          logger.error(`❌ Outfit ${outfitNumber} failed unexpectedly:`, error.message);
-          enrichedOutfits.push({
-            ...outfit,
-            imageUrl: `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
-            colorPalette: outfit.colorPalette || ['#000000', '#FFFFFF', '#808080'],
-            generatedImageColors: null,
-            shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
-            error: error.message || 'Generation failed'
-          });
-        }
       }
 
     logger.log(`⏱️ [PERF] All outfits processed sequentially: ${Date.now() - outfitsStart}ms`);

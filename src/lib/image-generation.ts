@@ -45,6 +45,12 @@ async function generateWithPollinations(options: ImageGenerationOptions, retryCo
     });
     clearTimeout(timeoutId);
     
+    // Check for subscription/payment wall
+    if (response.status === 402 || response.status === 403) {
+      console.error('❌ Pollinations.ai now requires subscription');
+      throw new Error('Service requires subscription - using fallback');
+    }
+    
     if (response.status === 429) {
       // Rate limit hit - retry with exponential backoff
       if (retryCount < maxRetries) {
@@ -92,7 +98,8 @@ async function generateWithHuggingFace(options: ImageGenerationOptions): Promise
   }
 
   console.log('🎨 Generating with Hugging Face');
-  console.log('🔑 API Key loaded:', apiKey.substring(0, 10) + '...');
+  // Security: Never log API keys, even partially
+  console.log('🔑 API Key: configured');
 
   // Try multiple models in order of preference (only working models)
   const models = [

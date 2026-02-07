@@ -151,7 +151,8 @@ export async function logDeletion(
     return deletionId;
   } catch (error) {
     console.error('❌ Failed to log deletion:', error);
-    throw error;
+    // Return deletionId anyway - logging failure shouldn't block the operation
+    return deletionId;
   }
 }
 

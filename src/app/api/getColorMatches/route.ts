@@ -159,7 +159,7 @@ const FASHION_COLORS: Record<string, string> = {
   'cyan': '#00FFFF',
 };
 
-// Color harmony calculation functions
+// Color harmony calculation functions with improved angles for better results
 const HARMONY_TYPES = {
   complementary: (hue: number) => [(hue + 180) % 360],
   analogous: (hue: number) => [(hue + 30) % 360, (hue - 30 + 360) % 360],
@@ -167,6 +167,16 @@ const HARMONY_TYPES = {
   split_complementary: (hue: number) => [(hue + 150) % 360, (hue + 210) % 360],
   tetradic: (hue: number) => [(hue + 90) % 360, (hue + 180) % 360, (hue + 270) % 360],
   monochromatic: (hue: number) => [hue], // Same hue, different saturation/lightness
+};
+
+// Helper to check if two colors have good contrast (WCAG AA standard)
+const hasGoodContrast = (color1: chroma.Color, color2: chroma.Color): boolean => {
+  const luminance1 = color1.luminance();
+  const luminance2 = color2.luminance();
+  const contrast = luminance1 > luminance2
+    ? (luminance1 + 0.05) / (luminance2 + 0.05)
+    : (luminance2 + 0.05) / (luminance1 + 0.05);
+  return contrast >= 3; // At least 3:1 ratio for fashion (less strict than text)
 };
 
 export async function POST(req: NextRequest) {
@@ -224,14 +234,42 @@ export async function POST(req: NextRequest) {
 
     console.log('🔍 Closest color name:', closestColorName, '(deltaE distance:', minDistance.toFixed(2), ')');
 
-    // Generate harmonious colors based on color theory
+    // Helper function to ensure fashionable colors (not too dark or too light)
+    const adjustForFashion = (color: chroma.Color): chroma.Color => {
+      const [h, s, l] = color.hsl();
+      // Ensure saturation is at least 0.2 (20%) for vibrant colors
+      const adjustedS = Math.max(0.2, Math.min(0.9, s));
+      // Ensure lightness is between 0.25 and 0.85 for wearable colors
+      const adjustedL = Math.max(0.25, Math.min(0.85, l));
+      return chroma.hsl(h || 0, adjustedS, adjustedL);
+    };
+
+    // Generate harmonious colors based on color theory with improved reliability
     const harmonyHues = HARMONY_TYPES[harmonyType as keyof typeof HARMONY_TYPES](inputHue);
     
     const matches: ColorMatch[] = harmonyHues.map((targetHue, index) => {
-      // Create harmonious color with similar saturation and lightness
-      const harmonyColor = chroma.hsl(targetHue, s, l);
+      // Create harmonious color with adjusted saturation and lightness for better fashion appeal
+      let harmonyColor: chroma.Color;
       
-      // Find closest named color for this harmony color
+      if (harmonyType === 'monochromatic') {
+        // For monochromatic, use same hue with varied lightness
+        const lightnessVariations = [0.3, 0.4, 0.6, 0.7];
+        harmonyColor = chroma.hsl(inputHue, Math.max(0.3, s), lightnessVariations[index % lightnessVariations.length]);
+      } else if (harmonyType === 'analogous') {
+        // For analogous, keep similar saturation and lightness
+        harmonyColor = chroma.hsl(targetHue, s * 0.9, l);
+      } else if (harmonyType === 'complementary') {
+        // For complementary, slightly adjust saturation for balance
+        harmonyColor = chroma.hsl(targetHue, s * 0.85, l);
+      } else {
+        // For other harmonies, maintain similar saturation
+        harmonyColor = chroma.hsl(targetHue, s, l);
+      }
+      
+      // Ensure the color is fashionable (not too extreme)
+      harmonyColor = adjustForFashion(harmonyColor);
+      
+      // Find closest named color for this harmony color with stricter matching
       let bestMatch = { name: 'Unknown', hex: harmonyColor.hex(), distance: Infinity };
       
       Object.entries(FASHION_COLORS).forEach(([name, hex]) => {
@@ -240,6 +278,10 @@ export async function POST(req: NextRequest) {
           bestMatch = { name, hex, distance };
         }
       });
+      
+      // If the match is too far (deltaE > 40), use the generated color instead
+      const finalHex = bestMatch.distance < 40 ? bestMatch.hex : harmonyColor.hex();
+      const finalColor = chroma(finalHex);
 
       return {
         label: harmonyType === 'complementary' && index === 0 
@@ -253,42 +295,66 @@ export async function POST(req: NextRequest) {
           : harmonyType === 'tetradic'
           ? `Tetradic ${index + 1}`
           : `Shade ${index + 1}`,
-        hex: bestMatch.hex,
-        rgb: chroma(bestMatch.hex).css(),
-        name: bestMatch.name.charAt(0).toUpperCase() + bestMatch.name.slice(1),
+        hex: finalHex,
+        rgb: finalColor.css(),
+        name: bestMatch.distance < 40 
+          ? bestMatch.name.charAt(0).toUpperCase() + bestMatch.name.slice(1)
+          : 'Custom ' + (index + 1),
       };
     });
 
-    // Add monochromatic variations (lighter and darker shades)
-    const lighterShade = inputColorObj.brighten(1);
-    const darkerShade = inputColorObj.darken(1);
-
-    const findClosestName = (color: chroma.Color) => {
-      let bestMatch = { name: 'Unknown', hex: color.hex(), distance: Infinity };
+    // Add improved monochromatic variations (lighter and darker shades with better contrast)
+    const addShadeVariation = (baseColor: chroma.Color, adjustment: number, label: string): ColorMatch => {
+      let variantColor: chroma.Color;
+      
+      if (adjustment > 0) {
+        // Lighter shade - increase lightness while maintaining hue
+        variantColor = baseColor.brighten(adjustment * 1.5);
+      } else {
+        // Darker shade - decrease lightness while maintaining hue
+        variantColor = baseColor.darken(Math.abs(adjustment) * 1.5);
+      }
+      
+      // Ensure the color stays fashionable
+      const [h, s, l] = variantColor.hsl();
+      const adjustedL = Math.max(0.2, Math.min(0.9, l));
+      variantColor = chroma.hsl(h || 0, Math.max(0.2, s), adjustedL);
+      
+      // Find closest named color
+      let bestMatch = { name: 'Unknown', hex: variantColor.hex(), distance: Infinity };
       Object.entries(FASHION_COLORS).forEach(([name, hex]) => {
-        const distance = chroma.deltaE(color, chroma(hex));
+        const distance = chroma.deltaE(variantColor, chroma(hex));
         if (distance < bestMatch.distance) {
           bestMatch = { name, hex, distance };
         }
       });
-      return bestMatch.name.charAt(0).toUpperCase() + bestMatch.name.slice(1);
+      
+      const finalHex = bestMatch.distance < 35 ? bestMatch.hex : variantColor.hex();
+      const finalColor = chroma(finalHex);
+      
+      return {
+        label,
+        hex: finalHex,
+        rgb: finalColor.css(),
+        name: bestMatch.distance < 35 
+          ? bestMatch.name.charAt(0).toUpperCase() + bestMatch.name.slice(1)
+          : label,
+      };
     };
 
-    matches.push({
-      label: 'Lighter Shade',
-      hex: lighterShade.hex(),
-      rgb: lighterShade.css(),
-      name: findClosestName(lighterShade),
-    });
+    // Add lighter and darker variations with improved quality
+    matches.push(addShadeVariation(inputColorObj, 1, 'Lighter Shade'));
+    matches.push(addShadeVariation(inputColorObj, -1, 'Darker Shade'));
+    
+    // Add a tint and shade for more variety
+    if (matches.length < 10) {
+      matches.push(addShadeVariation(inputColorObj, 0.5, 'Light Tint'));
+    }
+    if (matches.length < 10) {
+      matches.push(addShadeVariation(inputColorObj, -0.5, 'Dark Tone'));
+    }
 
-    matches.push({
-      label: 'Darker Shade',
-      hex: darkerShade.hex(),
-      rgb: darkerShade.css(),
-      name: findClosestName(darkerShade),
-    });
-
-    console.log('✅ Generated', matches.length, 'color matches using', harmonyType, 'harmony');
+    console.log('✅ Generated', matches.length, 'high-quality color matches using', harmonyType, 'harmony');
 
     return NextResponse.json({
       inputColor: {

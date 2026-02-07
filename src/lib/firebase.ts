@@ -11,13 +11,14 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { logger } from './logger';
 
-// Debug: Log what environment variables are available
-logger.log('🔍 Firebase env check:', {
-  apiKey: typeof process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: typeof process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: typeof process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  apiKeyValue: process.env.NEXT_PUBLIC_FIREBASE_API_KEY?.substring(0, 10) + '...',
-});
+// Debug: Log what environment variables are available (for development only)
+if (process.env.NODE_ENV === 'development') {
+  logger.log('🔍 Firebase env check:', {
+    hasApiKey: !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+    hasAuthDomain: !!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+    hasProjectId: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  });
+}
 
 // Firebase configuration from environment variables
 const firebaseConfig = {

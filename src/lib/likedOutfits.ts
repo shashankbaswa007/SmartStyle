@@ -170,8 +170,14 @@ export async function saveLikedOutfit(
       };
     } catch (firestoreError) {
       console.error('❌ Firestore save failed:', firestoreError);
-      console.error('❌ Error code:', (firestoreError as any)?.code);
-      console.error('❌ Error message:', (firestoreError as any)?.message);
+      if (firestoreError && typeof firestoreError === 'object') {
+        if ('code' in firestoreError) {
+          console.error('❌ Error code:', firestoreError.code);
+        }
+        if ('message' in firestoreError) {
+          console.error('❌ Error message:', firestoreError.message);
+        }
+      }
       throw firestoreError; // Re-throw to be caught by outer catch
     }
   } catch (error) {
@@ -180,15 +186,17 @@ export async function saveLikedOutfit(
       name: error instanceof Error ? error.name : 'Unknown',
       message: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined,
-      code: (error as any)?.code,
+      code: error && typeof error === 'object' && 'code' in error ? error.code : undefined,
     });
     
     // Provide user-friendly error messages
     let userMessage = 'Failed to save outfit';
-    if ((error as any)?.code === 'permission-denied') {
-      userMessage = 'Permission denied. Please sign in again.';
-    } else if ((error as any)?.code === 'unavailable') {
-      userMessage = 'Database temporarily unavailable. Please try again.';
+    if (error && typeof error === 'object' && 'code' in error) {
+      if (error.code === 'permission-denied') {
+        userMessage = 'Permission denied. Please sign in again.';
+      } else if (error.code === 'unavailable') {
+        userMessage = 'Database temporarily unavailable. Please try again.';
+      }
     } else if (error instanceof Error) {
       userMessage = error.message;
     }
@@ -253,7 +261,7 @@ export async function getLikedOutfits(userId: string): Promise<LikedOutfitData[]
     console.error('Error details:', {
       name: error instanceof Error ? error.name : 'Unknown',
       message: error instanceof Error ? error.message : String(error),
-      code: (error as any)?.code,
+      code: error && typeof error === 'object' && 'code' in error ? error.code : undefined,
     });
     
     // Return empty array instead of throwing
@@ -306,17 +314,19 @@ export async function removeLikedOutfit(
     console.error('Error details:', {
       name: error instanceof Error ? error.name : 'Unknown',
       message: error instanceof Error ? error.message : String(error),
-      code: (error as any)?.code,
+      code: error && typeof error === 'object' && 'code' in error ? error.code : undefined,
     });
     
     // Provide user-friendly error messages
     let userMessage = 'Failed to remove outfit';
-    if ((error as any)?.code === 'permission-denied') {
-      userMessage = 'Permission denied. Please sign in again.';
-    } else if ((error as any)?.code === 'not-found') {
-      userMessage = 'Outfit not found';
-    } else if ((error as any)?.code === 'unavailable') {
-      userMessage = 'Database temporarily unavailable. Please try again.';
+    if (error && typeof error === 'object' && 'code' in error) {
+      if (error.code === 'permission-denied') {
+        userMessage = 'Permission denied. Please sign in again.';
+      } else if (error.code === 'not-found') {
+        userMessage = 'Outfit not found';
+      } else if (error.code === 'unavailable') {
+        userMessage = 'Database temporarily unavailable. Please try again.';
+      }
     } else if (error instanceof Error) {
       userMessage = error.message;
     }

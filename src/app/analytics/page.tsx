@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import { 
   TrendingUp, 
@@ -27,9 +27,11 @@ import {
 import type { UserPreferences, RecommendationHistory } from '@/lib/personalization';
 import { getLikedOutfits } from '@/lib/likedOutfits';
 import Link from 'next/link';
-import Particles from '@/components/Particles';
-import TextPressure from '@/components/TextPressure';
 import { useMounted } from '@/hooks/useMounted';
+
+// Lazy load heavy components for better performance
+const Particles = lazy(() => import('@/components/Particles'));
+const TextPressure = lazy(() => import('@/components/TextPressure'));
 
 interface StyleInsights {
   topColors: { color: string; count: number; hex: string }[];
@@ -292,7 +294,7 @@ export default function AnalyticsPage() {
       setPreferences(prefs);
       setHistory(recs);
       setLikedCount(liked.length);
-      setInsights(calculateInsights(recs, liked.length, liked));
+      // Insights will be calculated via useMemo hook
 
     } catch (error) {
       console.error('Error loading analytics:', error);
@@ -302,7 +304,13 @@ export default function AnalyticsPage() {
     }
   };
 
-  const calculateInsights = (recs: RecommendationHistory[], likedTotal: number, likedOutfits: any[]): StyleInsights => {
+  // Memoize expensive calculations to avoid recalculation on every render
+  const insights = useMemo(() => {
+    if (!history.length && !likedCount) return null;
+    return calculateInsights(history, likedCount, [] as any[]);
+  }, [history, likedCount]);
+
+  const calculateInsights = useCallback((recs: RecommendationHistory[], likedTotal: number, likedOutfits: any[]): StyleInsights => {
     const colorCounts: { [key: string]: number } = {};
     const occasionCounts: { [key: string]: number } = {};
     const styleCounts: { [key: string]: number } = {};
@@ -403,7 +411,7 @@ export default function AnalyticsPage() {
       seasonalDistribution: Object.entries(seasonCounts).map(([season, count]) => ({ season, count })),
       mostActiveMonth: 'Recent'
     };
-  };
+  }, []);
 
   if (!isMounted) {
     return null;
@@ -434,47 +442,41 @@ export default function AnalyticsPage() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 relative overflow-hidden">
-        {/* Particles Background */}
+        {/* Particles Background - Optimized */}
         {isMounted && (
           <div className="absolute inset-0 opacity-40 pointer-events-none">
-            <Particles
-              className="absolute inset-0"
-              particleColors={['#a855f7', '#c4b5fd']}
-              particleCount={500}
-              particleSpread={10}
-              speed={0.3}
-              particleBaseSize={150}
-              moveParticlesOnHover={true}
-              alphaParticles={false}
-              disableRotation={false}
-            />
+            <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-purple-500/10" />}>
+              <Particles
+                className="absolute inset-0"
+                particleColors={['#a855f7', '#c4b5fd']}
+                particleCount={50}
+                particleSpread={10}
+                speed={0.2}
+                particleBaseSize={120}
+                moveParticlesOnHover={false}
+                alphaParticles={false}
+                disableRotation={true}
+              />
+            </Suspense>
           </div>
         )}
         
         <div className="relative z-10 container mx-auto px-4 py-12">
           {/* Header */}
           <header className="text-center mb-16">
-            <div style={{ 
-              position: 'relative', 
-              height: '300px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              paddingTop: '90px', 
-              paddingBottom: '90px',
-              paddingLeft: '40px',
-              paddingRight: '40px'
-            }}>
+            <div style={{ position: 'relative', height: '300px' }}>
               {isMounted && (
-                <TextPressure
-                  text="Style-Analytics"
-                  stroke={true}
-                  width={false}
-                  weight={true}
-                  textColor="#c4b5fd"
-                  strokeColor="#7c3aed"
-                  minFontSize={32}
-                />
+                <Suspense fallback={<h1 className="text-6xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent pt-24">Style-Analytics</h1>}>
+                  <TextPressure
+                    text="Style-Analytics"
+                    stroke={true}
+                    width={false}
+                    weight={true}
+                    textColor="#c4b5fd"
+                    strokeColor="#7c3aed"
+                    minFontSize={32}
+                  />
+                </Suspense>
               )}
             </div>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto mt-4">

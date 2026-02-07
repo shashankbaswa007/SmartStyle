@@ -1,15 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
-import { Palette, Search, Sparkles, Info } from "lucide-react";
+import { Palette, Search, Sparkles, Info, Copy, Check, Download, Pipette } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import Particles from "@/components/Particles";
-import TextPressure from "@/components/TextPressure";
 import { useMounted } from "@/hooks/useMounted";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+
+// Lazy load heavy components for better performance
+const Particles = lazy(() => import("@/components/Particles"));
+const TextPressure = lazy(() => import("@/components/TextPressure"));
 
 interface ColorMatch {
   label: string;
@@ -56,8 +58,52 @@ export default function ColorMatchPage() {
   const [harmonyType, setHarmonyType] = useState("complementary");
   const [loading, setLoading] = useState(false);
   const [colorData, setColorData] = useState<ColorResponse | null>(null);
+  const [copiedColor, setCopiedColor] = useState<string | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
   const { toast } = useToast();
   const isMounted = useMounted();
+
+  const copyToClipboard = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedColor(text);
+      setTimeout(() => setCopiedColor(null), 2000);
+      toast({
+        title: "Copied!",
+        description: `${label} copied to clipboard`,
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Failed to copy",
+        description: "Could not copy color to clipboard",
+      });
+    }
+  };
+
+  const exportPalette = () => {
+    if (!colorData) return;
+    
+    const paletteText = `Color Palette - ${colorData.harmonyType?.replace('_', ' ').toUpperCase()} Harmony\n\n` +
+      `Input Color: ${colorData.inputColor.name}\n${colorData.inputColor.hex}\n\n` +
+      `Matching Colors:\n` +
+      colorData.matches.map((m, i) => `${i + 1}. ${m.name} - ${m.hex}`).join('\n');
+    
+    const blob = new Blob([paletteText], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `color-palette-${Date.now()}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Palette Exported!",
+      description: "Color palette saved to your downloads",
+    });
+  };
 
   const handleSearch = async () => {
     if (!color.trim()) {
@@ -113,47 +159,41 @@ export default function ColorMatchPage() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 relative overflow-hidden">
-      {/* Particles Background */}
+      {/* Particles Background - Optimized */}
       <div className="absolute inset-0 z-0 pointer-events-none">
       {isMounted && (
-          <Particles
-              className="absolute inset-0"
-              particleColors={['#3b82f6', '#f63b82']}
-              particleCount={500}
-              particleSpread={10}
-              speed={0.3}
-              particleBaseSize={150}
-              moveParticlesOnHover={true}
-              alphaParticles={false}
-              disableRotation={false}
-            />
+          <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-blue-500/10" />}>
+            <Particles
+                className="absolute inset-0"
+                particleColors={['#3b82f6', '#93c5fd']}
+                particleCount={50}
+                particleSpread={10}
+                speed={0.2}
+                particleBaseSize={120}
+                moveParticlesOnHover={false}
+                alphaParticles={false}
+                disableRotation={true}
+              />
+          </Suspense>
       )}
       </div>
 
       <div className="relative z-10 container mx-auto px-4 py-12">
         {/* Header */}
         <header className="text-center mb-16">
-          <div style={{ 
-            position: 'relative', 
-            height: '300px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            paddingTop: '90px', 
-            paddingBottom: '90px',
-            paddingLeft: '40px',
-            paddingRight: '40px'
-          }}>
+          <div style={{ position: 'relative', height: '300px' }}>
             {isMounted && (
-              <TextPressure
-                text="Color-Match"
-                stroke={true}
-                width={false}
-                weight={true}
-                textColor="#93c5fd"
-                strokeColor="#1d4ed8"
-                minFontSize={32}
-              />
+              <Suspense fallback={<h1 className="text-6xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent pt-24">Color-Match</h1>}>
+                <TextPressure
+                  text="Color-Match"
+                  stroke={true}
+                  width={false}
+                  weight={true}
+                  textColor="#93c5fd"
+                  strokeColor="#1d4ed8"
+                  minFontSize={32}
+                />
+              </Suspense>
             )}
           </div>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mt-4">
@@ -223,24 +263,49 @@ export default function ColorMatchPage() {
             </div>
             
             <div className="space-y-4">
-              <div className="relative">
-                <Input
-                  type="text"
-                  placeholder='e.g., "red", "#3b82f6", "rgb(59, 130, 246)"'
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSearch();
-                  }}
-                  className="pr-12"
-                />
-                {color && (
-                  <div
-                    className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 border-white/20 shadow-md"
-                    style={{ backgroundColor: color }}
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    type="text"
+                    placeholder='e.g., "red", "#3b82f6", "rgb(59, 130, 246)"'
+                    value={color}
+                    onChange={(e) => setColor(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSearch();
+                    }}
+                    className="pr-12"
                   />
-                )}
+                  {color && (
+                    <div
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full border-2 border-white/20 shadow-md cursor-pointer hover:scale-110 transition-transform"
+                      style={{ backgroundColor: color }}
+                      onClick={() => setShowPicker(!showPicker)}
+                    />
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowPicker(!showPicker)}
+                  className="flex-shrink-0"
+                >
+                  <Pipette className="w-4 h-4" />
+                </Button>
               </div>
+              
+              {showPicker && (
+                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                  <label className="text-sm font-medium">Pick Color:</label>
+                  <input
+                    type="color"
+                    value={color.startsWith('#') ? color : '#3b82f6'}
+                    onChange={(e) => setColor(e.target.value)}
+                    className="w-12 h-12 rounded cursor-pointer border-2 border-border"
+                  />
+                  <span className="text-xs text-muted-foreground flex-1">or type a color name above</span>
+                </div>
+              )}
 
               <Button
                 onClick={handleSearch}
@@ -283,17 +348,28 @@ export default function ColorMatchPage() {
             {/* Input Color Display */}
             <motion.div variants={itemVariants} className="mb-8">
               <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-6">
-                <h3 className="font-semibold text-lg mb-4 flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-accent" />
-                  Your Color
-                  {colorData.harmonyType && (
-                    <span className="ml-auto text-sm font-normal text-muted-foreground bg-accent/10 px-3 py-1 rounded-full">
-                      {colorData.harmonyType.replace('_', ' ').split(' ').map(word => 
-                        word.charAt(0).toUpperCase() + word.slice(1)
-                      ).join(' ')} Harmony
-                    </span>
-                  )}
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-lg flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-accent" />
+                    Your Color
+                    {colorData.harmonyType && (
+                      <span className="text-sm font-normal text-muted-foreground bg-accent/10 px-3 py-1 rounded-full">
+                        {colorData.harmonyType.replace('_', ' ').split(' ').map(word => 
+                          word.charAt(0).toUpperCase() + word.slice(1)
+                        ).join(' ')} Harmony
+                      </span>
+                    )}
+                  </h3>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportPalette}
+                    className="gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Export Palette
+                  </Button>
+                </div>
                 <div className="flex items-center gap-6">
                   <div
                     className="w-24 h-24 rounded-full shadow-xl border-4 border-white/20"
@@ -325,10 +401,24 @@ export default function ColorMatchPage() {
                 >
                   <div className="flex flex-col items-center text-center">
                     {/* Color Swatch - Larger for better visibility */}
-                    <div
-                      className="w-28 h-28 rounded-full shadow-xl border-4 border-white/20 mb-3"
-                      style={{ backgroundColor: match.hex }}
-                    />
+                    <div className="relative group">
+                      <div
+                        className="w-28 h-28 rounded-full shadow-xl border-4 border-white/20 mb-3"
+                        style={{ backgroundColor: match.hex }}
+                      />
+                      <Button
+                        size="icon"
+                        variant="secondary"
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={() => copyToClipboard(match.hex, match.name || 'Color')}
+                      >
+                        {copiedColor === match.hex ? (
+                          <Check className="w-4 h-4" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </Button>
+                    </div>
                     
                     {/* Color Info */}
                     <div className="space-y-1.5 w-full">
@@ -338,12 +428,18 @@ export default function ColorMatchPage() {
                       {match.name && (
                         <p className="text-base font-bold">{match.name}</p>
                       )}
-                      <p className="text-xs font-mono text-muted-foreground break-all">
+                      <button
+                        onClick={() => copyToClipboard(match.hex, 'Hex code')}
+                        className="text-xs font-mono text-muted-foreground hover:text-foreground break-all cursor-pointer transition-colors"
+                      >
                         {match.hex}
-                      </p>
-                      <p className="text-xs text-muted-foreground break-all">
+                      </button>
+                      <button
+                        onClick={() => copyToClipboard(match.rgb, 'RGB value')}
+                        className="text-xs text-muted-foreground hover:text-foreground break-all cursor-pointer transition-colors"
+                      >
                         {match.rgb}
-                      </p>
+                      </button>
                     </div>
                   </div>
                 </motion.div>
@@ -351,7 +447,7 @@ export default function ColorMatchPage() {
             </div>
 
             {/* Color Theory Info - Updated with new schemes */}
-            <motion.div variants={itemVariants} className="mt-8">
+            <motion.div variants={itemVariants} className="mt-8 space-y-4">
               <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-6">
                 <h3 className="font-semibold text-lg mb-4">Color Theory Guide</h3>
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
@@ -378,6 +474,32 @@ export default function ColorMatchPage() {
                   <div>
                     <h4 className="font-semibold text-accent mb-1">Monochromatic</h4>
                     <p className="text-muted-foreground">Variations of the same hue. Creates elegant and cohesive designs.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Fashion Application Tips */}
+              <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 border border-purple-200 dark:border-purple-800/30 shadow-lg rounded-2xl p-6">
+                <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  Fashion Styling Tips
+                </h3>
+                <div className="grid md:grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-2 flex-shrink-0" />
+                    <p className="text-muted-foreground"><span className="font-semibold text-foreground">Bold Contrast:</span> Use complementary colors for statement pieces</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-2 flex-shrink-0" />
+                    <p className="text-muted-foreground"><span className="font-semibold text-foreground">Soft Harmony:</span> Analogous colors create effortless, flowing outfits</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-2 flex-shrink-0" />
+                    <p className="text-muted-foreground"><span className="font-semibold text-foreground">Accent Colors:</span> Use lighter/darker shades as accessories</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-2 flex-shrink-0" />
+                    <p className="text-muted-foreground"><span className="font-semibold text-foreground">60-30-10 Rule:</span> 60% main, 30% secondary, 10% accent color</p>
                   </div>
                 </div>
               </div>

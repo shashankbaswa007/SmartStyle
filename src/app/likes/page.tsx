@@ -203,7 +203,7 @@ export default function LikesPage() {
         {isMounted && (
           <Particles
             className="absolute inset-0"
-            particleColors={['#ef4444', '#44efef']}
+            particleColors={['#ef4444', '#b91c1c ']}
             particleCount={500}
             particleSpread={10}
             speed={0.3}
