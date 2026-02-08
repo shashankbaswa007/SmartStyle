@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import tavilySearch from '@/lib/tavily';
 import { z } from 'zod';
+import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
 
 // Input validation schema
 const tavilyRequestSchema = z.object({
@@ -12,6 +13,16 @@ const tavilyRequestSchema = z.object({
 
 export async function POST(req: Request) {
   try {
+    // Rate limit: 30 requests per minute per IP (Tavily has API costs)
+    const clientId = getClientIdentifier(req);
+    const rateLimit = checkRateLimit(clientId, { windowMs: 60_000, maxRequests: 30 });
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.', links: { amazon: null, ajio: null, myntra: null } },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rateLimit.resetTime - Date.now()) / 1000)) } }
+      );
+    }
+
     // Parse request body with error handling
     let body;
     try {

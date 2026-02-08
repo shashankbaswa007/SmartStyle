@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import chroma from 'chroma-js';
+import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
 
 interface ColorMatch {
   label: string;
   hex: string;
   rgb: string;
   name?: string;
+  fashionContext?: {
+    usage: 'primary' | 'secondary' | 'accent';
+    ratio: string;
+    clothingItems: string[];
+    styleNotes: string;
+  };
 }
 
 // Expanded color database with fashion-specific colors (140+ colors)
@@ -159,6 +166,109 @@ const FASHION_COLORS: Record<string, string> = {
   'cyan': '#00FFFF',
 };
 
+// Determine if a color is warm or cool
+const isWarmColor = (color: chroma.Color): boolean => {
+  const [h] = color.hsl();
+  const hue = h || 0;
+  // Warm: red to yellow (0-60 degrees)
+  return (hue >= 0 && hue <= 60) || (hue >= 300 && hue <= 360);
+};
+
+// Determine clothing items based on color characteristics
+const getSuggestedClothing = (color: chroma.Color, usage: string): string[] => {
+  const [h, s, l] = color.hsl();
+  const saturation = s || 0;
+  const lightness = l || 0;
+  const isWarm = isWarmColor(color);
+  
+  if (usage === 'primary') {
+    // Primary colors - main outfit pieces
+    if (lightness > 0.7) {
+      return ['Light tops', 'Summer dresses', 'Casual shirts', 'Blouses'];
+    } else if (lightness < 0.3) {
+      return ['Pants', 'Skirts', 'Blazers', 'Coats'];
+    } else if (saturation > 0.6) {
+      return ['Statement pieces', 'Dresses', 'Jackets', 'Sweaters'];
+    } else {
+      return ['Tops', 'Shirts', 'Dresses', 'Trousers'];
+    }
+  } else if (usage === 'secondary') {
+    // Secondary colors - complementary pieces
+    if (isWarm) {
+      return ['Cardigans', 'Scarves', 'Light jackets', 'Vests'];
+    } else {
+      return ['Blazers', 'Shawls', 'Layering pieces', 'Outer layers'];
+    }
+  } else {
+    // Accent colors - small touches
+    if (saturation > 0.7) {
+      return ['Jewelry', 'Belts', 'Handbags', 'Shoes'];
+    } else if (lightness > 0.6) {
+      return ['Accessories', 'Scarves', 'Hair accessories', 'Light jewelry'];
+    } else {
+      return ['Footwear', 'Bags', 'Watches', 'Bold accessories'];
+    }
+  }
+};
+
+// Generate style notes based on color properties
+const getStyleNotes = (color: chroma.Color, usage: string, harmonyType: string): string => {
+  const [h, s, l] = color.hsl();
+  const saturation = s || 0;
+  const lightness = l || 0;
+  
+  if (usage === 'primary') {
+    if (saturation > 0.7) {
+      return 'Bold choice for main pieces. Balance with neutral accessories.';
+    } else if (lightness > 0.75) {
+      return 'Light and airy. Perfect for daytime or summer outfits.';
+    } else if (lightness < 0.3) {
+      return 'Deep and sophisticated. Ideal for formal or evening wear.';
+    } else {
+      return 'Versatile main color. Easy to style with various accessories.';
+    }
+  } else if (usage === 'secondary') {
+    return `Complements your primary color through ${harmonyType} harmony. Use for layering.`;
+  } else {
+    if (saturation > 0.7) {
+      return 'Vibrant accent. Use sparingly for maximum impact.';
+    } else {
+      return 'Subtle accent. Adds depth without overwhelming.';
+    }
+  }
+};
+
+// Smart harmony recommendation based on color characteristics
+const getRecommendedHarmony = (color: chroma.Color): keyof typeof HARMONY_TYPES => {
+  const [h, s, l] = color.hsl();
+  const saturation = s || 0;
+  const lightness = l || 0;
+  
+  // Low saturation (neutral/pastel colors) - analogous for soft harmony
+  if (saturation < 0.3) {
+    return 'analogous';
+  }
+  
+  // Very light colors (pastels) - complementary for contrast
+  if (lightness > 0.75) {
+    return 'complementary';
+  }
+  
+  // Very dark colors - split complementary for richness without overwhelming
+  if (lightness < 0.3) {
+    return 'split_complementary';
+  }
+  
+  // Medium saturation, medium lightness (most fashion colors)
+  // High saturation - triadic for vibrant balanced looks
+  if (saturation > 0.6) {
+    return 'triadic';
+  }
+  
+  // Default: complementary for bold statement pieces
+  return 'complementary';
+};
+
 // Color harmony calculation functions with improved angles for better results
 const HARMONY_TYPES = {
   complementary: (hue: number) => [(hue + 180) % 360],
@@ -181,6 +291,16 @@ const hasGoodContrast = (color1: chroma.Color, color2: chroma.Color): boolean =>
 
 export async function POST(req: NextRequest) {
   try {
+    // Rate limit: 60 requests per minute per IP
+    const clientId = getClientIdentifier(req);
+    const rateLimit = checkRateLimit(clientId, { windowMs: 60_000, maxRequests: 60 });
+    if (!rateLimit.success) {
+      return NextResponse.json(
+        { error: 'Too many requests. Please try again later.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rateLimit.resetTime - Date.now()) / 1000)) } }
+      );
+    }
+
     // Parse request body with error handling
     let body;
     try {
@@ -193,7 +313,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { color, harmonyType = 'complementary' } = body;
+    const { color, harmonyType = 'recommended' } = body;
 
     if (!color || typeof color !== 'string') {
       return NextResponse.json(
@@ -244,9 +364,30 @@ export async function POST(req: NextRequest) {
       return chroma.hsl(h || 0, adjustedS, adjustedL);
     };
 
-    // Generate harmonious colors based on color theory with improved reliability
-    const harmonyHues = HARMONY_TYPES[harmonyType as keyof typeof HARMONY_TYPES](inputHue);
+    // Determine actual harmony type (handle 'recommended' mode)
+    const actualHarmonyType = harmonyType === 'recommended' 
+      ? getRecommendedHarmony(inputColorObj)
+      : harmonyType;
     
+    console.log('🎯 Using harmony type:', actualHarmonyType, harmonyType === 'recommended' ? '(auto-selected)' : '(user-selected)');
+
+    // Generate harmonious colors based on color theory with improved reliability
+    const harmonyHues = HARMONY_TYPES[actualHarmonyType as keyof typeof HARMONY_TYPES](inputHue);
+    
+    // Determine usage distribution based on harmony type
+    const getUsageType = (index: number, totalColors: number): 'primary' | 'secondary' | 'accent' => {
+      if (totalColors === 1) return 'accent';
+      if (index === 0) return 'secondary';
+      if (index === 1 && totalColors > 2) return 'secondary';
+      return 'accent';
+    };
+    
+    const getUsageRatio = (usage: 'primary' | 'secondary' | 'accent', index: number): string => {
+      if (usage === 'primary') return '60% - Main pieces';
+      if (usage === 'secondary') return index === 0 ? '30% - Secondary' : '20% - Secondary';
+      return '10% - Accents';
+    };
+
     const matches: ColorMatch[] = harmonyHues.map((targetHue, index) => {
       // Create harmonious color with adjusted saturation and lightness for better fashion appeal
       let harmonyColor: chroma.Color;
@@ -283,6 +424,8 @@ export async function POST(req: NextRequest) {
       const finalHex = bestMatch.distance < 40 ? bestMatch.hex : harmonyColor.hex();
       const finalColor = chroma(finalHex);
 
+      const usageType = getUsageType(index, harmonyHues.length);
+      
       return {
         label: harmonyType === 'complementary' && index === 0 
           ? 'Complementary' 
@@ -300,6 +443,12 @@ export async function POST(req: NextRequest) {
         name: bestMatch.distance < 40 
           ? bestMatch.name.charAt(0).toUpperCase() + bestMatch.name.slice(1)
           : 'Custom ' + (index + 1),
+        fashionContext: {
+          usage: usageType,
+          ratio: getUsageRatio(usageType, index),
+          clothingItems: getSuggestedClothing(finalColor, usageType),
+          styleNotes: getStyleNotes(finalColor, usageType, actualHarmonyType),
+        },
       };
     });
 
@@ -339,6 +488,14 @@ export async function POST(req: NextRequest) {
         name: bestMatch.distance < 35 
           ? bestMatch.name.charAt(0).toUpperCase() + bestMatch.name.slice(1)
           : label,
+        fashionContext: {
+          usage: 'accent',
+          ratio: '5-10% - Tonal accents',
+          clothingItems: getSuggestedClothing(finalColor, 'accent'),
+          styleNotes: adjustment > 0 
+            ? 'Lighter variation adds brightness and dimension.'
+            : 'Darker variation adds depth and sophistication.',
+        },
       };
     };
 
@@ -354,16 +511,24 @@ export async function POST(req: NextRequest) {
       matches.push(addShadeVariation(inputColorObj, -0.5, 'Dark Tone'));
     }
 
-    console.log('✅ Generated', matches.length, 'high-quality color matches using', harmonyType, 'harmony');
+    console.log('✅ Generated', matches.length, 'high-quality color matches using', actualHarmonyType, 'harmony');
 
     return NextResponse.json({
       inputColor: {
         hex: inputHex,
         rgb: inputRgb,
         name: closestColorName.charAt(0).toUpperCase() + closestColorName.slice(1),
+        fashionContext: {
+          usage: 'primary' as const,
+          ratio: '60% - Main pieces',
+          clothingItems: getSuggestedClothing(inputColorObj, 'primary'),
+          styleNotes: `Your base color. Build your outfit around this ${actualHarmonyType} harmony.`,
+        },
       },
       matches,
-      harmonyType,
+      harmonyType: actualHarmonyType,
+      requestedHarmonyType: harmonyType,
+      isRecommended: harmonyType === 'recommended',
     });
   } catch (error) {
     console.error('❌ Color matching error:', error);

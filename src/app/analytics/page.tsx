@@ -241,7 +241,6 @@ export default function AnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [history, setHistory] = useState<RecommendationHistory[]>([]);
-  const [insights, setInsights] = useState<StyleInsights | null>(null);
   const [likedCount, setLikedCount] = useState(0);
 
   // Hard-kill any stale service workers or caches to stop old chunk URLs
@@ -303,12 +302,6 @@ export default function AnalyticsPage() {
       setLoading(false);
     }
   };
-
-  // Memoize expensive calculations to avoid recalculation on every render
-  const insights = useMemo(() => {
-    if (!history.length && !likedCount) return null;
-    return calculateInsights(history, likedCount, [] as any[]);
-  }, [history, likedCount]);
 
   const calculateInsights = useCallback((recs: RecommendationHistory[], likedTotal: number, likedOutfits: any[]): StyleInsights => {
     const colorCounts: { [key: string]: number } = {};
@@ -412,6 +405,12 @@ export default function AnalyticsPage() {
       mostActiveMonth: 'Recent'
     };
   }, []);
+
+  // Memoize expensive calculations to avoid recalculation on every render
+  const insights = useMemo(() => {
+    if (!history.length && !likedCount) return null;
+    return calculateInsights(history, likedCount, [] as any[]);
+  }, [history, likedCount, calculateInsights]);
 
   if (!isMounted) {
     return null;

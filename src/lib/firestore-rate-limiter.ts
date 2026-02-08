@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
+import { doc, runTransaction, Timestamp } from 'firebase/firestore';
 
 export async function checkRateLimit(userId: string): Promise<{
   allowed: boolean;
@@ -8,66 +8,61 @@ export async function checkRateLimit(userId: string): Promise<{
   message?: string;
 }> {
   try {
+    const maxRequests = 20;
     const limitsRef = doc(db, 'rateLimits', userId);
-    const limitsSnap = await getDoc(limitsRef);
-    
     const now = new Date();
     const hourStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
-    
-    if (!limitsSnap.exists()) {
-      // First request this hour
-      await setDoc(limitsRef, {
-        count: 1,
-        hourStart: Timestamp.fromDate(hourStart),
-      });
-      return { 
-        allowed: true, 
-        remaining: 19, 
-        resetAt: new Date(hourStart.getTime() + 3600000) 
+    const resetAt = new Date(hourStart.getTime() + 3600000);
+
+    // Use a Firestore transaction to atomically read+write the counter
+    // This prevents two concurrent requests from both reading count=19
+    // and both writing count=20 (bypassing the limit).
+    const result = await runTransaction(db, async (transaction) => {
+      const limitsSnap = await transaction.get(limitsRef);
+
+      if (!limitsSnap.exists()) {
+        // First request this hour — create the doc
+        transaction.set(limitsRef, {
+          count: 1,
+          hourStart: Timestamp.fromDate(hourStart),
+        });
+        return { allowed: true, remaining: maxRequests - 1, resetAt };
+      }
+
+      const data = limitsSnap.data();
+      const lastHourStart = data.hourStart.toDate();
+
+      // New hour window — reset counter
+      if (hourStart > lastHourStart) {
+        transaction.set(limitsRef, {
+          count: 1,
+          hourStart: Timestamp.fromDate(hourStart),
+        });
+        return { allowed: true, remaining: maxRequests - 1, resetAt };
+      }
+
+      // Limit exceeded
+      if (data.count >= maxRequests) {
+        const actualResetAt = new Date(lastHourStart.getTime() + 3600000);
+        const minutesUntilReset = Math.ceil((actualResetAt.getTime() - now.getTime()) / 60000);
+        return {
+          allowed: false,
+          remaining: 0,
+          resetAt: actualResetAt,
+          message: `Rate limit exceeded. You can make ${maxRequests} requests per hour. Please try again in ${minutesUntilReset} minutes.`,
+        };
+      }
+
+      // Atomically increment
+      transaction.update(limitsRef, { count: data.count + 1 });
+      return {
+        allowed: true,
+        remaining: maxRequests - data.count - 1,
+        resetAt: new Date(lastHourStart.getTime() + 3600000),
       };
-    }
-    
-    const data = limitsSnap.data();
-    const lastHourStart = data.hourStart.toDate();
-    
-    // Reset if new hour
-    if (hourStart > lastHourStart) {
-      await setDoc(limitsRef, {
-        count: 1,
-        hourStart: Timestamp.fromDate(hourStart),
-      });
-      return { 
-        allowed: true, 
-        remaining: 19, 
-        resetAt: new Date(hourStart.getTime() + 3600000) 
-      };
-    }
-    
-    // Check limit (20 requests per hour per user)
-    const maxRequests = 20;
-    if (data.count >= maxRequests) {
-      const resetAt = new Date(lastHourStart.getTime() + 3600000);
-      const minutesUntilReset = Math.ceil((resetAt.getTime() - now.getTime()) / 60000);
-      
-      return { 
-        allowed: false, 
-        remaining: 0, 
-        resetAt,
-        message: `Rate limit exceeded. You can make ${maxRequests} requests per hour. Please try again in ${minutesUntilReset} minutes.`
-      };
-    }
-    
-    // Increment counter
-    await setDoc(limitsRef, {
-      count: data.count + 1,
-      hourStart: data.hourStart,
     });
-    
-    return { 
-      allowed: true, 
-      remaining: maxRequests - data.count - 1, 
-      resetAt: new Date(lastHourStart.getTime() + 3600000) 
-    };
+
+    return result;
   } catch (error) {
     console.error('Rate limit check error:', error);
     // Allow request if rate limiting check fails (graceful degradation)

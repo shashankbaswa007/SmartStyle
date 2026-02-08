@@ -99,7 +99,7 @@ export async function validateAndSanitizeImage(
     // This removes all metadata including GPS, camera info, etc.
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
+    ctx.drawImage(img as any, 0, 0);
 
     // Convert to appropriate format
     let sanitizedBase64: string;

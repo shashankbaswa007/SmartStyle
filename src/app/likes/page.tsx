@@ -204,9 +204,9 @@ export default function LikesPage() {
           <Particles
             className="absolute inset-0"
             particleColors={['#ef4444', '#b91c1c ']}
-            particleCount={500}
+            particleCount={150}
             particleSpread={10}
-            speed={0.3}
+            speed={0.5}
             particleBaseSize={150}
             moveParticlesOnHover={true}
             alphaParticles={false}

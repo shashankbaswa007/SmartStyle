@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, lazy, Suspense } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc } from 'firebase/firestore';
@@ -65,6 +65,7 @@ export default function WardrobePage() {
   const [showUndoToast, setShowUndoToast] = useState(false);
   const [isUndoing, setIsUndoing] = useState(false);
   const markingAsWornRef = useRef<Set<string>>(new Set());
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showInsights, setShowInsights] = useState(true);
   
   // Respect reduced-motion preference for accessibility
@@ -81,6 +82,13 @@ export default function WardrobePage() {
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
+
+  // Cleanup undo timer on unmount to prevent state updates after unmount
+  useEffect(() => {
+    return () => {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    };
+  }, []);
   
   // Context mode for smart filtering
   const CONTEXT_MODES = ['all', 'work', 'casual', 'travel', 'weather', 'occasion'] as const;
@@ -93,6 +101,42 @@ export default function WardrobePage() {
   type SortOption = typeof SORT_OPTIONS[number];
   const [sortBy, setSortBy] = useState<SortOption>('recent');
   const [groupByColor, setGroupByColor] = useState(false);
+  
+  // Network and sync state management
+  const [isOnline, setIsOnline] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  
+  // Scale awareness for large wardrobes
+  const LARGE_WARDROBE_THRESHOLD = 100;
+  const isLargeWardrobe = wardrobeItems.length >= LARGE_WARDROBE_THRESHOLD;
+
+  // Network connectivity detection
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      // Auto-refresh when coming back online
+      if (userId) {
+        console.log('📶 Connection restored, refreshing wardrobe...');
+        fetchWardrobeItems(userId);
+      }
+    };
+    const handleOffline = () => {
+      setIsOnline(false);
+      console.log('📴 Connection lost');
+    };
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    // Check initial state
+    setIsOnline(navigator.onLine);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [userId]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -231,9 +275,10 @@ export default function WardrobePage() {
     setFilteredItems(items);
   }, [selectedFilter, wardrobeItems, contextMode, searchQuery, sortBy]);
 
-  const fetchWardrobeItems = async (uid: string) => {
+  const fetchWardrobeItems = async (uid: string, silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
+      setIsSyncing(true);
       setError(null);
       console.log('🔍 Fetching wardrobe items for user:', uid);
       
@@ -241,6 +286,12 @@ export default function WardrobePage() {
       
       console.log('✅ Fetched wardrobe items:', items.length);
       setWardrobeItems(items);
+      setLastUpdated(Date.now());
+      
+      // Scale warning for large wardrobes
+      if (items.length >= LARGE_WARDROBE_THRESHOLD && items.length % 50 === 0) {
+        console.log(`⚠️ Large wardrobe detected: ${items.length} items. Consider using filters for better performance.`);
+      }
       
       if (items.length === 0) {
         console.log('ℹ️ No wardrobe items found - user may need to add items first');
@@ -259,11 +310,20 @@ export default function WardrobePage() {
       setWardrobeItems([]);
     } finally {
       setLoading(false);
+      setIsSyncing(false);
     }
   };
 
   const handleRefresh = () => {
     if (userId) {
+      if (!isOnline) {
+        toast({
+          variant: 'default',
+          title: 'No internet connection',
+          description: 'Please check your connection and try again.',
+        });
+        return;
+      }
       console.log('🔄 Manual refresh triggered');
       setError(null);
       setLoading(true);
@@ -273,6 +333,16 @@ export default function WardrobePage() {
 
   const handleDeleteItem = async (itemId: string, description: string) => {
     if (!userId) return;
+    
+    // Prevent operations when offline
+    if (!isOnline) {
+      toast({
+        variant: 'default',
+        title: 'No internet connection',
+        description: 'Cannot delete items while offline. Please check your connection.',
+      });
+      return;
+    }
 
     // Prevent concurrent deletes or undo operations
     if (deletingItemId || isUndoing) {
@@ -302,10 +372,14 @@ export default function WardrobePage() {
           setLastDeletedItem({ item: itemToDelete, timestamp: Date.now() });
           setShowUndoToast(true);
           
+          // Clear any existing undo timer
+          if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+          
           // Auto-hide undo after 10 seconds
-          setTimeout(() => {
+          undoTimerRef.current = setTimeout(() => {
             setShowUndoToast(false);
             setLastDeletedItem(null);
+            undoTimerRef.current = null;
           }, 10000);
         }
 
@@ -341,6 +415,29 @@ export default function WardrobePage() {
 
   const handleUndoDelete = async () => {
     if (!lastDeletedItem || !userId || isUndoing || deletingItemId) return;
+    
+    // Check if undo window has expired (10 seconds)
+    const timeSinceDelete = Date.now() - lastDeletedItem.timestamp;
+    if (timeSinceDelete > 10000) {
+      toast({
+        variant: 'default',
+        title: 'Undo window expired',
+        description: 'This item can no longer be restored. Please re-add it manually if needed.',
+      });
+      setShowUndoToast(false);
+      setLastDeletedItem(null);
+      return;
+    }
+    
+    // Prevent undo when offline
+    if (!isOnline) {
+      toast({
+        variant: 'default',
+        title: 'No internet connection',
+        description: 'Cannot restore items while offline. Please check your connection.',
+      });
+      return;
+    }
 
     // Prevent concurrent undo operations or deletes
     if (deletingItemId) {
@@ -414,6 +511,16 @@ export default function WardrobePage() {
 
   const handleMarkAsWorn = async (itemId: string, description: string) => {
     if (!userId) return;
+    
+    // Prevent operations when offline
+    if (!isOnline) {
+      toast({
+        variant: 'default',
+        title: 'No internet connection',
+        description: 'Cannot update wear count while offline.',
+      });
+      return;
+    }
 
     // Prevent duplicate requests for the same item
     if (markingAsWornRef.current.has(itemId)) {
@@ -488,8 +595,8 @@ export default function WardrobePage() {
     return colorMap[color.toLowerCase()] || '#808080';
   };
 
-  // Generate smart insights based on wardrobe data and context
-  const getSmartInsights = () => {
+  // Generate smart insights based on wardrobe data and context (memoized)
+  const smartInsights = useMemo(() => {
     if (wardrobeItems.length === 0) return [];
 
     const insights = [];
@@ -685,10 +792,10 @@ export default function WardrobePage() {
 
     // Return prioritized insights (max 4 to keep it manageable)
     return insights.slice(0, 4);
-  };
+  }, [wardrobeItems, contextMode]);
 
-  // Get item-specific nudge badge
-  const getItemNudge = (item: WardrobeItemData) => {
+  // Get item-specific nudge badge (memoized helper)
+  const getItemNudge = useCallback((item: WardrobeItemData) => {
     const now = Date.now();
     const ONE_MONTH = 30 * 24 * 60 * 60 * 1000;
     const TWO_WEEKS = 14 * 24 * 60 * 60 * 1000;
@@ -738,7 +845,7 @@ export default function WardrobePage() {
     }
 
     return null;
-  };
+  }, [wardrobeItems]);
 
   // Get detailed wear info for tooltips
   const getWearInfo = (item: WardrobeItemData) => {
@@ -777,6 +884,26 @@ export default function WardrobePage() {
 
     return parts.join(' • ');
   };
+  
+  // Format last updated time for display
+  const getLastUpdatedText = () => {
+    if (!lastUpdated) return 'Never';
+    
+    const now = Date.now();
+    const diff = now - lastUpdated;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    
+    if (seconds < 10) return 'Just now';
+    if (seconds < 60) return `${seconds}s ago`;
+    if (minutes < 60) return `${minutes}m ago`;
+    
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
 
   return (
     <ProtectedRoute>
@@ -788,6 +915,22 @@ export default function WardrobePage() {
         Skip to main content
       </a>
       <main className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8" role="main" aria-label="Wardrobe management">
+        {/* Offline Notification Banner */}
+        {!isOnline && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="fixed top-0 left-0 right-0 z-50 bg-amber-600 text-white px-4 py-2 text-center text-sm font-medium shadow-lg"
+            role="alert"
+            aria-live="assertive"
+          >
+            <div className="flex items-center justify-center gap-2">
+              <AlertCircle className="h-4 w-4" aria-hidden="true" />
+              <span>You&apos;re offline. Some features are unavailable until your connection is restored.</span>
+            </div>
+          </motion.div>
+        )}
+        
         {/* Particles Background - Optimized for performance */}
         <div className="absolute inset-0 -z-10">
           {isMounted && (
@@ -795,9 +938,9 @@ export default function WardrobePage() {
               <Particles
                 className="absolute inset-0"
                 particleColors={['#14b8a6', '#0f766e']}
-                particleCount={50}
+                particleCount={150}
                 particleSpread={10}
-                speed={0.2}
+                speed={0.5}
                 particleBaseSize={120}
                 moveParticlesOnHover={false}
                 alphaParticles={false}
@@ -826,10 +969,25 @@ export default function WardrobePage() {
               )}
             </div>
 
-            {/* Privacy Reassurance Badge */}
+            {/* Privacy Reassurance Badge with Sync Status */}
             <div className="flex items-center justify-center gap-2 mb-4 text-sm" role="status" aria-live="polite">
               <Shield className="h-4 w-4 text-teal-600" aria-hidden="true" />
               <span className="text-gray-700">Your wardrobe is private</span>
+              {isSyncing && (
+                <>
+                  <span className="text-gray-400">•</span>
+                  <Loader2 className="h-3 w-3 text-teal-600 animate-spin" aria-hidden="true" />
+                  <span className="text-gray-500 text-xs">Syncing...</span>
+                </>
+              )}
+              {!isSyncing && lastUpdated && (
+                <>
+                  <span className="text-gray-400">•</span>
+                  <span className="text-gray-500 text-xs" title={new Date(lastUpdated).toLocaleString()}>
+                    Updated {getLastUpdatedText()}
+                  </span>
+                </>
+              )}
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button 
@@ -895,15 +1053,15 @@ export default function WardrobePage() {
                   variant="outline"
                   size="lg"
                   className="w-full sm:w-auto border-teal-600 text-teal-600 hover:bg-teal-50 shadow-md h-12 sm:h-11 text-base sm:text-sm focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 touch-manipulation active:scale-95"
-                  disabled={loading}
+                  disabled={loading || isSyncing || !isOnline}
                   aria-label="Refresh wardrobe items"
                   aria-live="polite"
-                  aria-busy={loading}
+                  aria-busy={loading || isSyncing}
                 >
-                  {loading ? (
+                  {(loading || isSyncing) ? (
                     <>
                       <Loader2 className="h-4 w-4 sm:h-4 sm:w-4 mr-2 animate-spin" aria-hidden="true" />
-                      <span className="text-sm sm:text-base">Refreshing...</span>
+                      <span className="text-sm sm:text-base">{isSyncing ? 'Syncing...' : 'Refreshing...'}</span>
                     </>
                   ) : (
                     'Refresh'
@@ -918,14 +1076,15 @@ export default function WardrobePage() {
                 initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={prefersReducedMotion ? { duration: 0 } : undefined}
-                className="mt-6 sm:mt-8 flex flex-wrap gap-2 sm:gap-4 justify-center px-4 sm:px-0"
+                className="mt-6 sm:mt-8 space-y-3"
                 role="region"
                 aria-label="Wardrobe statistics"
               >
-                <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2">
-                  <span className="text-teal-900 font-semibold" aria-label={`${wardrobeItems.length} total items`}>{wardrobeItems.length}</span>
-                  <span className="text-teal-700 ml-1">Total Items</span>
-                </div>
+                <div className="flex flex-wrap gap-2 sm:gap-4 justify-center px-4 sm:px-0">
+                  <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2">
+                    <span className="text-teal-900 font-semibold" aria-label={`${wardrobeItems.length} total items`}>{wardrobeItems.length}</span>
+                    <span className="text-teal-700 ml-1">Total Items</span>
+                  </div>
                 <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
                   <span className="text-emerald-900 font-semibold" aria-label={`${wardrobeItems.filter(i => i.wornCount > 0).length} worn items`}>
                     {wardrobeItems.filter(i => i.wornCount > 0).length}
@@ -953,7 +1112,22 @@ export default function WardrobePage() {
                     <p className="text-xs mt-1 opacity-90">More items = better outfit suggestions</p>
                   </TooltipContent>
                 </Tooltip>
-              </motion.div>
+              </div>
+              
+              {/* Large Wardrobe Performance Tip */}
+              {isLargeWardrobe && (
+                <Alert className="max-w-2xl mx-auto border-amber-200 bg-amber-50">
+                  <Zap className="h-4 w-4 text-amber-600" />
+                  <AlertTitle className="text-amber-900">Large Wardrobe Detected</AlertTitle>
+                  <AlertDescription className="text-amber-800 text-sm">
+                    You have {wardrobeItems.length} items! Use filters, search, or context modes above for faster browsing. 
+                    {filteredItems.length < wardrobeItems.length && (
+                      <span className="font-medium"> Currently showing {filteredItems.length} items.</span>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </motion.div>
             )}
           </header>
 
@@ -1055,7 +1229,7 @@ export default function WardrobePage() {
                   <span className="text-gray-500">Active:</span>
                   {searchQuery && (
                     <Badge variant="secondary" className="bg-teal-100 text-teal-700">
-                      Search: "{searchQuery.slice(0, 20)}{searchQuery.length > 20 ? '...' : ''}"
+                      Search: &quot;{searchQuery.slice(0, 20)}{searchQuery.length > 20 ? '...' : ''}&quot;
                     </Badge>
                   )}
                   {sortBy !== 'recent' && (
@@ -1171,7 +1345,7 @@ export default function WardrobePage() {
           )}
 
           {/* Smart Insights Panel */}
-          {wardrobeItems.length > 0 && getSmartInsights().length > 0 && (
+          {wardrobeItems.length > 0 && smartInsights.length > 0 && (
             <motion.div
               initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
@@ -1192,7 +1366,7 @@ export default function WardrobePage() {
                     <Zap className="h-4 w-4 text-teal-600" aria-hidden="true" />
                     <span className="font-semibold text-teal-900">Smart Insights</span>
                     <Badge variant="secondary" className="bg-teal-100 text-teal-700 text-xs">
-                      {getSmartInsights().length}
+                      {smartInsights.length}
                     </Badge>
                   </div>
                   {showInsights ? (
@@ -1213,7 +1387,7 @@ export default function WardrobePage() {
                       className="overflow-hidden"
                     >
                       <div className="px-5 pb-4 space-y-3">
-                        {getSmartInsights().map((insight, idx) => {
+                        {smartInsights.map((insight, idx) => {
                           const IconComponent = insight.icon;
                           const colorClasses = {
                             amber: 'bg-amber-50 border-amber-200 text-amber-900',
@@ -1331,7 +1505,7 @@ export default function WardrobePage() {
               <div className="bg-gradient-to-br from-teal-50 to-emerald-50 border-2 border-dashed border-teal-300 rounded-2xl p-12 max-w-2xl mx-auto">
                 <Shirt className="h-20 w-20 mx-auto mb-6 text-teal-400" />
                 <h3 className="text-2xl font-bold text-teal-900 mb-3">
-                  Let's Build Your Digital Wardrobe
+                  Let&apos;s Build Your Digital Wardrobe
                 </h3>
                 <p className="text-teal-700 mb-6 text-lg">
                   Add photos of your clothing items to get personalized outfit suggestions.
@@ -1550,7 +1724,7 @@ export default function WardrobePage() {
                                     </TooltipTrigger>
                                     <TooltipContent className="max-w-xs hidden sm:block">
                                       <p className="font-semibold mb-1">Safe to remove</p>
-                                      <p className="text-xs">You'll have 10 seconds to undo this action</p>
+                                      <p className="text-xs">You&apos;ll have 10 seconds to undo this action</p>
                                     </TooltipContent>
                                   </Tooltip>
                                 </div>
@@ -1712,7 +1886,7 @@ export default function WardrobePage() {
                               </TooltipTrigger>
                               <TooltipContent className="max-w-xs hidden sm:block">
                                 <p className="font-semibold mb-1">Safe to remove</p>
-                                <p className="text-xs">You'll have 10 seconds to undo this action</p>
+                                <p className="text-xs">You&apos;ll have 10 seconds to undo this action</p>
                               </TooltipContent>
                             </Tooltip>
                           </div>
@@ -1738,7 +1912,7 @@ export default function WardrobePage() {
                   <>
                     <Search className="h-16 w-16 mx-auto mb-4 text-teal-400" />
                     <h3 className="text-xl font-bold text-teal-900 mb-2">
-                      No items match "{searchQuery}"
+                      No items match &quot;{searchQuery}&quot;
                     </h3>
                     <p className="text-teal-700 mb-4">
                       Try searching with different keywords or clear your filters.

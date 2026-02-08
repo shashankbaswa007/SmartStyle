@@ -1,45 +1,34 @@
 /**
- * Middleware - Route Protection and Authentication Flow
+ * Middleware - Security Headers & Route Configuration
  * 
  * This middleware:
- * 1. Redirects unauthenticated users from protected routes to /auth
- * 2. Redirects authenticated users from /auth to home page
- * 3. Allows public routes (auth page) to be accessible without authentication
+ * 1. Adds security headers to all responses (XSS, clickjacking, MIME-sniffing protection)
+ * 2. Sets strict Referrer-Policy
+ * 3. Sets Permissions-Policy to disable unused browser features
  * 
- * Note: Since Firebase Auth is client-side, this middleware checks for the presence
- * of session cookies. The actual auth verification happens in the AuthProvider on the client.
+ * Note: Firebase Auth is client-side. Actual auth enforcement happens via the
+ * <ProtectedRoute> component and API-level token verification.
  */
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Routes that require authentication
-const protectedRoutes = [
-  '/wardrobe',
-  '/style-check',
-  '/color-match',
-  '/analytics',
-  '/preferences',
-  '/likes',
-  '/account-settings',
-];
-
-// Public routes that don't require authentication
-const publicRoutes = ['/auth', '/'];
-
 export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const response = NextResponse.next();
 
-  // Check if the route is protected
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
-  const isPublicRoute = publicRoutes.includes(pathname) || pathname.startsWith('/_next') || pathname.startsWith('/api');
+  // Security headers — protect against XSS, clickjacking, MIME-sniffing
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set(
+    'Permissions-Policy',
+    'camera=(self), microphone=(), geolocation=(self), interest-cohort=()'
+  );
+  // Prevent browsers from running inline scripts from untrusted sources
+  response.headers.set('X-DNS-Prefetch-Control', 'on');
 
-  // For client-side Firebase Auth, we rely on the ProtectedRoute component
-  // to handle authentication checks. The middleware only handles static redirects.
-  // Removed cookie checks since Firebase Auth is client-side only.
-
-  // Allow the request to proceed
-  return NextResponse.next();
+  return response;
 }
 
 // Configure which routes the middleware should run on

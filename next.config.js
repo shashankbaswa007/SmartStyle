@@ -104,12 +104,12 @@ const nextConfig = {
   },
   // OPTIMIZED: Webpack optimizations
   webpack: (config, { dev, isServer }) => {
-    config.externals.push({
+    // Only add Node-only modules to externals for server builds
+    if (isServer) {
+      config.externals.push({
         'require-in-the-middle': 'require-in-the-middle',
-    });
-    
-    // Let Next.js handle chunk splitting automatically
-    // Custom chunk splitting was causing 404s in dev mode
+      });
+    }
     
     return config;
   },

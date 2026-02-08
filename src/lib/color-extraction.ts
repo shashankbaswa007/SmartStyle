@@ -157,7 +157,7 @@ export async function extractColorsFromImage(
     
     const canvas = createCanvas(img.width, img.height);
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(img, 0, 0);
+    ctx.drawImage(img as any, 0, 0);
 
     const width = canvas.width;
     const height = canvas.height;

@@ -67,10 +67,12 @@ service firebase.storage {
       // Private wardrobe photos - only owner can access
     }
     
-    // Generated images cache - server-side caching of AI-generated images
+    // Generated images cache - public read, auth + validation for write
     match /generated-images/{imageHash} {
       allow read: if true; // Public read for cached images
-      allow write: if true; // Allow server to cache images (validated server-side)
+      allow write: if isAuthenticated()
+                   && isImage()
+                   && isValidSize();
       // Images are cached by MD5 hash of prompt + colors
       // Reduces image generation costs by 60-70%
     }

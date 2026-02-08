@@ -22,15 +22,15 @@ export default function StyleCheckPage() {
         {isMounted && (
           <>
             <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-indigo-500/10" />}>
-              <SplashCursor SPLAT_RADIUS={0.12} SPLAT_FORCE={2000} COLOR_UPDATE_SPEED={6} SIM_RESOLUTION={64} DYE_RESOLUTION={512} PRESSURE_ITERATIONS={8} />
+              <SplashCursor SPLAT_RADIUS={0.10} SPLAT_FORCE={2000} COLOR_UPDATE_SPEED={6} SIM_RESOLUTION={64} DYE_RESOLUTION={512} PRESSURE_ITERATIONS={8} />
             </Suspense>
             <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-purple-500/10" />}>
               <Particles
                 className="absolute inset-0"
                 particleColors={['#a855f7', '#c4b5fd']}
-                particleCount={50}
+                particleCount={150}
                 particleSpread={10}
-                speed={0.2}
+                speed={0.5}
                 particleBaseSize={120}
                 moveParticlesOnHover={false}
                 alphaParticles={false}

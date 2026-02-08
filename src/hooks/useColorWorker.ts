@@ -4,7 +4,7 @@
  */
 'use client';
 
-import { useCallback, useRef, useEffect } from 'react';
+import { useCallback, useRef, useEffect, useState } from 'react';
 
 interface ColorInfo {
   hex: string;

@@ -59,6 +59,11 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return;
 
+  // Skip Next.js internal assets — they are versioned per build and must NOT be cached by the SW
+  if (url.pathname.startsWith('/_next/')) {
+    return;
+  }
+
   // Skip chrome extensions and external APIs
   if (!url.origin.includes(self.location.origin) && 
       !url.origin.includes('googleapis.com') &&

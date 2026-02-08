@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
@@ -68,7 +68,7 @@ export default function PreferencesPage() {
   const [blocklists, setBlocklists] = useState<BlocklistData | null>(null);
   const { toast } = useToast();
 
-  const loadUserData = async (userId: string) => {
+  const loadUserData = useCallback(async (userId: string) => {
     try {
       setLoading(true);
       
@@ -93,7 +93,7 @@ export default function PreferencesPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -105,7 +105,7 @@ export default function PreferencesPage() {
       }
     });
     return () => unsubscribe();
-  }, [loadUserData, toast]);
+  }, [loadUserData]);
 
   const resetPreferences = async () => {
     if (!user) return;

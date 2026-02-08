@@ -78,10 +78,9 @@ service cloud.firestore {
     }
     
     // Recommendation History - Users can only read/write their own recommendations
-    // Anonymous users can create recommendations but they won't be persisted long-term
     match /recommendationHistory/{recommendationId} {
-      allow read: if canReadAnonymously() || (isAuthenticated() && resource.data.userId == request.auth.uid);
-      allow create: if true; // Allow anonymous creation for demo purposes
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
@@ -134,11 +133,11 @@ service cloud.firestore {
       }
     }
     
-    // System Logs - Allow write from anywhere (error logging), no reads
+    // System Logs - Require auth to prevent anonymous flooding
     match /systemLogs/{logId} {
-      allow create: if true; // Allow all error logging
-      allow read: if false; // No reads (logs are for admin only)
-      allow update, delete: if false; // Logs are immutable
+      allow create: if isAuthenticated();
+      allow read: if false;
+      allow update, delete: if false;
     }
     
     // Audit Logs - Users can read their own logs, only Cloud Functions can write
@@ -165,20 +164,20 @@ service cloud.firestore {
       allow write: if false; // Only Cloud Functions can write
     }
     
-    // API Cache - NEW: For caching API responses (server-side only)
+    // API Cache - Require auth to prevent cache poisoning by anonymous users
     match /apiCache/{cacheKey} {
-      allow read: if true; // Allow all reads for cache hits
-      allow create: if true; // Allow server to create cache entries
-      allow update: if true; // Allow server to update cache entries
-      allow delete: if false; // No deletions (let TTL expire naturally)
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if false;
     }
     
-    // Rate Limits - NEW: For rate limiting per user (server-side tracking)
+    // Rate Limits - Scoped to own userId to prevent counter manipulation
     match /rateLimits/{userId} {
-      allow read: if true; // Allow server to check rate limits
-      allow create: if true; // Allow server to create rate limit entries
-      allow update: if true; // Allow server to update rate limit counters
-      allow delete: if false; // No deletions (let them expire naturally)
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isAuthenticated() && request.auth.uid == userId;
+      allow delete: if false;
     }
     
     // Archive Collections - No direct access (admin only via Cloud Functions)
