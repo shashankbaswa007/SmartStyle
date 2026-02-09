@@ -21,6 +21,7 @@ import { Button } from "./ui/button";
 import { saveRecommendationUsage } from "@/app/actions";
 import { EnhancedColorPalette } from "./EnhancedColorPalette";
 import { MatchScoreBadge } from "./match-score-badge";
+import { optimizeItemLinks, buildOutfitSearchUrls } from "@/lib/shopping-query-optimizer";
 
 interface StyleAdvisorResultsProps {
   analysisResult: AnalyzeImageAndProvideRecommendationsOutput;
@@ -569,18 +570,14 @@ export function StyleAdvisorResults({
             return colorObj.hex || convertColorNameToHex(colorObj.name || 'gray');
           });
           
-          // Generate individual item shopping links to save with the outfit
+          // Generate individual item shopping links with optimized queries
           const itemShoppingLinks = (outfit.items || []).map(item => {
-            const itemQuery = `${gender || ''} ${item}`.trim();
-            const genderPath = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'shop';
-            const genderCategory = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'all';
-            const encodedItem = encodeURIComponent(itemQuery);
-            
+            const links = optimizeItemLinks(item, gender);
             return {
-              item,
-              amazon: `https://www.amazon.in/s?k=${encodedItem}&rh=n:1968024031`,
-              tatacliq: `https://www.tatacliq.com/search?q=${encodeURIComponent(itemQuery + ':relevance:inStockFlag:true')}`,
-              myntra: `https://www.myntra.com/${genderPath}?rawQuery=${encodedItem}`,
+              item: links.item,
+              amazon: links.amazon,
+              tatacliq: links.tatacliq,
+              myntra: links.myntra,
             };
           });
           
@@ -729,16 +726,9 @@ export function StyleAdvisorResults({
 
   // Automatically fetch shopping links for all outfits on mount
   useEffect(() => {
-    const generateSearchUrls = (query: string, genderParam?: string) => {
-      const encodedQuery = encodeURIComponent(query);
-      const genderPath = genderParam === 'male' ? 'men' : genderParam === 'female' ? 'women' : 'shop';
-      return {
-        amazon: `https://www.amazon.in/s?k=${encodedQuery}${genderParam ? `+${genderParam}` : ''}&rh=n:1968024031`,
-        tatacliq: genderParam && genderParam !== 'neutral'
-          ? `https://www.tatacliq.com/search/?searchCategory=${genderParam === 'male' ? 'men' : 'women'}&text=${encodedQuery}`
-          : `https://www.tatacliq.com/search/?text=${encodedQuery}`,
-        myntra: `https://www.myntra.com/${genderPath}?rawQuery=${encodedQuery}`
-      };
+    // Use the centralized optimizer for fallback URLs
+    const generateSearchUrls = (items: string[], genderParam?: string) => {
+      return buildOutfitSearchUrls(items, genderParam);
     };
 
     const fetchShoppingLinks = async () => {
@@ -767,18 +757,16 @@ export function StyleAdvisorResults({
             // No links from API - fetch them now as fallback
             console.log(`⚠️ Outfit ${index} missing shopping links, fetching now...`);
             
-            // Create comprehensive search query using ALL outfit items
-            // This ensures the search includes all pieces mentioned in the description
+            // Build optimized search query from individual items
             const allItems = outfit.items || [];
-            const searchQuery = allItems.length > 0 
-              ? allItems.join(' ') // Use all items for better search coverage
+            const firstItemQuery = allItems.length > 0
+              ? allItems[0] // Use first item for focused search
               : outfit.title;
             
-            console.log(`🔍 Searching with all items: "${searchQuery}" (${allItems.length} items)`);
-            console.log(`   Items: ${allItems.join(', ')}`);
+            console.log(`🔍 Searching for: "${firstItemQuery}" (${allItems.length} total items)`);
             console.log(`   Gender: ${gender || 'not specified'}`);
             
-            const links = await findSimilar(searchQuery, outfit.colorPalette, gender);
+            const links = await findSimilar(firstItemQuery, outfit.colorPalette, gender);
             
             // If Tavily returns links, use them
             if (links && (links.amazon || links.tatacliq || links.myntra)) {
@@ -793,10 +781,10 @@ export function StyleAdvisorResults({
               };
             }
             
-            // Fallback: Generate direct search URLs using the first item
-            console.log(`⚠️ No Tavily links found for outfit ${index}, generating search URLs`);
-            const searchUrls = generateSearchUrls(searchQuery, gender);
-            console.log(`🔗 Generated search URLs:`, searchUrls);
+            // Fallback: Generate optimized search URLs
+            console.log(`⚠️ No Tavily links found for outfit ${index}, generating optimized URLs`);
+            const searchUrls = generateSearchUrls(allItems, gender);
+            console.log(`🔗 Generated optimized URLs (query: "${searchUrls.query}"):`, searchUrls);
             
             return {
               ...outfit,
@@ -1195,15 +1183,8 @@ export function StyleAdvisorResults({
                               if (outfitWithLinks.itemShoppingLinks && outfitWithLinks.itemShoppingLinks[itemIndex]) {
                                 itemLinks = outfitWithLinks.itemShoppingLinks[itemIndex];
                               } else {
-                                const itemQuery = `${gender || ''} ${item}`.trim();
-                                const genderPath = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'shop';
-                                const encodedItem = encodeURIComponent(itemQuery);
-                                itemLinks = {
-                                  item,
-                                  amazon: `https://www.amazon.in/s?k=${encodedItem}&rh=n:1968024031`,
-                                  tatacliq: `https://www.tatacliq.com/search?q=${encodeURIComponent(itemQuery + ':relevance:inStockFlag:true')}`,
-                                  myntra: `https://www.myntra.com/${genderPath}?rawQuery=${encodedItem}`,
-                                };
+                                // Use optimized query builder instead of raw AI text
+                                itemLinks = optimizeItemLinks(item, gender);
                               }
 
                               return (

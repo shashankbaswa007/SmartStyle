@@ -1,6 +1,7 @@
 import { generateShoppingQuery } from '@/ai/flows/generate-shopping-query';
 import type { StructuredAnalysis, ClothingItem } from '@/ai/flows/analyze-generated-image';
 import { buildShoppingQueries, calculateColorMatchScore } from './shopping-query-builder';
+import { buildAmazonUrl, buildMyntraUrl, buildTataCliqUrl, parseItemDescription, buildOptimizedQuery } from './shopping-query-optimizer';
 import { logger } from './logger';
 
 type TavilyResult = {
@@ -58,23 +59,19 @@ interface TavilySearchResult {
 const TAVILY_API_URL = 'https://api.tavily.com/search';
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 
-// Generate direct search URLs as fallback
+// Generate direct search URLs as fallback using centralized optimizer
 function generateDirectSearchURL(platform: 'amazon' | 'myntra' | 'tatacliq', query: string, gender?: string): string {
-  const encodedQuery = encodeURIComponent(query);
+  // Parse the query to extract structured attributes, then build an optimized URL
+  const parsed = parseItemDescription(query);
+  const optimized = buildOptimizedQuery(parsed, { includeGender: platform === 'amazon' ? gender : undefined, includeFabric: true });
   
   switch (platform) {
     case 'amazon':
-      return `https://www.amazon.in/s?k=${encodedQuery}&i=apparel`;
+      return buildAmazonUrl(optimized, gender);
     case 'myntra':
-      const genderPath = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'shop';
-      return `https://www.myntra.com/${genderPath}?rawQuery=${encodedQuery}`;
+      return buildMyntraUrl(optimized, gender);
     case 'tatacliq':
-      // TATA CLiQ uses a specific query format: q=search:relevance
-      // Example: q=t-shirts for men:relevance:inStockFlag:true
-      const cleanQuery = query.replace(/\s+/g, ' ').trim();
-      const searchQuery = `${cleanQuery}:relevance:inStockFlag:true`;
-      const encodedCliqQuery = encodeURIComponent(searchQuery);
-      return `https://www.tatacliq.com/search?q=${encodedCliqQuery}`;
+      return buildTataCliqUrl(optimized, gender);
     default:
       return '#';
   }
