@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Sparkles, Palette, Shirt, PenTool, Wand2, ShoppingCart, ShoppingBag, ExternalLink, Check, Heart, Info, ChevronDown, Star, Lightbulb } from "lucide-react";
+import { Sparkles, Palette, Shirt, PenTool, Wand2, ShoppingCart, ShoppingBag, ExternalLink, Check, Heart, Info, ChevronDown, ChevronUp, Star, Lightbulb, Eye } from "lucide-react";
 import type { AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
 import type { ShoppingLinkResult, ItemShoppingLinks, ProductLink } from "@/lib/tavily";
 import { Separator } from "./ui/separator";
@@ -998,426 +998,307 @@ export function StyleAdvisorResults({
         )}
 
         {enrichedOutfits.map((outfit, index) => {
-          // Cast to extended type to support itemShoppingLinks from liked outfits
           const outfitWithLinks = outfit as OutfitWithLinks;
           const outfitId = `outfit${index + 1}` as 'outfit1' | 'outfit2' | 'outfit3';
           const isSelected = selectedOutfit === outfitId;
           const isLoading = isUsing === index;
+
+          const imgUrl = generatedImageUrls[index] || '';
           const imgState = imageStates.get(index) || 'placeholder';
+          const hasOutfitError = (outfit as any).error && !(outfit as any).shoppingError;
+          const isDataUri = imgUrl.startsWith('data:');
+          const isPlaceholderUrl = imgUrl.includes('via.placeholder.com');
+          const hasRealImage = imgUrl && !isPlaceholderUrl && !hasOutfitError && !isDataUri;
+
+          // Extract color hex codes for accent strip + compact dots
+          const colorHexes = (outfit.colorPalette || []).map((c: ColorValue) => {
+            if (typeof c === 'object' && c !== null && 'hex' in c) return c.hex || '#808080';
+            if (typeof c === 'string') {
+              const hm = c.match(/#[0-9A-Fa-f]{6}/);
+              if (hm) return hm[0];
+              if (c.startsWith('#')) return c;
+              return convertColorNameToHex(c);
+            }
+            return '#808080';
+          }).slice(0, 6) as string[];
+
+          const gradientBg = colorHexes.length >= 2
+            ? `linear-gradient(135deg, ${colorHexes.join(', ')})`
+            : colorHexes.length === 1
+            ? colorHexes[0]
+            : 'linear-gradient(135deg, #6366f1, #a78bfa, #c4b5fd)';
+
+          const rankLabels = ['✦ Top Pick', '✦✦ Look 2', '✦✦✦ Look 3'];
+          const rankColors = [
+            'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
+            'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
+            'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
+          ];
 
           return (
-            <motion.div key={index} variants={itemVariants} className={cardClasses}>
-              <div className="p-6">
-                {/* Outfit Header with Select Button */}
-                <div className="flex items-start justify-between gap-4 mb-6">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2 flex-wrap">
-                      <h4 className="font-bold text-xl text-foreground flex items-center gap-2">
-                        <Wand2 className="text-accent w-5 h-5" /> {outfit.title}
-                      </h4>
-                      {/* Shopping Error Badge */}
-                      {(outfit as any).shoppingError && (
-                        <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-600 dark:text-amber-400">
-                          <Info className="w-3 h-3 mr-1" />
-                          Shopping links unavailable
-                        </Badge>
+            <motion.div
+              key={index}
+              variants={itemVariants}
+              className="group relative rounded-2xl overflow-hidden bg-card/70 dark:bg-card/50 backdrop-blur-xl border border-border/20 shadow-lg hover:shadow-2xl transition-shadow duration-300"
+            >
+              {/* ── Color Accent Strip ── */}
+              <div className="h-1.5 w-full" style={{ background: gradientBg }} />
+
+              {/* ── Card Body ── */}
+              <div className="p-5 sm:p-6 space-y-5">
+
+                {/* ── Header Row: Rank + Title + Match Badge ── */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${rankColors[index] || rankColors[2]}`}>
+                    {rankLabels[index] || `Look ${index + 1}`}
+                  </span>
+                  <h4 className="text-lg sm:text-xl font-bold text-foreground flex-1 min-w-0 truncate">
+                    {outfit.title}
+                  </h4>
+                  <MatchScoreBadge
+                    matchScore={outfitWithLinks.matchScore}
+                    matchCategory={outfitWithLinks.matchCategory}
+                    showScore={true}
+                  />
+                </div>
+
+                {/* ── Explanation ── */}
+                {outfitWithLinks.explanation && (
+                  <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/5 border border-accent/15 text-sm text-muted-foreground">
+                    <Lightbulb className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
+                    <p>{outfitWithLinks.explanation}</p>
+                  </div>
+                )}
+
+                {/* ── Main Content Grid ── */}
+                <div className={`grid gap-5 ${hasRealImage ? 'md:grid-cols-[minmax(200px,2fr)_3fr]' : ''}`}>
+
+                  {/* Image column — only for real AI-generated images */}
+                  {hasRealImage && (
+                    <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden shadow-md border border-border/20">
+                      {imgState === 'loading' && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse z-10">
+                          <div className="text-center space-y-2">
+                            <div className="w-7 h-7 border-[3px] border-accent border-t-transparent rounded-full animate-spin mx-auto" />
+                            <p className="text-xs text-muted-foreground">Loading…</p>
+                          </div>
+                        </div>
                       )}
-                      {/* Match Score Badge - shows personalization confidence */}
-                      <MatchScoreBadge 
-                        matchScore={outfitWithLinks.matchScore}
-                        matchCategory={outfitWithLinks.matchCategory}
-                        showScore={true}
+                      {imgState === 'error' && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-muted/80 z-10">
+                          <div className="text-center space-y-2 p-4">
+                            <Eye className="w-8 h-8 text-muted-foreground/40 mx-auto" />
+                            <p className="text-xs text-muted-foreground">Couldn&apos;t load image</p>
+                          </div>
+                        </div>
+                      )}
+                      <Image
+                        src={imgUrl}
+                        alt={`Generated outfit: ${outfit.title}`}
+                        fill
+                        sizes="(max-width: 768px) 100vw, 300px"
+                        style={{ objectFit: 'cover' }}
+                        className={`transition-opacity duration-300 ${imgState === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+                        data-ai-hint="fashion outfit"
+                        priority={index === 0}
+                        onLoad={() => handleImageLoad(index)}
+                        onError={() => handleImageError(index)}
+                        unoptimized={
+                          imgUrl.includes('together.xyz') ||
+                          imgUrl.includes('together.ai') ||
+                          imgUrl.includes('replicate.delivery')
+                        }
                       />
                     </div>
-                    
-                    {/* Recommendation Explanation - why this was recommended */}
-                    {outfitWithLinks.explanation && (
-                      <div className="mt-2 p-3 rounded-lg bg-accent/5 border border-accent/20">
-                        <div className="flex items-start gap-2">
-                          <Lightbulb className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
-                          <p className="text-sm text-muted-foreground">
-                            {outfitWithLinks.explanation}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {outfit.isExistingMatch && (
-                      <Badge variant="secondary" className="mt-2">
-                        ✨ Trending style match
-                      </Badge>
-                    )}
-                  </div>
-                </div>
+                  )}
 
-                {/* Image and Description Side by Side */}
-                <div className="grid md:grid-cols-2 gap-6 mb-6">
-                  {/* Left: Generated Image */}
-                  {(() => {
-                    const imgUrl = generatedImageUrls[index] || '';
-                    const imgState = imageStates.get(index) || 'placeholder';
-                    const hasOutfitError = (outfit as any).error && !(outfit as any).shoppingError;
-                    const isDataUri = imgUrl.startsWith('data:');
-                    const isPlaceholderUrl = imgUrl.includes('via.placeholder.com');
-                    const hasRealImage = imgUrl && !isPlaceholderUrl && !hasOutfitError;
-
-                    return hasRealImage ? (
-                  <div className="relative">
-                    {isDataUri ? (
-                      /* SVG/base64 data URI — render as plain <img> (Next Image doesn't support these well) */
-                      <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden shadow-lg border-2 border-border/30 bg-muted">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={imgUrl}
-                          alt={`Outfit visualization: ${outfit.title}`}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/50 to-transparent p-3">
-                          <p className="text-[10px] text-white/70 text-center">AI visualization placeholder</p>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Real URL (Together.ai / Firebase Storage / etc.) */
-                      <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden shadow-lg border-2 border-accent/30">
-                        {/* Loading skeleton — visible until image loads or errors */}
-                        {imgState === 'loading' && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse z-10">
-                            <div className="text-center space-y-3">
-                              <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
-                              <p className="text-sm text-muted-foreground">Loading image…</p>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Error state — show fallback with outfit info */}
-                        {imgState === 'error' && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-muted/80 z-10">
-                            <div className="text-center space-y-3 p-6">
-                              <Wand2 className="w-10 h-10 text-muted-foreground/40 mx-auto" />
-                              <p className="text-sm font-medium text-muted-foreground">Image couldn&apos;t be loaded</p>
-                              <p className="text-xs text-muted-foreground/70">Outfit details are shown alongside</p>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Actual Image — fades in on load */}
-                        <Image
-                          src={imgUrl}
-                          alt={`Generated outfit: ${outfit.title}`}
-                          fill
-                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                          style={{ objectFit: 'cover' }}
-                          className={`transition-opacity duration-300 ${
-                            imgState === 'loaded' ? 'opacity-100' : 'opacity-0'
-                          }`}
-                          data-ai-hint="fashion outfit"
-                          priority={index === 0}
-                          onLoad={() => handleImageLoad(index)}
-                          onError={() => handleImageError(index)}
-                          unoptimized={
-                            imgUrl.includes('together.xyz') ||
-                            imgUrl.includes('together.ai') ||
-                            imgUrl.includes('replicate.delivery')
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-                    ) : (
-                      /* No image / placeholder / generation error — show styled empty state */
-                      <div className="relative aspect-[3/4] w-full rounded-xl bg-gradient-to-br from-muted/60 to-muted/30 border-2 border-border/20 flex items-center justify-center p-6">
-                        <div className="text-center space-y-3">
-                          <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center mx-auto">
-                            <Wand2 className="w-7 h-7 text-accent/50" />
-                          </div>
-                          <p className="text-sm font-medium text-muted-foreground">
-                            {hasOutfitError ? 'Image generation failed' : 'Image not available'}
-                          </p>
-                          <p className="text-xs text-muted-foreground/70">
-                            Outfit details are shown alongside
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Right: Outfit Details */}
-                  <div className="space-y-4">
+                  {/* Details column */}
+                  <div className="space-y-4 min-w-0">
                     {/* Description */}
                     {outfit.description && (
-                      <div>
-                        <h5 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                          Description
+                      <p className="text-sm text-foreground/85 leading-relaxed">
+                        {outfit.description}
+                      </p>
+                    )}
+
+                    {/* Color Palette — compact inline dots */}
+                    {colorHexes.length > 0 && (
+                      <div className="space-y-1.5">
+                        <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                          <Palette className="w-3.5 h-3.5" /> Palette
                         </h5>
-                        <p className="text-foreground/90 leading-relaxed">
-                          {outfit.description}
-                        </p>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {colorHexes.map((hex, ci) => (
+                            <button
+                              key={ci}
+                              onClick={() => {
+                                navigator.clipboard?.writeText(hex);
+                                toast({ title: 'Copied!', description: `${hex} copied to clipboard`, duration: 1500 });
+                              }}
+                              className="w-8 h-8 rounded-lg border-2 border-white/30 shadow-sm hover:scale-110 hover:shadow-md transition-all duration-200 cursor-pointer"
+                              style={{ backgroundColor: hex }}
+                              title={hex}
+                            />
+                          ))}
+                        </div>
                       </div>
                     )}
 
-                    {/* Enhanced Interactive Color Palette */}
-                    {((outfit as any).colorDetails && (outfit as any).colorDetails.length > 0) || 
-                     (outfit.colorPalette && outfit.colorPalette.length > 0) ? (
-                      <div className="space-y-3">
-                        {/* AI Recommended Colors */}
-                        {((outfit as any).colorDetails || outfit.colorPalette) && (
-                          <EnhancedColorPalette
-                            colors={
-                              (outfit as any).colorDetails && (outfit as any).colorDetails.length > 0
-                                ? (outfit as any).colorDetails.map((c: any) => ({
-                                    hex: c.hex || (typeof c === 'string' ? convertColorNameToHex(c) : '#808080'),
-                                    name: c.name || '',
-                                    percentage: c.percentage,
-                                  }))
-                                : (outfit.colorPalette || []).map((colorValue: ColorValue) => {
-                                    let hex: string;
-                                    let colorName: string;
-                                    
-                                    if (typeof colorValue === 'object' && colorValue !== null && 'hex' in colorValue) {
-                                      hex = colorValue.hex || '#808080';
-                                      colorName = colorValue.name || hex;
-                                    } else if (typeof colorValue === 'string') {
-                                      const cleanValue = colorValue.trim();
-                                      const hexMatch = cleanValue.match(/#[0-9A-Fa-f]{6}/);
-                                      if (hexMatch) {
-                                        hex = hexMatch[0].toUpperCase();
-                                        colorName = cleanValue.replace(hexMatch[0], '').trim() || hex;
-                                      } else if (cleanValue.startsWith('#')) {
-                                        hex = cleanValue.toUpperCase();
-                                        colorName = hex;
-                                      } else {
-                                        hex = convertColorNameToHex(cleanValue);
-                                        colorName = cleanValue;
-                                      }
-                                    } else {
-                                      hex = '#808080';
-                                      colorName = 'Unknown';
-                                    }
-                                    
-                                    return { hex, name: colorName };
-                                  })
-                            }
-                            outfitTitle={outfit.title}
-                            showHarmonyInfo={true}
-                          />
-                        )}
-                      </div>
-                    ) : null}
-
-                    {/* Outfit Items */}
+                    {/* Outfit Items — chips/tags */}
                     {outfit.items && outfit.items.length > 0 && (
-                      <div>
-                        <h5 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                          Outfit Items
+                      <div className="space-y-1.5">
+                        <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                          <Shirt className="w-3.5 h-3.5" /> Items
                         </h5>
-                        <ul className="space-y-1 text-foreground/80">
+                        <div className="flex flex-wrap gap-1.5">
                           {outfit.items.map((item, idx) => (
-                            <li key={idx} className="flex items-start gap-2">
-                              <span className="text-accent mt-1">•</span>
-                              <span>{item}</span>
-                            </li>
+                            <span
+                              key={idx}
+                              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-muted/60 text-foreground/80 border border-border/20 hover:bg-accent/10 hover:border-accent/30 transition-colors"
+                            >
+                              {item}
+                            </span>
                           ))}
-                        </ul>
+                        </div>
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* NEW: Enhanced Shopping Links (if available) */}
-                {enhancedShoppingLinks && enhancedShoppingLinks[index] && (
-                  <EnhancedShoppingSection
-                    shoppingLinks={enhancedShoppingLinks[index]}
-                    outfitTitle={outfit.title}
-                  />
-                )}
+                {/* ── Shopping Links — collapsible ── */}
+                {(() => {
+                  const hasEnhanced = enhancedShoppingLinks && enhancedShoppingLinks[index];
+                  const hasLegacy = !hasEnhanced && outfitWithLinks.items && outfitWithLinks.items.length > 0;
 
-                {/* Individual Item Shopping Links (Legacy fallback) */}
-                {(!enhancedShoppingLinks || !enhancedShoppingLinks[index]) && outfitWithLinks.items && outfitWithLinks.items.length > 0 && (
-                  <div className="pt-6 border-t border-border/20">
-                    <h5 className="text-base font-bold mb-4 text-foreground flex items-center gap-2">
-                      <ShoppingCart className="w-5 h-5 text-accent" />
-                      Shop Individual Items
-                    </h5>
-                    <div className="space-y-3">
-                      {outfitWithLinks.items.map((item, itemIndex) => {
-                        // Use saved links if available (from liked outfit), otherwise generate fresh links
-                        let itemLinks;
-                        if (outfitWithLinks.itemShoppingLinks && outfitWithLinks.itemShoppingLinks[itemIndex]) {
-                          itemLinks = outfitWithLinks.itemShoppingLinks[itemIndex];
-                        } else {
-                          // Generate links on-the-fly for new recommendations
-                          const itemQuery = `${gender || ''} ${item}`.trim();
-                          const genderPath = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'shop';
-                          const genderCategory = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'all';
-                          const encodedItem = encodeURIComponent(itemQuery);
-                          
-                          itemLinks = {
-                            item,
-                            amazon: `https://www.amazon.in/s?k=${encodedItem}&rh=n:1968024031`,
-                            tatacliq: `https://www.tatacliq.com/search?q=${encodeURIComponent(itemQuery + ':relevance:inStockFlag:true')}`,
-                            myntra: `https://www.myntra.com/${genderPath}?rawQuery=${encodedItem}`,
-                          };
-                        }
-                        
-                        return (
-                          <div 
-                            key={itemIndex} 
-                            className="flex items-center justify-between gap-4 p-3 rounded-lg bg-accent/5 hover:bg-accent/10 transition-all duration-200 border border-border/10 hover:border-accent/30 hover:shadow-md group"
-                          >
-                            <span className="text-sm font-medium text-foreground flex-1">{item}</span>
-                            <div className="flex gap-2">
-                              <a
-                                href={itemLinks.amazon}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => handleShoppingClick('amazon', item)}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 hover:scale-105 transition-all duration-200 border border-orange-200/50 hover:border-orange-300 shadow-sm hover:shadow-orange-500/30"
-                                title={`Search "${item}" on Amazon`}
-                              >
-                                <ShoppingBag className="w-4 h-4" />
-                                <span className="text-xs font-semibold hidden sm:inline">Amazon</span>
-                              </a>
-                              <a
-                                href={itemLinks.tatacliq}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => handleShoppingClick('tatacliq', item)}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 hover:scale-105 transition-all duration-200 border border-blue-200/50 hover:border-blue-300 shadow-sm hover:shadow-blue-500/30"
-                                title={`Search "${item}" on TATA CLiQ`}
-                              >
-                                <ShoppingCart className="w-4 h-4" />
-                                <span className="text-xs font-semibold hidden sm:inline">CLiQ</span>
-                              </a>
-                              <a
-                                href={itemLinks.myntra}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => handleShoppingClick('myntra', item)}
-                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 hover:scale-105 transition-all duration-200 border border-pink-200/50 hover:border-pink-300 shadow-sm hover:shadow-pink-500/30"
-                                title={`Search "${item}" on Myntra`}
-                              >
-                                <ShoppingBag className="w-4 h-4" />
-                                <span className="text-xs font-semibold hidden sm:inline">Myntra</span>
-                              </a>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-3 italic text-center">
-                      Click any button to search for that specific item on your preferred store
-                    </p>
-                  </div>
-                )}
+                  if (!hasEnhanced && !hasLegacy) return null;
 
-                {/* Like Button - Save to favorites */}
-                <div className="pt-6 border-t border-border/20">
-                  {!userId || !recommendationId || isAnonymous ? (
-                    <div className="space-y-3">
-                      <button
-                        onClick={() => {
-                          toast({
-                            title: "Sign in required",
-                            description: "Create an account to save your favorite outfits and get personalized recommendations!",
-                            action: (
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => window.location.href = '/auth'}
-                              >
-                                Sign In
-                              </Button>
-                            ),
-                          });
-                        }}
-                        className="w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-3 bg-gradient-to-r from-accent/70 to-accent/50 hover:from-accent/80 hover:to-accent/60 text-white shadow-lg hover:shadow-xl transform hover:scale-105"
-                      >
-                        <Heart className="w-6 h-6" />
-                        <span>Like This Outfit</span>
-                      </button>
-                      <p className="text-xs text-muted-foreground text-center">
-                        Sign in to like outfits and get personalized recommendations
-                      </p>
-                    </div>
-                  ) : (
-                    <div>
-                      <button
-                        onClick={() => handleUseOutfit(index, outfit.title)}
-                        disabled={selectedOutfit === `outfit${index + 1}` || isUsing === index}
-                        className={`w-full px-8 py-4 rounded-lg font-semibold text-lg transition-all duration-300 flex items-center justify-center gap-3 ${
-                          selectedOutfit === `outfit${index + 1}`
-                            ? 'bg-green-500/20 text-green-600 border-2 border-green-500 cursor-not-allowed'
-                            : isUsing === index
-                            ? 'bg-accent/50 text-white cursor-wait'
-                            : 'bg-gradient-to-r from-accent to-accent/80 hover:from-accent/90 hover:to-accent/70 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
-                        }`}
-                      >
-                        {isUsing === index ? (
-                          <>
-                            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>Liking...</span>
-                          </>
-                        ) : selectedOutfit === `outfit${index + 1}` ? (
-                          <>
-                            <Check className="w-6 h-6" />
-                            <span>Liked ✓</span>
-                          </>
+                  return (
+                    <details className="group/shop pt-4 border-t border-border/15">
+                      <summary className="flex items-center justify-between cursor-pointer list-none py-2 select-none [&::-webkit-details-marker]:hidden">
+                        <h5 className="text-sm font-bold text-foreground flex items-center gap-2">
+                          <ShoppingBag className="w-4 h-4 text-accent" />
+                          Shop This Look
+                        </h5>
+                        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open/shop:rotate-180" />
+                      </summary>
+
+                      <div className="pt-3 space-y-2">
+                        {hasEnhanced ? (
+                          <EnhancedShoppingSection
+                            shoppingLinks={enhancedShoppingLinks![index]}
+                            outfitTitle={outfit.title}
+                          />
                         ) : (
                           <>
-                            <Heart className="w-6 h-6" />
-                            <span>Like</span>
+                            {outfitWithLinks.items!.map((item, itemIndex) => {
+                              let itemLinks;
+                              if (outfitWithLinks.itemShoppingLinks && outfitWithLinks.itemShoppingLinks[itemIndex]) {
+                                itemLinks = outfitWithLinks.itemShoppingLinks[itemIndex];
+                              } else {
+                                const itemQuery = `${gender || ''} ${item}`.trim();
+                                const genderPath = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'shop';
+                                const encodedItem = encodeURIComponent(itemQuery);
+                                itemLinks = {
+                                  item,
+                                  amazon: `https://www.amazon.in/s?k=${encodedItem}&rh=n:1968024031`,
+                                  tatacliq: `https://www.tatacliq.com/search?q=${encodeURIComponent(itemQuery + ':relevance:inStockFlag:true')}`,
+                                  myntra: `https://www.myntra.com/${genderPath}?rawQuery=${encodedItem}`,
+                                };
+                              }
+
+                              return (
+                                <div
+                                  key={itemIndex}
+                                  className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-accent/5 hover:bg-accent/10 transition-all duration-200 border border-border/10 hover:border-accent/30"
+                                >
+                                  <span className="text-xs font-medium text-foreground flex-1 min-w-0 truncate">{item}</span>
+                                  <div className="flex gap-1.5 flex-shrink-0">
+                                    <a href={itemLinks.amazon} target="_blank" rel="noopener noreferrer" onClick={() => handleShoppingClick('amazon', item)}
+                                      className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 hover:scale-105 transition-all border border-orange-200/40">
+                                      <ShoppingBag className="w-3 h-3" /><span className="hidden sm:inline">Amazon</span>
+                                    </a>
+                                    <a href={itemLinks.tatacliq} target="_blank" rel="noopener noreferrer" onClick={() => handleShoppingClick('tatacliq', item)}
+                                      className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 hover:scale-105 transition-all border border-blue-200/40">
+                                      <ShoppingCart className="w-3 h-3" /><span className="hidden sm:inline">CLiQ</span>
+                                    </a>
+                                    <a href={itemLinks.myntra} target="_blank" rel="noopener noreferrer" onClick={() => handleShoppingClick('myntra', item)}
+                                      className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 hover:scale-105 transition-all border border-pink-200/40">
+                                      <ShoppingBag className="w-3 h-3" /><span className="hidden sm:inline">Myntra</span>
+                                    </a>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </>
                         )}
+                      </div>
+                    </details>
+                  );
+                })()}
+
+                {/* ── Action Bar ── */}
+                <div className="pt-4 border-t border-border/15 flex flex-wrap items-center gap-3">
+                  {(!userId || !recommendationId || isAnonymous) ? (
+                    <button
+                      onClick={() => {
+                        toast({
+                          title: "Sign in required",
+                          description: "Create an account to save outfits and get personalized recommendations!",
+                          action: <Button variant="outline" size="sm" onClick={() => window.location.href = '/auth'}>Sign In</Button>,
+                        });
+                      }}
+                      className="flex-1 min-w-[180px] px-5 py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-accent to-accent/80 text-white shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
+                    >
+                      <Heart className="w-4 h-4" /> Like This Outfit
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleUseOutfit(index, outfit.title)}
+                        disabled={isSelected || isLoading}
+                        className={`flex-1 min-w-[140px] px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
+                          isSelected
+                            ? 'bg-green-500/15 text-green-600 dark:text-green-400 border-2 border-green-500/40 cursor-default'
+                            : isLoading
+                            ? 'bg-accent/50 text-white cursor-wait'
+                            : 'bg-gradient-to-r from-accent to-accent/80 text-white shadow-md hover:shadow-lg hover:scale-[1.02]'
+                        }`}
+                      >
+                        {isLoading ? (
+                          <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</>
+                        ) : isSelected ? (
+                          <><Check className="w-4 h-4" /> Liked ✓</>
+                        ) : (
+                          <><Heart className="w-4 h-4" /> Like</>
+                        )}
                       </button>
-                      <p className="text-xs text-muted-foreground text-center mt-2">
-                        {selectedOutfit === `outfit${index + 1}` 
-                          ? "This outfit will help improve future recommendations" 
-                          : "Click to save this outfit to your favorites"}
-                      </p>
-                      
-                      {/* Mark as Worn Button - Strongest signal (+5 weight) */}
-                      {userId && !isAnonymous && selectedOutfit === `outfit${index + 1}` && (
-                        <div className="mt-3 pt-3 border-t border-border/10">
-                          <button
-                            onClick={() => handleMarkAsWorn(index, outfit)}
-                            disabled={wornOutfits.has(index) || isMarkingWorn === index}
-                            className={`w-full px-6 py-3 rounded-lg font-medium text-sm transition-all duration-300 flex items-center justify-center gap-2 ${
-                              wornOutfits.has(index)
-                                ? 'bg-purple-500/20 text-purple-600 border-2 border-purple-500 cursor-not-allowed'
-                                : isMarkingWorn === index
-                                ? 'bg-purple-500/50 text-white cursor-wait'
-                                : 'bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white shadow-md hover:shadow-lg transform hover:scale-105'
-                            }`}
-                          >
-                            {isMarkingWorn === index ? (
-                              <>
-                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                                <span>Updating...</span>
-                              </>
-                            ) : wornOutfits.has(index) ? (
-                              <>
-                                <Check className="w-5 h-5" />
-                                <span>Marked as Worn ✓</span>
-                              </>
-                            ) : (
-                              <>
-                                <Shirt className="w-5 h-5" />
-                                <span>I Wore This! (+5 points)</span>
-                              </>
-                            )}
-                          </button>
-                          <p className="text-xs text-muted-foreground text-center mt-1.5">
-                            {wornOutfits.has(index)
-                              ? "Thanks! We'll remember this style for future recommendations"
-                              : "Actually wore this? Mark it to boost these style preferences!"}
-                          </p>
-                        </div>
+
+                      {/* Mark as Worn — only visible after Like */}
+                      {isSelected && (
+                        <button
+                          onClick={() => handleMarkAsWorn(index, outfit)}
+                          disabled={wornOutfits.has(index) || isMarkingWorn === index}
+                          className={`px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-2 ${
+                            wornOutfits.has(index)
+                              ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-2 border-purple-500/40 cursor-default'
+                              : isMarkingWorn === index
+                              ? 'bg-purple-500/50 text-white cursor-wait'
+                              : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md hover:shadow-lg hover:scale-[1.02]'
+                          }`}
+                        >
+                          {isMarkingWorn === index ? (
+                            <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</>
+                          ) : wornOutfits.has(index) ? (
+                            <><Check className="w-4 h-4" /> Worn ✓</>
+                          ) : (
+                            <><Shirt className="w-4 h-4" /> I Wore This!</>
+                          )}
+                        </button>
                       )}
-                    </div>
+                    </>
                   )}
                 </div>
 
-                {/* Removed RecommendationFeedback component - feedback now handled by main Like button above */}
               </div>
             </motion.div>
           );
