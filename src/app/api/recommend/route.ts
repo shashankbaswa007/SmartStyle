@@ -27,6 +27,7 @@ import { checkRateLimit as checkFirestoreRateLimit } from '@/lib/firestore-rate-
 import { generateImageWithRetry } from '@/lib/smart-image-generation';
 import { getCachedImage, cacheImage } from '@/lib/image-cache';
 import { generateWithReplicate, isReplicateAvailable } from '@/lib/replicate-image';
+import { generateWithTogether, isTogetherAvailable } from '@/lib/together-image';
 
 /**
  * Sanitize error messages to prevent XSS
@@ -266,10 +267,21 @@ export async function POST(req: Request) {
                 }
               }
               
-              // Strategy 2: Try free service (Pollinations.ai / alternatives)
+              // Strategy 2: Try Together.ai (free tier, FLUX-schnell)
+              if (!imageGenerated && isTogetherAvailable()) {
+                logger.log(`🎨 [OUTFIT ${outfitNumber}] Trying Together.ai FLUX-schnell (free tier)...`);
+                const togetherUrl = await generateWithTogether(imagePrompt, colorHexCodes);
+                if (togetherUrl) {
+                  generatedImageUrl = togetherUrl;
+                  logger.log(`✅ [OUTFIT ${outfitNumber}] Image generated via Together.ai`);
+                  imageGenerated = true;
+                }
+              }
+
+              // Strategy 3: Generic free fallback (placeholder)
               if (!imageGenerated) {
-                logger.log(`🎨 [OUTFIT ${outfitNumber}] Trying free image generation...`);
-                generatedImageUrl = await generateImageWithRetry(imagePrompt, colorHexCodes, 2);
+                logger.log(`🎨 [OUTFIT ${outfitNumber}] Using placeholder fallback...`);
+                generatedImageUrl = await generateImageWithRetry(imagePrompt, colorHexCodes, 1);
                 imageGenerated = true;
               }
               

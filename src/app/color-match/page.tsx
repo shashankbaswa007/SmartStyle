@@ -659,9 +659,9 @@ export default function ColorMatchPage() {
                             
                             {/* Clothing Items */}
                             {match.fashionContext.clothingItems.length > 0 && (
-                              <div className="flex flex-wrap gap-1 justify-center">
-                                {match.fashionContext.clothingItems.slice(0, 2).map((item, idx) => (
-                                  <span key={idx} className="text-xs bg-muted/50 px-1.5 py-0.5 rounded">
+                              <div className="flex flex-col gap-1 items-center">
+                                {match.fashionContext.clothingItems.map((item, idx) => (
+                                  <span key={idx} className="text-xs bg-muted/50 px-2 py-0.5 rounded text-center w-full truncate" title={item}>
                                     {item}
                                   </span>
                                 ))}

@@ -88,6 +88,18 @@ const nextConfig = {
         hostname: 'www.freepik.com',
         port: '',
         pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'api.together.xyz',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.together.xyz',
+        port: '',
+        pathname: '/**',
       }
     ],
     // Disable optimization for external images to prevent 500 errors

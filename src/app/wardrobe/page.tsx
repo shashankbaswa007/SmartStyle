@@ -910,11 +910,11 @@ export default function WardrobePage() {
       <TooltipProvider delayDuration={300}>
       <a 
         href="#main-content" 
-        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-teal-600 focus:text-white focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-24 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-teal-600 focus:text-white focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-background"
       >
         Skip to main content
       </a>
-      <main className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8" role="main" aria-label="Wardrobe management">
+      <main id="main-content" className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8" role="main" aria-label="Wardrobe management">
         {/* Offline Notification Banner */}
         {!isOnline && (
           <motion.div

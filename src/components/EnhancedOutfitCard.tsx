@@ -16,12 +16,18 @@ interface EnhancedOutfitCardProps {
   imageAlt?: string;
   className?: string;
   delay?: number;
+  /** Mark as true for the first visible card to prioritise image loading */
+  priority?: boolean;
   onHover?: () => void;
   onClick?: () => void;
 }
 
+// Tiny 4×5 blurred gradient — eliminates the white flash while real image loads
+const BLUR_PLACEHOLDER =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAQAAAAFCAIAAADtz6aMAAAAJ0lEQVQI12N4/fY9AwMDIwMDAwMD49Onz/4zMDAwABkMQAIoBwAcqQkVlFp3bAAAAABJRU5ErkJggg==';
+
 export const EnhancedOutfitCard = React.memo<EnhancedOutfitCardProps>(
-  ({ children, imageUrl, imageAlt = '', className, delay = 0, onHover, onClick }) => {
+  ({ children, imageUrl, imageAlt = '', className, delay = 0, priority = false, onHover, onClick }) => {
     return (
       <motion.div
         className={cn(
@@ -54,9 +60,12 @@ export const EnhancedOutfitCard = React.memo<EnhancedOutfitCardProps>(
                 alt={imageAlt}
                 fill
                 sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                className="object-cover"
-                loading="lazy"
-                quality={85}
+                className="object-cover transition-opacity duration-300"
+                loading={priority ? 'eager' : 'lazy'}
+                priority={priority}
+                quality={80}
+                placeholder="blur"
+                blurDataURL={BLUR_PLACEHOLDER}
               />
             </motion.div>
           </div>

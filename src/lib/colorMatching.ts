@@ -435,7 +435,12 @@ export function getRecommendedHarmony(color: chroma.Color): string {
 }
 
 /**
- * Generate fashion context for a color based on its role in the palette
+ * Generate fashion context for a color based on its role in the palette.
+ *
+ * Recommendations are:
+ *  - Gender-agnostic (no gendered garment names)
+ *  - Split into three categories: Tops, Bottoms, Accessories
+ *  - Context-aware based on color lightness, saturation, and warmth
  */
 function generateFashionContext(
   color: chroma.Color,
@@ -444,6 +449,10 @@ function generateFashionContext(
 ): ColorMatch['fashionContext'] {
   const [h, s, l] = color.hsl();
   const hue = h || 0;
+  const isWarm = (hue >= 0 && hue < 70) || hue >= 300;
+  const isDark = l < 0.35;
+  const isLight = l > 0.7;
+  const isBold = s > 0.55;
 
   // Determine ratio based on usage role
   const ratios: Record<string, string> = {
@@ -452,34 +461,61 @@ function generateFashionContext(
     accent: '10% accent',
   };
 
-  // Determine suitable clothing items based on color properties and role
+  // ── Pick clothing suggestions per category ──────────────────────
   const clothingItems: string[] = [];
+
   if (usage === 'primary') {
-    if (l < 0.35) clothingItems.push('Blazer', 'Trousers', 'Coat');
-    else if (l > 0.7) clothingItems.push('Shirt', 'Blouse', 'Dress');
-    else clothingItems.push('Jacket', 'Sweater', 'Skirt');
+    // Primary colour → suggest one Top + one Bottom
+    if (isDark) {
+      clothingItems.push('Top: Blazer or Jacket');
+      clothingItems.push('Bottom: Tailored Trousers');
+    } else if (isLight) {
+      clothingItems.push('Top: Linen Shirt or Blouse');
+      clothingItems.push('Bottom: Chinos or A-line Skirt');
+    } else if (isBold) {
+      clothingItems.push('Top: Structured Jacket');
+      clothingItems.push('Bottom: Slim-fit Pants or Skirt');
+    } else {
+      clothingItems.push('Top: Crew-neck Sweater');
+      clothingItems.push('Bottom: Jeans or Casual Trousers');
+    }
   } else if (usage === 'secondary') {
-    clothingItems.push('Top', 'Cardigan', 'Scarf');
+    // Secondary colour → suggest one Top + one layering/accessory piece
+    if (isDark) {
+      clothingItems.push('Top: Turtleneck or Henley');
+      clothingItems.push('Layer: Vest or Overshirt');
+    } else if (isLight) {
+      clothingItems.push('Top: T-shirt or Tank');
+      clothingItems.push('Layer: Light Cardigan or Open Shirt');
+    } else {
+      clothingItems.push('Top: Polo or Button-up');
+      clothingItems.push('Bottom: Shorts or Midi Skirt');
+    }
   } else {
-    if (s > 0.5) clothingItems.push('Belt', 'Bag', 'Shoes');
-    else clothingItems.push('Watch', 'Jewelry', 'Hat');
+    // Accent colour → suggest accessories only
+    if (isBold) {
+      clothingItems.push('Accessory: Statement Bag or Belt');
+      clothingItems.push('Accessory: Bold Sneakers or Loafers');
+    } else {
+      clothingItems.push('Accessory: Watch or Bracelet');
+      clothingItems.push('Accessory: Scarf or Hat');
+    }
   }
 
-  // Style notes based on color personality
+  // ── Style notes ─────────────────────────────────────────────────
   let styleNotes = '';
-  const isWarm = (hue >= 0 && hue < 70) || hue >= 300;
   if (usage === 'primary') {
     styleNotes = isWarm
-      ? 'Warm foundation — pairs naturally with earth tones'
-      : 'Cool foundation — complements silver and white accessories';
+      ? 'Warm base — pairs naturally with earth-tone bottoms and gold accessories'
+      : 'Cool base — works beautifully with grey, white, or silver accessories';
   } else if (usage === 'secondary') {
-    styleNotes = s > 0.5
-      ? 'Adds visual energy as a supporting color'
-      : 'Smooth transition between main and accent colors';
+    styleNotes = isBold
+      ? 'A vibrant supporting piece that adds energy to your look'
+      : 'A muted complement that blends smoothly with your main colour';
   } else {
-    styleNotes = s > 0.5
-      ? 'Small pops of this color draw the eye to key details'
-      : 'Subtle accent that ties the look together';
+    styleNotes = isBold
+      ? 'Small pops of this colour draw the eye — perfect for statement accessories'
+      : 'A subtle accent that ties the whole outfit together';
   }
 
   return {
