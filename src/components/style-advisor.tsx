@@ -158,78 +158,9 @@ function getColorName(r: number, g: number, b: number): string {
 }
 
 /**
- * Preload images and wait for them to fully load with retry logic
- * @param imageUrls - Array of image URLs to preload
- * @returns Promise that resolves with results for each image (fulfilled or rejected)
+ * StyleAdvisor component
+ * Image preloading is now handled per-card in StyleAdvisorResults.
  */
-function preloadImages(imageUrls: string[]): Promise<PromiseSettledResult<void>[]> {
-  console.log('🖼️ Starting image preload for', imageUrls.length, 'images...');
-  
-  const imagePromises = imageUrls.map((url, index) => {
-    return new Promise<void>((resolve, reject) => {
-      if (typeof window === 'undefined') {
-        console.log(`⚠️ Server-side rendering detected, skipping image ${index + 1}`);
-        resolve();
-        return;
-      }
-
-      // Skip placeholder images
-      if (url.includes('placeholder') || !url) {
-        console.log(`⚠️ Image ${index + 1} is placeholder/empty, skipping preload`);
-        resolve();
-        return;
-      }
-
-      console.log(`📷 Preloading image ${index + 1}/${imageUrls.length}...`);
-      
-      let attempts = 0;
-      const maxAttempts = 3;
-      const retryDelay = 2000; // 2 seconds between retries
-      
-      const attemptLoad = () => {
-        attempts++;
-        console.log(`  Attempt ${attempts}/${maxAttempts} for image ${index + 1}`);
-        
-        const img = document.createElement('img');
-        
-        const timeout = setTimeout(() => {
-          img.src = ''; // Cancel load
-          if (attempts < maxAttempts) {
-            console.warn(`  ⏱️ Image ${index + 1} timed out (15s), retrying in ${retryDelay}ms...`);
-            setTimeout(attemptLoad, retryDelay);
-          } else {
-            console.error(`  ❌ Image ${index + 1} failed after ${maxAttempts} attempts`);
-            reject(new Error(`Failed to load image ${index + 1} after ${maxAttempts} attempts`));
-          }
-        }, 15000); // 15 second timeout per attempt
-        
-        img.onload = () => {
-          clearTimeout(timeout);
-          console.log(`  ✅ Image ${index + 1} loaded successfully (${img.width}x${img.height})`);
-          resolve();
-        };
-        
-        img.onerror = () => {
-          clearTimeout(timeout);
-          if (attempts < maxAttempts) {
-            console.warn(`  ⚠️ Image ${index + 1} load error, retrying in ${retryDelay}ms...`);
-            setTimeout(attemptLoad, retryDelay);
-          } else {
-            console.error(`  ❌ Image ${index + 1} failed to load after ${maxAttempts} attempts`);
-            reject(new Error(`Image ${index + 1} failed to load`));
-          }
-        };
-        
-        img.src = url;
-      };
-      
-      attemptLoad();
-    });
-  });
-
-  // Use allSettled to allow partial success
-  return Promise.allSettled(imagePromises);
-}
 
 export function StyleAdvisor() {
   const { toast } = useToast();
@@ -990,86 +921,32 @@ export function StyleAdvisor() {
       // Extract image URLs from the enriched outfits
       const imageUrls = enrichedOutfits.map((outfit: any) => outfit.imageUrl || '');
       const sources = enrichedOutfits.map((outfit: any) => {
-        if (outfit.imageUrl?.includes('placeholder')) return 'placeholder' as const;
-        if (outfit.imageUrl?.includes('pollinations')) return 'pollinations' as const;
-        return 'placeholder' as const;
+        const url: string = outfit.imageUrl || '';
+        if (!url || url.includes('via.placeholder.com')) return 'placeholder' as const;
+        if (url.includes('together.xyz') || url.includes('together.ai')) return 'gemini' as const;
+        if (url.includes('firebasestorage.googleapis.com')) return 'gemini' as const;
+        if (url.includes('replicate.delivery')) return 'gemini' as const;
+        if (url.startsWith('data:image/svg')) return 'placeholder' as const;
+        if (url.startsWith('data:image/png')) return 'gemini' as const;
+        if (url.includes('pollinations')) return 'pollinations' as const;
+        return 'gemini' as const;
       });
 
       setGeneratedImageUrls(imageUrls);
       setImageSources(sources);
 
-      // ✅ CRITICAL: Preload all images and wait for them to fully load
+      // Show results immediately — image loading is handled per-card in the results component
       updateStep('finalize', 'processing');
-      // 🚀 OPTIMIZATION 7: Progressive Image Loading - Show results immediately!
-      console.log('✨ [PROGRESSIVE] Displaying results immediately with progressive image loading');
-      console.log('💼 Images will load in background without blocking UI');
-      
-      // Show results immediately (pass the analysis object, not the full data)
+      console.log('✨ Displaying results immediately — images will load progressively per-card');
       if (isStale()) return;
 
       setAnalysisResult(result);
       setAllContentReady(true);
-      updateStep('finalize', 'complete');
-      setLoadingMessage("");
-      
-      // Load images progressively in background
-      const backgroundImageUrls = result.outfitRecommendations
-        .map((outfit: any) => outfit.imageUrl)
-        .filter((url: string) => url && !url.includes('placeholder'));
-      
-      console.log(`🖼️ Loading ${backgroundImageUrls.length} images progressively in background...`);
-      
-      let loadedImageCount = 0;
-      backgroundImageUrls.forEach((url: string, index: number) => {
-        const img = document.createElement('img');
-        
-        img.onload = () => {
-          loadedImageCount++;
-          console.log(`✅ Image ${index + 1}/${backgroundImageUrls.length} loaded (${img.width}x${img.height})`);
-          
-          if (loadedImageCount === backgroundImageUrls.length) {
-            console.log('🎉 All images loaded in background!');
-          }
-        };
-        
-        img.onerror = () => {
-          console.warn(`⚠️ Image ${index + 1}/${backgroundImageUrls.length} failed to load (showing placeholder)`);
-        };
-        
-        img.src = url;
-      });
-      
-      // Wait longer to ensure DOM is ready and images are cached in browser
-      console.log('⏳ Final preparation - ensuring images are cached in browser...');
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Increased from 500ms to 1500ms
-      if (isStale()) return;
-      
-      // Double-check that images are still available before showing results
-      const finalImageCheck = await Promise.all(imageUrls.map((url: string) => {
-        return new Promise<boolean>((resolve) => {
-          if (url.includes('placeholder')) {
-            resolve(true);
-            return;
-          }
-          const img = globalThis.Image ? new globalThis.Image() : document.createElement('img');
-          img.onload = () => resolve(true);
-          img.onerror = () => resolve(false);
-          img.src = url;
-          // If image loads instantly (cached), resolve immediately
-          if (img.complete) resolve(true);
-        });
-      }));
-      
-      const allImagesReady = finalImageCheck.every(ready => ready);
-      console.log(`🎨 Final image check: ${finalImageCheck.filter(r => r).length}/${finalImageCheck.length} images ready`);
-      
-      if (isStale()) return;
-
-      // ✅ FINAL STEP: Show results
-      console.log('🎉 All content ready! Displaying results to user!');
       setShowResults(true);
+      updateStep('finalize', 'complete');
+      setLoadingMessage('');
 
-      console.log('✅ Full recommendation flow complete with progressive loading!');
+      console.log('🎉 Recommendation flow complete! Results visible, images loading in-place.');
       
       // Show success toast
       toast({

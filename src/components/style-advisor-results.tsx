@@ -383,37 +383,50 @@ export function StyleAdvisorResults({
   const [loadingLinks, setLoadingLinks] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   
-  // NEW: Track image loading state
-  const [loadedImages, setLoadedImages] = useState<Set<number>>(new Set());
-  const [imageLoadErrors, setImageLoadErrors] = useState<Set<number>>(new Set());
-  const [allImagesReady, setAllImagesReady] = useState(false);
+  // Track per-image loading state: 'loading' | 'loaded' | 'error' | 'placeholder'
+  const [imageStates, setImageStates] = useState<Map<number, 'loading' | 'loaded' | 'error' | 'placeholder'>>(new Map());
 
-  // Reset image loading state when new images arrive
+  // When image URLs change, immediately classify each one
   useEffect(() => {
-    setLoadedImages(new Set());
-    setImageLoadErrors(new Set());
-    setAllImagesReady(false);
+    const initial = new Map<number, 'loading' | 'loaded' | 'error' | 'placeholder'>();
+    generatedImageUrls.forEach((url, i) => {
+      if (!url || url.includes('via.placeholder.com')) {
+        initial.set(i, 'placeholder');
+      } else if (url.startsWith('data:')) {
+        // SVG/base64 data URIs are available instantly — no network load needed
+        initial.set(i, 'loaded');
+      } else {
+        initial.set(i, 'loading');
+      }
+    });
+    setImageStates(initial);
   }, [generatedImageUrls]);
 
-  // Check if all images are ready (loaded or errored)
+  // Safety timeout: force any still-loading images to 'error' after 12s
   useEffect(() => {
-    const totalImages = generatedImageUrls.length;
-    const readyImages = loadedImages.size + imageLoadErrors.size;
-    
-    if (totalImages > 0 && readyImages >= totalImages) {
-      console.log('✅ All images ready:', { loaded: loadedImages.size, errors: imageLoadErrors.size });
-      setAllImagesReady(true);
-    }
-  }, [loadedImages, imageLoadErrors, generatedImageUrls]);
+    const hasLoading = Array.from(imageStates.values()).some(s => s === 'loading');
+    if (!hasLoading) return;
+    const timer = setTimeout(() => {
+      setImageStates(prev => {
+        const next = new Map(prev);
+        for (const [k, v] of next) {
+          if (v === 'loading') next.set(k, 'error');
+        }
+        return next;
+      });
+      console.warn('⏱️ Image load timeout — forced remaining images to error state');
+    }, 12000);
+    return () => clearTimeout(timer);
+  }, [imageStates]);
 
   const handleImageLoad = (index: number) => {
     console.log('🖼️ Image loaded:', index);
-    setLoadedImages(prev => new Set(prev).add(index));
+    setImageStates(prev => new Map(prev).set(index, 'loaded'));
   };
 
   const handleImageError = (index: number) => {
     console.log('❌ Image error:', index);
-    setImageLoadErrors(prev => new Set(prev).add(index));
+    setImageStates(prev => new Map(prev).set(index, 'error'));
   };
 
   useEffect(() => {
@@ -923,31 +936,6 @@ export function StyleAdvisorResults({
       animate="visible"
       className="w-full space-y-8 relative"
     >
-      {/* Loading Overlay - Show while images are loading */}
-      {!allImagesReady && generatedImageUrls.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-background/98 backdrop-blur-sm z-50 flex items-center justify-center"
-        >
-          <div className="text-center space-y-6 px-4">
-            <div className="w-20 h-20 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
-            <div className="space-y-2">
-              <h3 className="text-2xl font-bold text-foreground">Generating Your Outfits</h3>
-              <p className="text-muted-foreground max-w-md">
-                Creating {generatedImageUrls.length} unique fashion recommendations...
-              </p>
-              <div className="flex items-center justify-center gap-2 pt-2">
-                <div className="text-sm font-medium text-accent">
-                  {loadedImages.size + imageLoadErrors.size} / {generatedImageUrls.length} images ready
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-      )}
-      
       <header className="text-center">
         <h2 className="text-3xl md:text-4xl font-headline font-bold text-foreground flex items-center justify-center gap-3">
           <Sparkles className="w-8 h-8 text-accent" /> Your Style Analysis
@@ -1015,8 +1003,7 @@ export function StyleAdvisorResults({
           const outfitId = `outfit${index + 1}` as 'outfit1' | 'outfit2' | 'outfit3';
           const isSelected = selectedOutfit === outfitId;
           const isLoading = isUsing === index;
-          const isImageLoaded = loadedImages.has(index);
-          const hasImageError = imageLoadErrors.has(index);
+          const imgState = imageStates.get(index) || 'placeholder';
 
           return (
             <motion.div key={index} variants={itemVariants} className={cardClasses}>
@@ -1065,75 +1052,97 @@ export function StyleAdvisorResults({
 
                 {/* Image and Description Side by Side */}
                 <div className="grid md:grid-cols-2 gap-6 mb-6">
-                  {/* Left: Generated Image - Only show if valid generation (not placeholder) */}
-                  {generatedImageUrls[index] && 
-                   !generatedImageUrls[index].includes('placeholder') && 
-                   !generatedImageUrls[index].startsWith('data:') && (
+                  {/* Left: Generated Image */}
+                  {(() => {
+                    const imgUrl = generatedImageUrls[index] || '';
+                    const imgState = imageStates.get(index) || 'placeholder';
+                    const hasOutfitError = (outfit as any).error && !(outfit as any).shoppingError;
+                    const isDataUri = imgUrl.startsWith('data:');
+                    const isPlaceholderUrl = imgUrl.includes('via.placeholder.com');
+                    const hasRealImage = imgUrl && !isPlaceholderUrl && !hasOutfitError;
+
+                    return hasRealImage ? (
                   <div className="relative">
-                    {/* Check for image error (not shopping error) */}
-                    {(outfit as any).error && !(outfit as any).shoppingError ? (
-                      <div className="aspect-square w-full rounded-xl bg-muted/50 border-2 border-destructive/30 flex items-center justify-center p-6">
-                        <div className="text-center space-y-4">
-                          <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
-                            <Info className="w-8 h-8 text-destructive" />
-                          </div>
-                          <div>
-                            <h4 className="font-semibold text-foreground mb-2">Image Generation Failed</h4>
-                            <p className="text-sm text-muted-foreground">{(outfit as any).error}</p>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              The outfit details are still available below.
-                            </p>
-                          </div>
+                    {isDataUri ? (
+                      /* SVG/base64 data URI — render as plain <img> (Next Image doesn't support these well) */
+                      <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden shadow-lg border-2 border-border/30 bg-muted">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={imgUrl}
+                          alt={`Outfit visualization: ${outfit.title}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/50 to-transparent p-3">
+                          <p className="text-[10px] text-white/70 text-center">AI visualization placeholder</p>
                         </div>
                       </div>
-                    ) : generatedImageUrls[index] ? (
-                      <div className="relative aspect-square w-full rounded-xl overflow-hidden shadow-lg border-2 border-accent/30">
-                        {/* Loading Skeleton - Show until image loads */}
-                        {!loadedImages.has(index) && !imageLoadErrors.has(index) && (
-                          <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse">
+                    ) : (
+                      /* Real URL (Together.ai / Firebase Storage / etc.) */
+                      <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden shadow-lg border-2 border-accent/30">
+                        {/* Loading skeleton — visible until image loads or errors */}
+                        {imgState === 'loading' && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse z-10">
                             <div className="text-center space-y-3">
                               <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin mx-auto" />
-                              <p className="text-sm text-muted-foreground">Loading image...</p>
+                              <p className="text-sm text-muted-foreground">Loading image…</p>
                             </div>
                           </div>
                         )}
 
-                        {/* Actual Image - Hidden until loaded */}
-                        <Image 
-                          src={generatedImageUrls[index]} 
-                          alt={`Generated outfit: ${outfit.title}`} 
-                          fill 
+                        {/* Error state — show fallback with outfit info */}
+                        {imgState === 'error' && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-muted/80 z-10">
+                            <div className="text-center space-y-3 p-6">
+                              <Wand2 className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+                              <p className="text-sm font-medium text-muted-foreground">Image couldn&apos;t be loaded</p>
+                              <p className="text-xs text-muted-foreground/70">Outfit details are shown alongside</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Actual Image — fades in on load */}
+                        <Image
+                          src={imgUrl}
+                          alt={`Generated outfit: ${outfit.title}`}
+                          fill
                           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                          style={{ objectFit: 'cover' }} 
+                          style={{ objectFit: 'cover' }}
                           className={`transition-opacity duration-300 ${
-                            loadedImages.has(index) ? 'opacity-100' : 'opacity-0'
+                            imgState === 'loaded' ? 'opacity-100' : 'opacity-0'
                           }`}
-                          data-ai-hint="fashion outfit" 
+                          data-ai-hint="fashion outfit"
                           priority={index === 0}
                           onLoad={() => handleImageLoad(index)}
                           onError={() => handleImageError(index)}
                           unoptimized={
-                            generatedImageUrls[index]?.includes('pollinations.ai') ||
-                            generatedImageUrls[index]?.includes('placeholder')
+                            imgUrl.includes('together.xyz') ||
+                            imgUrl.includes('together.ai') ||
+                            imgUrl.includes('replicate.delivery')
                           }
                         />
-                        
-                        {/* REMOVED: No watermark/attribution shown */}
-                      </div>
-                    ) : (
-                      <div className="aspect-square w-full rounded-xl bg-muted animate-pulse flex items-center justify-center">
-                        <Wand2 className="w-12 h-12 text-muted-foreground/30" />
                       </div>
                     )}
                   </div>
-                  )}
+                    ) : (
+                      /* No image / placeholder / generation error — show styled empty state */
+                      <div className="relative aspect-[3/4] w-full rounded-xl bg-gradient-to-br from-muted/60 to-muted/30 border-2 border-border/20 flex items-center justify-center p-6">
+                        <div className="text-center space-y-3">
+                          <div className="w-14 h-14 rounded-full bg-accent/10 flex items-center justify-center mx-auto">
+                            <Wand2 className="w-7 h-7 text-accent/50" />
+                          </div>
+                          <p className="text-sm font-medium text-muted-foreground">
+                            {hasOutfitError ? 'Image generation failed' : 'Image not available'}
+                          </p>
+                          <p className="text-xs text-muted-foreground/70">
+                            Outfit details are shown alongside
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
-                  {/* Right: Outfit Details - Full width if no image */}
-                  <div className={generatedImageUrls[index] && 
-                                 !generatedImageUrls[index].includes('placeholder') && 
-                                 !generatedImageUrls[index].startsWith('data:') 
-                                 ? "space-y-4" 
-                                 : "space-y-4 md:col-span-2"}>
+                  {/* Right: Outfit Details */}
+                  <div className="space-y-4">
                     {/* Description */}
                     {outfit.description && (
                       <div>
