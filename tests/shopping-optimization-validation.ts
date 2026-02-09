@@ -4,7 +4,15 @@
  */
 
 import { analyzeGeneratedImageStructured } from '@/ai/flows/analyze-generated-image';
-import { buildShoppingQueries, buildAmazonQuery, buildMyntraQuery, buildTataCliqQuery, buildFallbackQuery, isQueryValid, calculateColorMatchScore } from '@/lib/shopping-query-builder';
+import {
+  buildShoppingQueries,
+  calculateColorMatchScore,
+  parseItemDescription,
+  buildOptimizedQuery,
+  buildAmazonUrl,
+  buildMyntraUrl,
+  buildTataCliqUrl,
+} from '@/lib/shopping-query-optimizer';
 import { searchShoppingLinksStructured } from '@/lib/tavily';
 import { generateOutfitImageEnhanced } from '@/ai/flows/generate-outfit-image';
 import type { ClothingItem, StructuredAnalysis } from '@/ai/flows/analyze-generated-image';
@@ -233,49 +241,67 @@ function testTask2() {
   log('════════════════════════════════════════════════', 'cyan');
   
   try {
-    // Test all builder functions exist
-    if (typeof buildAmazonQuery !== 'function' ||
-        typeof buildMyntraQuery !== 'function' ||
-        typeof buildTataCliqQuery !== 'function' ||
-        typeof buildFallbackQuery !== 'function') {
+    // Test core functions exist
+    if (typeof parseItemDescription !== 'function' ||
+        typeof buildOptimizedQuery !== 'function' ||
+        typeof buildAmazonUrl !== 'function' ||
+        typeof buildMyntraUrl !== 'function' ||
+        typeof buildTataCliqUrl !== 'function' ||
+        typeof buildShoppingQueries !== 'function') {
       throw new Error('One or more query builder functions missing');
     }
     
     log('✓ All query builder functions exist', 'green');
     
-    // Test Amazon query
-    const amazonQuery = buildAmazonQuery(mockClothingItems[0]);
+    // Test deterministic keyword ordering: [COLOR] → [MATERIAL] → [PRODUCT_TYPE] → [GENDER]
+    const parsed = parseItemDescription('Navy Blue Cotton Slim-Fit Shirt');
+    const amazonQuery = buildOptimizedQuery(parsed, { gender: 'male', includeMaterial: true });
     log(`\n  Amazon Query: "${amazonQuery}"`, 'blue');
     if (!amazonQuery.includes('men') || !amazonQuery.includes('shirt')) {
       throw new Error('Amazon query missing essential keywords');
     }
-    log('  ✓ Contains gender and item type', 'green');
-    
-    // Test Myntra query
-    const myntraQuery = buildMyntraQuery(mockClothingItems[0]);
-    log(`\n  Myntra Query: "${myntraQuery}"`, 'blue');
-    if (!myntraQuery.includes('shirt') || !myntraQuery.includes('casual')) {
-      throw new Error('Myntra query missing essential keywords');
+    // Verify keyword order: color before material before product type
+    const colorIdx = amazonQuery.indexOf('navy blue');
+    const materialIdx = amazonQuery.indexOf('cotton');
+    const typeIdx = amazonQuery.indexOf('shirt');
+    if (colorIdx >= materialIdx || materialIdx >= typeIdx) {
+      throw new Error('Keyword ordering incorrect — expected [COLOR] → [MATERIAL] → [PRODUCT_TYPE]');
     }
-    log('  ✓ Contains item type and style', 'green');
+    log('  ✓ Correct keyword order: [COLOR] → [MATERIAL] → [PRODUCT_TYPE] → [GENDER]', 'green');
     
-    // Test Tata CLiQ query
-    const cliqQuery = buildTataCliqQuery(mockClothingItems[0]);
-    log(`\n  Tata CLiQ Query: "${cliqQuery}"`, 'blue');
-    if (!cliqQuery.includes('men') || !cliqQuery.includes('shirt')) {
-      throw new Error('Tata CLiQ query missing essential keywords');
+    // Test Myntra URL pattern
+    const myntraUrl = buildMyntraUrl(amazonQuery);
+    log(`\n  Myntra URL: "${myntraUrl.substring(0, 80)}..."`, 'blue');
+    if (!myntraUrl.includes('myntra.com/') || !myntraUrl.includes('rawQuery=')) {
+      throw new Error('Myntra URL not following SEO path + rawQuery pattern');
     }
-    log('  ✓ Contains gender and item type', 'green');
+    log('  ✓ Myntra uses SEO path + rawQuery pattern', 'green');
     
-    // Test validation
-    log('\n  Testing query validation...', 'yellow');
-    const validQuery = isQueryValid('men navy blue cotton shirt');
-    const invalidQuery = isQueryValid('ab cd');
-    
-    if (!validQuery || invalidQuery) {
-      throw new Error('Query validation not working correctly');
+    // Test Tata CLiQ URL pattern
+    const cliqQuery = buildOptimizedQuery(parsed, { includeMaterial: true });
+    const cliqUrl = buildTataCliqUrl(cliqQuery);
+    log(`\n  Tata CLiQ URL: "${cliqUrl.substring(0, 80)}..."`, 'blue');
+    if (!cliqUrl.includes('searchCategory=all') || !cliqUrl.includes('text=')) {
+      throw new Error('Tata CLiQ URL missing searchCategory=all or text= param');
     }
-    log('  ✓ Query validation working', 'green');
+    log('  ✓ Tata CLiQ uses searchCategory=all&text= pattern', 'green');
+    
+    // Test Amazon URL uses + for spaces
+    const amazonUrl = buildAmazonUrl(amazonQuery);
+    if (!amazonUrl.includes('+') || amazonUrl.includes('%20')) {
+      throw new Error('Amazon URL should use + for spaces, not %20');
+    }
+    log('  ✓ Amazon URL uses + for space encoding', 'green');
+    
+    // Test 3–4 keyword limit
+    const longDesc = 'Light Grey Premium Quality Cotton Slim-Fit Tailored Formal Trousers with Flat Front';
+    const longParsed = parseItemDescription(longDesc);
+    const longQuery = buildOptimizedQuery(longParsed, { gender: 'male', includeMaterial: true });
+    const wordCount = longQuery.split(' ').length;
+    if (wordCount > 4) {
+      throw new Error(`Query has ${wordCount} keywords — expected ≤ 4`);
+    }
+    log(`  ✓ Long description compressed to ${wordCount} keywords: "${longQuery}"`, 'green');
     
     // Test color matching
     log('\n  Testing color synonym matching...', 'yellow');
@@ -288,20 +314,19 @@ function testTask2() {
     log(`  ✓ Exact match score: ${exactScore.toFixed(2)}`, 'green');
     log(`  ✓ Synonym match score: ${navyScore.toFixed(2)}`, 'green');
     
-    // Test diverse scenarios
-    log('\n  Testing diverse outfit scenarios...', 'yellow');
-    for (const scenario of testScenarios) {
-      const query = buildAmazonQuery(scenario.item);
-      log(`    ${scenario.name}: "${query.substring(0, 60)}..."`, 'blue');
-      
-      if (!isQueryValid(query)) {
-        throw new Error(`Invalid query for ${scenario.name}`);
-      }
+    // Test diverse scenarios using buildShoppingQueries
+    log('\n  Testing diverse outfit scenarios via buildShoppingQueries...', 'yellow');
+    const queries = buildShoppingQueries(mockStructuredAnalysis);
+    if (!queries.amazon.length || !queries.myntra.length || !queries.tatacliq.length) {
+      throw new Error('buildShoppingQueries returned empty arrays');
+    }
+    for (let i = 0; i < queries.amazon.length; i++) {
+      log(`    Item ${i + 1}: Amazon="${queries.amazon[i]}", Myntra="${queries.myntra[i]}", CLiQ="${queries.tatacliq[i]}"`, 'blue');
     }
     log('  ✓ All scenarios generate valid queries', 'green');
     
     testResults.task2.passed = true;
-    testResults.task2.details = 'Query builder fully functional with all platforms';
+    testResults.task2.details = 'Query builder fully functional with deterministic ordering and 3-4 keyword limit';
     log('\n✅ TASK 2: PASSED', 'bold');
   } catch (error) {
     testResults.task2.details = (error as Error).message;

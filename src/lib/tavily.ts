@@ -1,7 +1,14 @@
 import { generateShoppingQuery } from '@/ai/flows/generate-shopping-query';
 import type { StructuredAnalysis, ClothingItem } from '@/ai/flows/analyze-generated-image';
-import { buildShoppingQueries, calculateColorMatchScore } from './shopping-query-builder';
-import { buildAmazonUrl, buildMyntraUrl, buildTataCliqUrl, parseItemDescription, buildOptimizedQuery } from './shopping-query-optimizer';
+import {
+  buildShoppingQueries,
+  calculateColorMatchScore,
+  buildAmazonUrl,
+  buildMyntraUrl,
+  buildTataCliqUrl,
+  parseItemDescription,
+  buildOptimizedQuery,
+} from './shopping-query-optimizer';
 import { logger } from './logger';
 
 type TavilyResult = {
@@ -63,15 +70,22 @@ const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
 function generateDirectSearchURL(platform: 'amazon' | 'myntra' | 'tatacliq', query: string, gender?: string): string {
   // Parse the query to extract structured attributes, then build an optimized URL
   const parsed = parseItemDescription(query);
-  const optimized = buildOptimizedQuery(parsed, { includeGender: platform === 'amazon' ? gender : undefined, includeFabric: true });
-  
+
+  // Amazon/Myntra: include gender as an optional 4th keyword
+  // Tata CLiQ: searchCategory=all handles gender, keep query gender-neutral
+  const isTataCliq = platform === 'tatacliq';
+  const optimized = buildOptimizedQuery(parsed, {
+    gender: isTataCliq ? undefined : gender,
+    includeMaterial: true,
+  });
+
   switch (platform) {
     case 'amazon':
-      return buildAmazonUrl(optimized, gender);
+      return buildAmazonUrl(optimized);
     case 'myntra':
-      return buildMyntraUrl(optimized, gender);
+      return buildMyntraUrl(optimized);
     case 'tatacliq':
-      return buildTataCliqUrl(optimized, gender);
+      return buildTataCliqUrl(optimized);
     default:
       return '#';
   }

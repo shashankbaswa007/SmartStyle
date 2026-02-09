@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { analyzeImageAndProvideRecommendations } from '@/ai/flows/analyze-image-and-provide-recommendations';
 import { generateOutfitImage } from '@/ai/flows/generate-outfit-image';
 import { extractColorsFromUrl } from '@/lib/color-extraction';
-import { generateShoppingLinks, validateShoppingLinks } from '@/lib/shopping-link-generator';
+import { generateShoppingLinks, validateShoppingLinks } from '@/lib/shopping-query-optimizer';
 import saveRecommendation from '@/lib/firestoreRecommendations';
 import { withTimeout } from '@/lib/timeout-utils';
 import crypto from 'crypto';
