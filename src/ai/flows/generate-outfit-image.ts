@@ -44,6 +44,10 @@ export async function generateOutfitImage(
 
   try {
     const imageUrl = await generateOutfitImageWithFallback(imagePrompt, colorHexCodes);
+    if (!imageUrl) {
+      console.log('⚠️ Image generation returned null — using placeholder');
+      return 'https://via.placeholder.com/800x1000/6366f1/ffffff?text=Fashion+Outfit';
+    }
     console.log('✅ Image generated successfully');
     console.log('🔗 Image URL:', imageUrl.substring(0, 100) + '...');
     return imageUrl;
@@ -87,6 +91,22 @@ export async function generateOutfitImageEnhanced(
   try {
     // Step 1: Generate the outfit image
     const imageUrl = await generateOutfitImageWithFallback(imagePrompt, colorHexCodes);
+    if (!imageUrl) {
+      console.log('⚠️ [ENHANCED] Image generation returned null — using placeholder');
+      const fallbackUrl = 'https://via.placeholder.com/800x1000/6366f1/ffffff?text=Fashion+Outfit';
+      return {
+        imageUrl: fallbackUrl,
+        dominantColors: [],
+        detailedDescription: outfitDescription,
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          primaryModel: 'null-fallback',
+          analysisTime: 0,
+          searchTime: 0,
+          totalProcessingTime: Date.now() - startTime,
+        },
+      };
+    }
     console.log('✅ Image generated:', imageUrl.substring(0, 80) + '...');
 
     // Step 2: Analyze the generated image for colors and basic data

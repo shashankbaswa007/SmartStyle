@@ -9,9 +9,9 @@
  */
 
 const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 6;
 const POLL_INTERVAL = 1000; // 1 second
-const MAX_WAIT_TIME = 30000; // 30 seconds
+const MAX_WAIT_TIME = 7000; // 7 seconds — must fit within 8s per-outfit budget
 
 interface ReplicatePrediction {
   id: string;
@@ -38,7 +38,7 @@ export async function generateWithReplicate(
     
     // Enhance prompt with colors
     const colorList = colors.map(c => c.replace('#', '')).join(', ');
-    const enhancedPrompt = `${prompt}, featuring colors: ${colorList}, high quality fashion photography, professional lighting, detailed textures, 8k resolution`;
+    const enhancedPrompt = `${prompt}, featuring colors: ${colorList}, fashion product photograph, soft studio lighting, clean white background, detailed textures, high resolution, photorealistic, absolutely no text no words no letters no banners no logos no watermarks no overlays`;
 
     // Create prediction
     const createResponse = await fetch('https://api.replicate.com/v1/predictions', {
@@ -60,7 +60,17 @@ export async function generateWithReplicate(
     });
 
     if (!createResponse.ok) {
-      throw new Error(`Replicate API error: ${createResponse.statusText}`);
+      // 402 Payment Required = no credits — throw so circuit breaker trips
+      if (createResponse.status === 402) {
+        console.warn('💳 [REPLICATE] Account has no credits (402 Payment Required), skipping...');
+        throw new Error('Replicate API error: 402 Payment Required — no credits');
+      }
+      // 429 Too Many Requests — skip immediately, circuit breaker will handle
+      if (createResponse.status === 429) {
+        console.warn('🚦 [REPLICATE] Rate limited (429 Too Many Requests), skipping...');
+        throw new Error('Replicate API error: 429 Too Many Requests');
+      }
+      throw new Error(`Replicate API error: ${createResponse.status} ${createResponse.statusText}`);
     }
 
     const prediction: ReplicatePrediction = await createResponse.json();
@@ -111,8 +121,12 @@ export async function generateWithReplicate(
     console.warn('⚠️ [REPLICATE] Max retries reached');
     return null;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ [REPLICATE] Error generating image:', error);
+    // Re-throw 402/429 so the circuit breaker in smart-image-generation.ts can trip
+    if (error?.message?.includes('402') || error?.message?.includes('429')) {
+      throw error;
+    }
     return null;
   }
 }

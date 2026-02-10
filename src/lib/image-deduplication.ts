@@ -1,7 +1,14 @@
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 
+// Server-side API routes have no request.auth context, so Firestore
+// security rules reject all reads/writes with PERMISSION_DENIED.
+const isServerSide = typeof window === 'undefined';
+
 export async function checkDuplicateImage(userId: string, imageHash: string) {
+  // Server-side: Firestore client SDK lacks auth context — skip
+  if (isServerSide) return null;
+
   try {
     // Check if this exact image was processed in last 24 hours
     const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);

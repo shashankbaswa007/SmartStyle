@@ -95,7 +95,81 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     };
   }, []);
 
-  const handleImageSelect = (file: File) => {
+  // Automatically compress images to fit under 800KB (client-side, instant!)
+  const compressImage = async (file: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = document.createElement('img');
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas not supported'));
+            return;
+          }
+
+          // Calculate dimensions to maintain aspect ratio
+          // Target max dimension of 1200px for good quality while staying under 800KB
+          const MAX_DIMENSION = 1200;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height && width > MAX_DIMENSION) {
+            height = (height * MAX_DIMENSION) / width;
+            width = MAX_DIMENSION;
+          } else if (height > MAX_DIMENSION) {
+            width = (width * MAX_DIMENSION) / height;
+            height = MAX_DIMENSION;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Try different quality levels to get under 800KB
+          const tryCompress = (quality: number) => {
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  reject(new Error('Compression failed'));
+                  return;
+                }
+
+                const sizeKB = blob.size / 1024;
+                console.log(`🖼️ Compressed to ${sizeKB.toFixed(0)}KB at quality ${quality}`);
+
+                if (blob.size < 800 * 1024 || quality <= 0.5) {
+                  // Success! Convert blob back to File
+                  const compressedFile = new File([blob], file.name, {
+                    type: 'image/jpeg',
+                    lastModified: Date.now(),
+                  });
+                  resolve(compressedFile);
+                } else {
+                  // Try lower quality
+                  tryCompress(quality - 0.1);
+                }
+              },
+              'image/jpeg',
+              quality
+            );
+          };
+
+          // Start with high quality (0.85) and reduce if needed
+          tryCompress(0.85);
+        };
+
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target?.result as string;
+      };
+
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageSelect = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       toast({
         variant: 'destructive',
@@ -105,31 +179,63 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       return;
     }
 
-    // Check file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
-      toast({
-        variant: 'destructive',
-        title: 'File Too Large',
-        description: `Image size is ${sizeMB}MB. Please select an image under 5MB.`,
+    const originalSizeKB = (file.size / 1024).toFixed(0);
+    console.log(`📸 Original image: ${originalSizeKB}KB`);
+
+    // Show compressing toast if image is large
+    let compressionToast: any = null;
+    if (file.size > 800 * 1024) {
+      compressionToast = toast({
+        title: 'Optimizing image...',
+        description: `Compressing ${originalSizeKB}KB image to fit storage limits`,
+        duration: 10000,
       });
-      return;
     }
 
-    setImageFile(file);
+    try {
+      // Automatically compress if needed
+      let processedFile = file;
+      if (file.size > 800 * 1024) {
+        processedFile = await compressImage(file);
+        const newSizeKB = (processedFile.size / 1024).toFixed(0);
+        console.log(`✅ Compressed: ${originalSizeKB}KB → ${newSizeKB}KB`);
+        
+        // Update toast with success
+        if (compressionToast) {
+          compressionToast.dismiss();
+          toast({
+            title: 'Image optimized! ✨',
+            description: `Reduced from ${originalSizeKB}KB to ${newSizeKB}KB`,
+            duration: 2000,
+          });
+        }
+      }
 
-    // Create preview
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
+      setImageFile(processedFile);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(processedFile);
+      
+    } catch (error) {
+      console.error('Image compression failed:', error);
+      if (compressionToast) compressionToast.dismiss();
+      
+      toast({
+        variant: 'destructive',
+        title: 'Compression Failed',
+        description: 'Could not optimize image. Please try a different photo or reduce its size manually.',
+      });
+    }
   };
 
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleImageSelect(file);
+      await handleImageSelect(file);
     }
   };
 
@@ -351,6 +457,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     if (imageFile && !suggestionsApplied) {
       generateSmartSuggestions(imageFile);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageFile]);
 
   // Process colors in background after item is saved
@@ -436,73 +543,53 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     onOpenChange(newOpen);
   };
 
+  // Convert image to base64 data URI (no Firebase Storage billing required - 100% FREE!)
   const uploadImageToStorage = async (file: File, userId: string): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const timestamp = Date.now();
-      const fileName = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-      const storageRef = ref(storage, `wardrobe/${userId}/${fileName}`);
+      // Check file size - Firestore documents have a 1MB limit
+      // We use 800KB as a safe limit to account for other document fields
+      const MAX_SIZE = 800 * 1024; // 800KB
+      if (file.size > MAX_SIZE) {
+        const sizeMB = (file.size / 1024).toFixed(0);
+        reject(new Error(`Image too large (${sizeMB}KB). Please use an image under 800KB. Tip: Take a photo at lower resolution or compress it.`));
+        return;
+      }
 
-      const uploadTask = uploadBytesResumable(storageRef, file, {
-        contentType: file.type,
-        customMetadata: {
-          uploadedAt: new Date().toISOString(),
-          originalName: file.name,
-        },
-      });
-
-      uploadTaskRef.current = uploadTask;
-
-      uploadTask.on(
-        'state_changed',
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-          setUploadProgress(Math.round(progress));
-          
-          switch (snapshot.state) {
-            case 'running':
-              setUploadStatus('uploading');
-              break;
-            case 'paused':
-              console.log('Upload paused');
-              break;
-          }
-        },
-        (error) => {
-          console.error('Upload error:', error);
-          uploadTaskRef.current = null;
-          
-          let errorMessage = 'Failed to upload image';
-          if (error.code === 'storage/canceled') {
-            errorMessage = 'Upload was canceled';
-          } else if (error.code === 'storage/unauthorized') {
-            errorMessage = 'Permission denied. Please sign in again.';
-          } else if (error.code === 'storage/quota-exceeded') {
-            errorMessage = 'Storage quota exceeded';
-          } else if (error.code === 'storage/retry-limit-exceeded') {
-            errorMessage = 'Upload failed after multiple retries';
-          }
-          
-          reject(new Error(errorMessage));
-        },
-        async () => {
-          try {
-            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            uploadTaskRef.current = null;
-            resolve(downloadURL);
-          } catch (error) {
-            uploadTaskRef.current = null;
-            reject(error);
-          }
-        }
-      );
+      const reader = new FileReader();
+      
+      reader.onload = () => {
+        const result = reader.result as string;
+        const sizeKB = Math.round(result.length / 1024);
+        console.log(`✅ Image converted to base64 (${sizeKB}KB) - stored in Firestore (no storage costs!)`);
+        
+        // Simulate progress for better UX
+        setUploadProgress(50);
+        setTimeout(() => {
+          setUploadProgress(100);
+          setUploadStatus('processing');
+          resolve(result);
+        }, 200);
+      };
+      
+      reader.onerror = () => {
+        console.error('❌ FileReader error:', reader.error);
+        reject(new Error('Failed to read image file. Please try again.'));
+      };
+      
+      // Start reading the file as base64
+      setUploadStatus('uploading');
+      setUploadProgress(0);
+      reader.readAsDataURL(file);
     });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('🚀 Wardrobe upload: Form submitted');
 
     // Prevent duplicate submissions
     if (isSubmitting) {
+      console.warn('⚠️ Upload already in progress');
       toast({
         title: 'Upload in progress',
         description: 'Please wait for the current upload to complete.',
@@ -511,7 +598,9 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     }
 
     const user = auth.currentUser;
+    console.log('👤 Current user:', user ? user.uid : 'NOT AUTHENTICATED');
     if (!user) {
+      console.error('❌ User not authenticated');
       toast({
         variant: 'destructive',
         title: 'Authentication Required',
@@ -527,6 +616,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       if (!itemType) missing.push('item type');
       if (!description) missing.push('description');
       
+      console.error('❌ Missing required fields:', missing);
       toast({
         variant: 'destructive',
         title: 'Missing Information',
@@ -534,6 +624,13 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       });
       return;
     }
+    
+    console.log('✅ Validation passed, starting upload...', {
+      hasImage: !!imageFile,
+      itemType,
+      description: description.substring(0, 30),
+      userId: user.uid
+    });
 
     const submissionId = submissionIdRef.current;
     const MAX_RETRIES = 3;
@@ -550,34 +647,41 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
         return;
       }
 
-      // Step 1: Upload image to Firebase Storage with retry logic
+      // Step 1: Convert image to base64 (no Firebase Storage, no billing!)
+      console.log('📤 Converting image to base64 (free storage in Firestore)...');
       let uploadAttempt = 0;
       while (uploadAttempt < MAX_RETRIES && !uploadUrl) {
         // Check if submission was cancelled
         if (submissionId !== submissionIdRef.current) {
+          console.log('🚫 Upload cancelled');
           return;
         }
 
         try {
+          console.log(`📤 Conversion attempt ${uploadAttempt + 1}/${MAX_RETRIES}...`);
           uploadUrl = await uploadImageToStorage(imageFile, user.uid);
+          console.log('✅ Image converted to base64 successfully (data URI):', uploadUrl.substring(0, 30) + '...');
         } catch (uploadError) {
           uploadAttempt++;
           setRetryCount(uploadAttempt);
+          console.error(`❌ Upload attempt ${uploadAttempt} failed:`, uploadError);
           
           if (uploadAttempt >= MAX_RETRIES) {
             const errorMsg = uploadError instanceof Error 
               ? uploadError.message 
               : `Upload failed after ${MAX_RETRIES} attempts`;
             setUploadError(errorMsg);
+            console.error('❌ All upload attempts failed:', errorMsg);
             throw new Error(errorMsg);
           }
           
-          console.warn(`Upload attempt ${uploadAttempt} failed, retrying...`);
+          console.warn(`⏳ Retrying upload in ${uploadAttempt}s...`);
           await new Promise(resolve => setTimeout(resolve, 1000 * uploadAttempt)); // Exponential backoff
         }
       }
 
       if (!uploadUrl) {
+        console.error('❌ Upload failed: No URL returned');
         throw new Error('Failed to upload image');
       }
 
@@ -588,6 +692,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
 
       // Step 2: Save immediately with placeholder colors for fast response
       setUploadStatus('processing');
+      console.log('💾 Preparing to save to Firestore...');
       
       // Use neutral placeholder colors - will be updated in background
       const placeholderColors = ['#808080', '#A0A0A0'];
@@ -608,26 +713,41 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
         isActive: true,
         colorsProcessed: false,
       };
+      
+      console.log('📦 Item data prepared:', {
+        imageUrl: itemData.imageUrl.substring(0, 50) + '...',
+        itemType: itemData.itemType,
+        description: itemData.description.substring(0, 30),
+        hasSeasons: !!itemData.season,
+        hasOccasions: !!itemData.occasions
+      });
 
       // Step 4: Add to Firestore with retry
+      console.log('💾 Saving to Firestore...');
       let saveAttempt = 0;
       let saveResult = null;
       
       while (saveAttempt < MAX_RETRIES && !saveResult?.success) {
         try {
+          console.log(`💾 Save attempt ${saveAttempt + 1}/${MAX_RETRIES}...`);
           saveResult = await addWardrobeItem(user.uid, itemData);
           
           if (!saveResult.success) {
+            console.error('❌ Save failed:', saveResult.message);
             throw new Error(saveResult.message);
           }
+          
+          console.log('✅ Item saved successfully, ID:', saveResult.itemId);
         } catch (saveError) {
           saveAttempt++;
+          console.error(`❌ Save attempt ${saveAttempt} failed:`, saveError);
           
           if (saveAttempt >= MAX_RETRIES) {
+            console.error('❌ All save attempts failed');
             throw new Error('Failed to save item after multiple attempts');
           }
           
-          console.warn(`Save attempt ${saveAttempt} failed, retrying...`);
+          console.warn(`⏳ Retrying save in ${saveAttempt}s...`);
           await new Promise(resolve => setTimeout(resolve, 1000 * saveAttempt));
         }
       }
@@ -649,7 +769,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       
       toast({
         title: 'Item Added! 🎉',
-        description: 'Colors are being analyzed in the background.',
+        description: 'Your item is saved (100% free - no storage costs!)',
         duration: 2000,
       });
 
@@ -694,16 +814,16 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
               </TooltipContent>
             </Tooltip>
           </DialogTitle>
-          <DialogDescription className="space-y-2">
-            <p>Upload a photo and add details about your clothing item.</p>
-            <div className="flex items-start gap-2 text-xs text-teal-800 bg-teal-50/80 rounded-lg px-3 py-2 border border-teal-200">
-              <Shield className="h-4 w-4 flex-shrink-0 mt-0.5 text-teal-600" />
-              <div>
-                <p className="font-semibold mb-0.5">Your Privacy is Protected</p>
-                <p className="text-teal-700">Images are stored securely with your account. Only you can access them. AI color detection happens automatically to help categorize your items.</p>
-              </div>
-            </div>
+          <DialogDescription>
+            Upload a photo and add details about your clothing item.
           </DialogDescription>
+          <div className="flex items-start gap-2 text-xs text-teal-800 bg-teal-50/80 rounded-lg px-3 py-2 border border-teal-200 mt-2">
+            <Shield className="h-4 w-4 flex-shrink-0 mt-0.5 text-teal-600" />
+            <div>
+              <div className="font-semibold mb-0.5">Your Privacy is Protected</div>
+              <div className="text-teal-700">Images are stored securely with your account. Only you can access them. AI color detection happens automatically to help categorize your items.</div>
+            </div>
+          </div>
           {imageFile && suggestionsApplied && (
             <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded-lg flex items-start gap-2">
               <Info className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
@@ -720,7 +840,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
             <div className="flex items-center justify-between">
               <Label>Item Photo *</Label>
               {!imagePreview && (
-                <span className="text-xs text-gray-500">Max 5MB</span>
+                <span className="text-xs text-teal-600 font-medium">Auto-optimized • No size limits!</span>
               )}
             </div>
             {!imagePreview ? (

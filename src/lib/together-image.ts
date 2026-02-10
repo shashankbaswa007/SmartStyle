@@ -11,7 +11,7 @@
 
 const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
 const TOGETHER_API_URL = 'https://api.together.xyz/v1/images/generations';
-const REQUEST_TIMEOUT = 20000; // 20 seconds
+const REQUEST_TIMEOUT = 5000; // 5 seconds — must fit within 8s per-outfit budget
 
 interface TogetherImageResponse {
   data: Array<{
@@ -46,7 +46,8 @@ export async function generateWithTogether(
     const enhancedPrompt = [
       prompt,
       colorList ? `featuring colors: #${colorList}` : '',
-      'professional fashion photography, studio lighting, clean background, high quality, detailed textures',
+      'fashion product photograph, soft studio lighting, clean white background, high quality, detailed textures, photorealistic',
+      'absolutely no text, no words, no letters, no banners, no logos, no watermarks, no overlays, no studio equipment visible',
     ]
       .filter(Boolean)
       .join(', ');

@@ -2,6 +2,10 @@ import { db } from '@/lib/firebase';
 import { collection, doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import crypto from 'crypto';
 
+// Server-side API routes have no request.auth context, so Firestore
+// security rules reject all reads/writes with PERMISSION_DENIED.
+const isServerSide = typeof window === 'undefined';
+
 export class FirestoreCache {
   private cacheCollection = 'apiCache';
   
@@ -26,6 +30,9 @@ export class FirestoreCache {
     gender: string;
     occasion?: string;
   }): Promise<T | null> {
+    // Server-side: Firestore client SDK lacks auth context — skip
+    if (isServerSide) return null;
+
     try {
       const cacheKey = this.generateCacheKey(params);
       const docRef = doc(db, this.cacheCollection, cacheKey);
@@ -59,6 +66,9 @@ export class FirestoreCache {
     gender: string;
     occasion?: string;
   }, result: T, ttlSeconds: number = 3600): Promise<void> {
+    // Server-side: Firestore client SDK lacks auth context — skip
+    if (isServerSide) return;
+
     try {
       const cacheKey = this.generateCacheKey(params);
       const expiresAt = new Date(Date.now() + ttlSeconds * 1000);

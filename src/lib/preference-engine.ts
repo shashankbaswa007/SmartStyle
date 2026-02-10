@@ -589,6 +589,48 @@ export async function analyzeShoppingBehavior(userId: string): Promise<ShoppingB
  * Get all user preferences in one call
  */
 export async function getComprehensivePreferences(userId: string): Promise<ComprehensivePreferences> {
+  // Server-side: Firestore client SDK lacks auth context — return empty defaults
+  if (typeof window === 'undefined') {
+    logger.log('ℹ️ [Preference Engine] Server-side — returning empty defaults');
+    return {
+      colors: {
+        favoriteColors: [],
+        dislikedColors: [],
+        provenCombinations: [],
+        intensityPreference: 'balanced',
+        temperaturePreference: 'neutral',
+        confidence: 0,
+      },
+      styles: {
+        topStyles: [],
+        fitPreferences: [],
+        patternPreferences: [],
+        silhouettePreferences: [],
+        occasionStyles: { office: [], casual: [], party: [], ethnic: [] },
+        styleConsistency: 0,
+        confidence: 0,
+      },
+      seasonal: {
+        summer: { colors: [], fabrics: [], styles: [] },
+        winter: { colors: [], fabrics: [], styles: [] },
+        monsoon: { colors: [], fabrics: [], styles: [] },
+        seasonalShifts: [],
+        confidence: 0,
+      },
+      shopping: {
+        priceRangeComfort: { min: 0, max: 0 },
+        averagePrice: 0,
+        preferredPlatforms: [],
+        fabricPreferences: [],
+        brandStyleAffinity: [],
+        confidence: 0,
+      },
+      overallConfidence: 0,
+      totalInteractions: 0,
+      lastUpdated: new Date(),
+    };
+  }
+
   logger.log('📊 [Preference Engine] Fetching comprehensive preferences for:', userId);
 
   const [colors, styles, seasonal, shopping] = await Promise.all([

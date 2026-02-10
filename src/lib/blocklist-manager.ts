@@ -55,6 +55,9 @@ export interface Blocklists {
  * Get all blocklists for a user
  */
 export async function getBlocklists(userId: string): Promise<Blocklists> {
+  // Server-side: Firestore client SDK lacks auth context — return empty defaults
+  if (typeof window === 'undefined') return getEmptyBlocklists();
+
   try {
     const prefsRef = doc(db, 'userPreferences', userId);
     const prefsDoc = await getDoc(prefsRef);

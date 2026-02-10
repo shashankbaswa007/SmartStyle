@@ -87,6 +87,9 @@ export async function createInteractionSession(
   metadata: Omit<SessionMetadata, 'sessionId' | 'userId' | 'timestamp' | 'season'>,
   recommendations: OutfitRecommendationData[]
 ): Promise<void> {
+  // Server-side: Firestore client SDK lacks auth context — skip
+  if (typeof window === 'undefined') return;
+
   try {
     const now = new Date();
     const season = getSeason(now);

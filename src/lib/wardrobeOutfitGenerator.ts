@@ -1,5 +1,5 @@
 import Groq from 'groq-sdk';
-import { getWardrobeItems, WardrobeItemData } from './wardrobeService';
+import { WardrobeItemData } from './wardrobeService';
 import { getComprehensivePreferences } from './preference-engine';
 
 const groq = new Groq({
@@ -29,22 +29,21 @@ export interface OutfitSuggestionResult {
 
 /**
  * Generate outfit combinations from user's wardrobe using AI
- * @param userId - User ID
+ * @param wardrobeItems - Array of wardrobe items from client
+ * @param userId - User ID for fetching preferences
  * @param occasion - Occasion for the outfit (casual, formal, party, etc.)
  * @param weather - Optional weather data
  * @returns AI-generated outfit combinations
  */
 export async function generateWardrobeOutfits(
+  wardrobeItems: WardrobeItemData[],
   userId: string,
   occasion: string,
   weather?: { temp: number; condition: string; location?: string }
 ): Promise<OutfitSuggestionResult> {
-  console.log('👔 Generating wardrobe outfits for:', userId, 'occasion:', occasion);
+  console.log('👔 Generating wardrobe outfits - userId:', userId, '- occasion:', occasion, '- items:', wardrobeItems.length);
 
   try {
-    // Fetch user's wardrobe items - only active items
-    const wardrobeItems = await getWardrobeItems(userId);
-    
     // Filter only active items to exclude deleted/inactive items
     const activeItems = wardrobeItems.filter(item => item.isActive !== false);
 
@@ -53,8 +52,12 @@ export async function generateWardrobeOutfits(
     }
     
     // Provide guidance for sparse wardrobes
+    if (activeItems.length < 3) {
+      throw new Error('Not enough items in wardrobe. Please add at least 3 items to generate outfit suggestions.');
+    }
+    
     if (activeItems.length < 5) {
-      console.warn('⚠️ Sparse wardrobe detected:', activeItems.length, 'items');
+      console.warn('⚠️ Sparse wardrobe detected:', activeItems.length, 'items - generating best combinations with available items');
     }
 
     // Fetch user preferences
@@ -272,13 +275,21 @@ OCCASION: ${occasion}${weatherInfo}${weatherGuidance}${preferencesInfo}
 USER'S WARDROBE:${wardrobeDescription}
 
 TASK:
-Create 3 DIFFERENT outfit combinations using ONLY items from the wardrobe above. Each outfit must:
+Create up to 3 DIFFERENT outfit combinations using ONLY items from the wardrobe above.
+
+IMPORTANT RULES:
+1. Work with WHATEVER item types are available - if the wardrobe only has tops and bottoms, create combinations with those
+2. DO NOT infer or suggest items that don't exist in the wardrobe
+3. Each outfit MUST use items that exist in the wardrobe (reference them by exact ID)
+4. If certain item types (shoes, accessories, outerwear) are missing, ignore them - focus on the available items
+5. Generate the best possible combinations with what's available
+
+Each outfit must:
 1. Be appropriate for the occasion: ${occasion}
 2. ${weather ? `Be WEATHER-APPROPRIATE for ${weather.temp}°C and ${weather.condition} conditions` : 'Consider typical weather for this occasion'}
-3. Use items that exist in the wardrobe (reference them by ID)
-4. Include colors that work well together
-5. Consider the user's preferences and wear history
-6. Be practical and stylish${weather ? `\n7. IMPORTANT: All suggestions MUST be suitable for the forecasted weather conditions` : ''}
+3. Include colors that work well together
+4. Consider the user's preferences and wear history
+5. Be practical and stylish${weather ? `\n6. IMPORTANT: All suggestions MUST be suitable for the forecasted weather conditions` : ''}
 
 For each outfit, specify:
 - name: A creative name for the outfit

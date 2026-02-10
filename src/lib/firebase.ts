@@ -30,12 +30,14 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-logger.log('🔍 Firebase config object:', {
-  hasApiKey: !!firebaseConfig.apiKey,
-  hasAuthDomain: !!firebaseConfig.authDomain,
-  hasProjectId: !!firebaseConfig.projectId,
-  configKeys: Object.keys(firebaseConfig),
-});
+if (process.env.NODE_ENV === 'development') {
+  logger.log('🔍 Firebase config object:', {
+    hasApiKey: !!firebaseConfig.apiKey,
+    hasAuthDomain: !!firebaseConfig.authDomain,
+    hasProjectId: !!firebaseConfig.projectId,
+    configKeys: Object.keys(firebaseConfig),
+  });
+}
 
 // Validate Firebase configuration values (not process.env, but actual config values)
 const missingFields = Object.entries(firebaseConfig)

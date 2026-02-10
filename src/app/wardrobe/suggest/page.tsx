@@ -13,12 +13,14 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
-import Particles from '@/components/Particles';
+import dynamic from 'next/dynamic';
+const Particles = dynamic(() => import('@/components/Particles'), { ssr: false });
 import TextPressure from '@/components/TextPressure';
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { getWardrobeItems } from '@/lib/wardrobeService';
 
 interface OutfitItem {
   itemId: string;
@@ -90,6 +92,19 @@ export default function WardrobeSuggestPage() {
       setLoading(true);
       setError(null);
 
+      // Fetch user's wardrobe items from client-side
+      const wardrobeItems = await getWardrobeItems(user.uid);
+      
+      if (wardrobeItems.length === 0) {
+        toast({
+          variant: 'destructive',
+          title: 'Empty Wardrobe',
+          description: 'Please add items to your wardrobe before generating outfit suggestions.',
+        });
+        setLoading(false);
+        return;
+      }
+
       const idToken = await user.getIdToken();
 
       const response = await fetch('/api/wardrobe-outfit', {
@@ -102,6 +117,7 @@ export default function WardrobeSuggestPage() {
           userId: user.uid,
           occasion: occasion.trim(),
           date: selectedDate.toISOString(),
+          wardrobeItems: wardrobeItems, // Send wardrobe items from client
         }),
       });
 
@@ -161,7 +177,7 @@ export default function WardrobeSuggestPage() {
             <Particles
               className="absolute inset-0"
               particleColors={['#14b8a6', '#5eead4']}
-              particleCount={500}
+              particleCount={200}
               particleSpread={10}
               speed={0.3}
               particleBaseSize={150}

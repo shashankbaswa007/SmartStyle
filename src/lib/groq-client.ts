@@ -263,7 +263,7 @@ JSON RESPONSE FORMAT:
       "styleType": "casual|formal|streetwear|bohemian|minimalist|vintage|sporty",
       "occasion": "Specific occasion",
       "stylingTips": ["Tip 1", "Tip 2", "Tip 3"],
-      "imagePrompt": "PROFESSIONAL FASHION CATALOG: Full-body shot, [detailed outfit description with fabrics, colors, textures]. White mannequin, centered, front-facing. Studio lighting at 45°. White seamless backdrop. High-res, 85mm lens, professional catalog quality.",
+      "imagePrompt": "Fashion product photograph, full-body outfit displayed on plain white mannequin, front-facing centered view. [detailed outfit description with fabrics, colors using hex codes, textures]. Soft even studio lighting, clean white seamless background, high resolution, sharp focus, photorealistic. Absolutely no text, no words, no letters, no banners, no logos, no watermarks, no overlays.",
       "isExistingMatch": false
     }
   ],

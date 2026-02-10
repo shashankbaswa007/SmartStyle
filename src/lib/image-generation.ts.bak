@@ -13,7 +13,9 @@
 // ─── Configuration ──────────────────────────────────────────────────────────
 const POLLINATIONS_API_KEY = process.env.POLLINATIONS_API_KEY;
 const POLLINATIONS_GEN_URL = 'https://gen.pollinations.ai/image';
-const POLLINATIONS_TIMEOUT = 8_000; // 8 s — klein model averages 3.5s, 8s gives safe headroom
+const POLLINATIONS_LEGACY_URL = 'https://image.pollinations.ai/prompt';
+const POLLINATIONS_TIMEOUT = 6_000; // 6 s per attempt — fast-fail, let fallback chain work
+const MAX_RETRIES = 1; // Single attempt — retries waste budget, fallback chain is faster
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export interface ImageGenerationOptions {
@@ -95,7 +97,7 @@ function getImageDimensions(bytes: Uint8Array): { width: number; height: number 
  *
  * @throws Error if the image fails validation
  */
-function validateOutfitImage(buffer: ArrayBuffer): void {
+function validateOutfitImage(buffer: ArrayBuffer, expectedWidth: number, expectedHeight: number): void {
   // Check 1: Minimum size — real 768×1024 outfit images are ≥ 30 KB
   if (buffer.byteLength < 30_000) {
     throw new Error(`Image too small (${(buffer.byteLength / 1024).toFixed(1)} KB) — likely not a real outfit image`);
@@ -143,7 +145,7 @@ export async function generateWithPollinationsAuth(
   const encodedPrompt = encodeURIComponent(prompt);
 
   const params = new URLSearchParams({
-    model: 'klein',
+    model: 'flux',
     width: String(width),
     height: String(height),
     nologo: 'true',
@@ -180,7 +182,54 @@ export async function generateWithPollinationsAuth(
   const buffer = await response.arrayBuffer();
 
   // Validate: catches rate-limit posters, error pages, wrong-dimension images
-  validateOutfitImage(buffer);
+  validateOutfitImage(buffer, width, height);
+
+  const base64 = Buffer.from(buffer).toString('base64');
+  return `data:${contentType};base64,${base64}`;
+}
+
+// ─── Strategy 2: Pollinations Legacy URL (image.pollinations.ai) ────────────
+/**
+ * Generate a direct image URL that the browser can load on demand.
+ * No API key needed — but subject to rate limits and less reliable.
+ * Validates with a HEAD request before returning.
+ */
+export async function generateWithPollinationsUrl(
+  options: ImageGenerationOptions,
+  onLifecycle: LifecycleCallback = defaultLifecycle,
+  externalSignal?: AbortSignal,
+): Promise<string> {
+  const { prompt, width = 768, height = 1024 } = options;
+  const seed = randomSeed();
+  const encodedPrompt = encodeURIComponent(prompt);
+  const url = `${POLLINATIONS_LEGACY_URL}/${encodedPrompt}?width=${width}&height=${height}&nologo=true&enhance=false&model=flux&seed=${seed}`;
+
+  if (externalSignal?.aborted) throw new Error('Cancelled by orchestrator');
+
+  onLifecycle({ provider: 'pollinations-url', status: 'in-progress', timestamp: Date.now() });
+
+  // Full fetch + validation — prevents rate-limit poster images from reaching the user
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), POLLINATIONS_TIMEOUT);
+  if (externalSignal) {
+    const onAbort = () => { clearTimeout(tid); controller.abort(); };
+    externalSignal.addEventListener('abort', onAbort, { once: true });
+  }
+
+  const response = await fetch(url, { method: 'GET', signal: controller.signal });
+  clearTimeout(tid);
+
+  if (!response.ok) {
+    if (response.status === 429) throw new Error('Pollinations rate limit hit');
+    if (response.status === 402 || response.status === 403) throw new Error('Pollinations legacy requires subscription');
+    throw new Error(`Pollinations legacy ${response.status}`);
+  }
+
+  const contentType = response.headers.get('content-type') || 'image/jpeg';
+  const buffer = await response.arrayBuffer();
+
+  // Validate: catches rate-limit posters, error pages, wrong-dimension images
+  validateOutfitImage(buffer, width, height);
 
   const base64 = Buffer.from(buffer).toString('base64');
   return `data:${contentType};base64,${base64}`;
@@ -254,12 +303,12 @@ export function enhancePromptForProfessionalQuality(prompt: string): string {
 /**
  * Generate an outfit image using Pollinations.ai with multi-strategy fallback.
  *
- * Single-strategy design (2026-02-10 overhaul):
- *   • Auth endpoint only — 4 s timeout, fail fast.
- *   • Legacy URL removed: it always returned rate-limit posters and wasted 6–10 s.
- *   • Returns null on failure — orchestrator decides fallback.
+ * Strategy chain (sequential, never parallel):
+ *   1. Pollinations authenticated  (gen.pollinations.ai + API key → base64 data URI)
+ *   2. Pollinations legacy URL     (image.pollinations.ai → browser-loadable URL)
+ *   3. Placeholder                 (via.placeholder.com → instant, always works)
  *
- * Called by smart-image-generation.ts as one provider in the
+ * This function is called by smart-image-generation.ts as one provider in the
  * wider fallback chain (Pollinations → Together → Replicate → SVG placeholder).
  */
 export async function generateOutfitImageWithFallback(
@@ -267,27 +316,52 @@ export async function generateOutfitImageWithFallback(
   colorHexCodes: string[],
   onLifecycle: LifecycleCallback = defaultLifecycle,
   signal?: AbortSignal,
-): Promise<string | null> {
+): Promise<string> {
   const start = Date.now();
   const enhanced = enhancePromptForProfessionalQuality(prompt);
+
   const options: ImageGenerationOptions = { prompt: enhanced, width: 768, height: 1024 };
 
-  // Single attempt: Pollinations authenticated (4 s timeout)
+  // ── Strategy 1: Pollinations authenticated ────────────────────────────────
   if (POLLINATIONS_API_KEY && !signal?.aborted) {
-    try {
-      onLifecycle({ provider: 'pollinations-auth', status: 'initiated', timestamp: Date.now() });
-      const url = await generateWithPollinationsAuth(options, onLifecycle, signal);
-      const dur = Date.now() - start;
-      onLifecycle({ provider: 'pollinations-auth', status: 'success', timestamp: Date.now(), duration: dur });
-      return url;
-    } catch (err: any) {
-      const dur = Date.now() - start;
-      onLifecycle({ provider: 'pollinations-auth', status: 'failure', timestamp: Date.now(), duration: dur, error: err.message });
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      if (signal?.aborted) break; // Bail early if orchestrator cancelled
+      try {
+        onLifecycle({ provider: 'pollinations-auth', status: 'initiated', timestamp: Date.now() });
+        const url = await generateWithPollinationsAuth(options, onLifecycle, signal);
+        const dur = Date.now() - start;
+        onLifecycle({ provider: 'pollinations-auth', status: 'success', timestamp: Date.now(), duration: dur });
+        return url;
+      } catch (err: any) {
+        const dur = Date.now() - start;
+        onLifecycle({ provider: 'pollinations-auth', status: 'failure', timestamp: Date.now(), duration: dur, error: err.message });
+        if (signal?.aborted) break; // Don't backoff if cancelled
+        if (attempt < MAX_RETRIES) {
+          const backoff = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+          await new Promise(r => setTimeout(r, backoff));
+        }
+      }
     }
   }
 
-  // Return null — orchestrator handles Together/Replicate/SVG fallback
-  return null;
+  // ── Strategy 2: Pollinations legacy URL ───────────────────────────────────
+  if (!signal?.aborted) {
+    try {
+      onLifecycle({ provider: 'pollinations-url', status: 'initiated', timestamp: Date.now() });
+      const url = await generateWithPollinationsUrl(options, onLifecycle, signal);
+      const dur = Date.now() - start;
+      onLifecycle({ provider: 'pollinations-url', status: 'success', timestamp: Date.now(), duration: dur });
+      return url;
+    } catch (err: any) {
+      const dur = Date.now() - start;
+      onLifecycle({ provider: 'pollinations-url', status: 'failure', timestamp: Date.now(), duration: dur, error: err.message });
+    }
+  }
+
+  // ── Strategy 3: Placeholder ───────────────────────────────────────────────
+  const dur = Date.now() - start;
+  onLifecycle({ provider: 'placeholder', status: 'success', timestamp: Date.now(), duration: dur });
+  return `https://via.placeholder.com/768x1024/6366f1/ffffff?text=${encodeURIComponent('Fashion Outfit')}`;
 }
 
 /**

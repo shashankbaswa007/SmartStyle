@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { analyzeImageAndProvideRecommendations } from '@/ai/flows/analyze-image-and-provide-recommendations';
-import { generateOutfitImage } from '@/ai/flows/generate-outfit-image';
-import { extractColorsFromUrl } from '@/lib/color-extraction';
-import { generateShoppingLinks, validateShoppingLinks } from '@/lib/shopping-query-optimizer';
+import { generateShoppingLinks } from '@/lib/shopping-query-optimizer';
 import saveRecommendation from '@/lib/firestoreRecommendations';
 import { withTimeout } from '@/lib/timeout-utils';
 import crypto from 'crypto';
@@ -24,10 +22,8 @@ import {
 import { FirestoreCache } from '@/lib/firestore-cache';
 import { checkDuplicateImage, generateImageHash } from '@/lib/image-deduplication';
 import { checkRateLimit as checkFirestoreRateLimit } from '@/lib/firestore-rate-limiter';
-import { generateImageWithRetry } from '@/lib/smart-image-generation';
+import { generateImageWithRetry, createFallbackPlaceholder } from '@/lib/smart-image-generation';
 import { getCachedImage, cacheImage } from '@/lib/image-cache';
-import { generateWithReplicate, isReplicateAvailable } from '@/lib/replicate-image';
-import { generateWithTogether, isTogetherAvailable } from '@/lib/together-image';
 
 /**
  * Sanitize error messages to prevent XSS
@@ -215,176 +211,106 @@ export async function POST(req: Request) {
       throw new Error('Failed to analyze image. Please try again with a clearer photo.');
     }
 
-    // Step 2: Process outfits SEQUENTIALLY (one at a time for stability)
+    // Step 2: Process outfits — text/palettes first, images in PARALLEL with budget cap
     const outfitsStart = Date.now();
     const outfitsToProcess = analysis.outfitRecommendations.slice(0, 3);
     
-    logger.log('🔄 [PERF] Processing 3 outfits SEQUENTIALLY (one at a time for stability)...');
+    logger.log('🔄 [PERF] Processing outfits with PARALLEL image generation (15s budget)...');
     
-    let enrichedOutfits = [];
-    
-    for (let index = 0; index < outfitsToProcess.length; index++) {
-      const outfit = outfitsToProcess[index];
-      const outfitStart = Date.now();
-      const outfitNumber = index + 1;
-      logger.log(`⚡ [PERF] Starting outfit ${outfitNumber}/3`);
+    // First: extract all text data instantly (no async needed)
+    let enrichedOutfits: any[] = outfitsToProcess.map((outfit: any, index: number) => {
+      const colorHexCodes = outfit.colorPalette?.map((c: any) => {
+        if (typeof c === 'string') return c;
+        const colorObj = c as { hex?: string; name?: string };
+        return colorObj.hex || '#000000';
+      }) || [];
 
-      // Track generated image URL across scopes
-      let generatedImageUrl: string | null = null;
+      const shoppingLinksData = generateShoppingLinks({
+        gender,
+        items: outfit.items,
+        colorPalette: colorHexCodes.slice(0, 5),
+        style: outfit.styleType || 'casual',
+        description: outfit.description
+      });
 
+      const shoppingLinks = {
+        amazon: shoppingLinksData.byPlatform.amazon[0]?.url || null,
+        myntra: shoppingLinksData.byPlatform.myntra[0]?.url || null,
+        tatacliq: shoppingLinksData.byPlatform.tataCliq[0]?.url || null,
+      };
+
+      return {
+        ...outfit,
+        imageUrl: null, // Will be filled by parallel image gen
+        colorPalette: colorHexCodes.slice(0, 5),
+        generatedImageColors: null,
+        shoppingLinks,
+        _imagePrompt: outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`,
+        _colorHexCodes: colorHexCodes,
+      };
+    });
+
+    logger.log(`⏱️ [PERF] Text/palettes/shopping ready in ${Date.now() - outfitsStart}ms`);
+
+    // Second: generate images IN PARALLEL — all outfits fire simultaneously
+    // Pollinations is the primary/only provider, so parallel is safe and much faster
+    // Total time = slowest single image (~8s) instead of sum of all (~25s)
+    const IMAGE_BUDGET = 12_000; // 12 s — klein model: 3.5s avg, all 3 parallel within this window
+    const imageStart = Date.now();
+
+    logger.log(`🎨 [IMAGES] Starting PARALLEL image generation for ${enrichedOutfits.length} outfits (${IMAGE_BUDGET / 1000}s budget)...`);
+
+    const imagePromises = enrichedOutfits.map(async (outfit, i) => {
+      const outfitNumber = i + 1;
       try {
+        // Check image cache first
+        const cachedImageUrl = await getCachedImage(outfit._imagePrompt, outfit._colorHexCodes);
+        if (cachedImageUrl) {
+          logger.log(`✅ [OUTFIT ${outfitNumber}] Using cached image`);
+          const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
+          return { ...cleanOutfit, imageUrl: cachedImageUrl };
+        }
 
-            // Extract color hex codes from AI recommendation
-            const colorHexCodes = outfit.colorPalette?.map(c => {
-              if (typeof c === 'string') return c;
-              const colorObj = c as { hex?: string; name?: string };
-              return colorObj.hex || '#000000';
-            }) || [];
-            
-            logger.log(`🎨 Using AI-generated color palette: ${colorHexCodes.join(', ')}`);
-            
-            const imagePrompt = outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`;
-            
-            // 🚀 OPTIMIZATION 5: Check image cache first
-            const cachedImageUrl = await getCachedImage(imagePrompt, colorHexCodes);
-            if (cachedImageUrl) {
-              generatedImageUrl = cachedImageUrl;
-              logger.log(`✅ [OUTFIT ${outfitNumber}] Using cached image (saved generation cost!)`);
-            } else {
-              // 🚀 OPTIMIZATION 6: Hybrid generation strategy with fallbacks
-              // Try Replicate first (if available), then fall back to free services
-              
-              let imageGenerated = false;
-              
-              // Strategy 1: Try Replicate (premium quality) - prioritize for ALL positions if free services fail
-              if (isReplicateAvailable()) {
-                logger.log(`💎 [OUTFIT ${outfitNumber}] Trying Replicate for premium quality...`);
-                const replicateUrl = await generateWithReplicate(imagePrompt, colorHexCodes);
-                if (replicateUrl) {
-                  generatedImageUrl = replicateUrl;
-                  logger.log(`✅ [OUTFIT ${outfitNumber}] Premium image generated via Replicate`);
-                  imageGenerated = true;
-                }
-              }
-              
-              // Strategy 2: Try Together.ai (free tier, FLUX-schnell)
-              if (!imageGenerated && isTogetherAvailable()) {
-                logger.log(`🎨 [OUTFIT ${outfitNumber}] Trying Together.ai FLUX-schnell (free tier)...`);
-                const togetherUrl = await generateWithTogether(imagePrompt, colorHexCodes);
-                if (togetherUrl) {
-                  generatedImageUrl = togetherUrl;
-                  logger.log(`✅ [OUTFIT ${outfitNumber}] Image generated via Together.ai`);
-                  imageGenerated = true;
-                }
-              }
+        logger.log(`🎨 [OUTFIT ${outfitNumber}] Starting image generation...`);
+        const url = await generateImageWithRetry(outfit._imagePrompt, outfit._colorHexCodes, IMAGE_BUDGET);
+        const elapsed = Date.now() - imageStart;
+        logger.log(`✅ [OUTFIT ${outfitNumber}] Image ready in ${elapsed}ms`);
 
-              // Strategy 3: Generic free fallback (placeholder)
-              if (!imageGenerated) {
-                logger.log(`🎨 [OUTFIT ${outfitNumber}] Using placeholder fallback...`);
-                generatedImageUrl = await generateImageWithRetry(imagePrompt, colorHexCodes, 1);
-                imageGenerated = true;
-              }
-              
-              // Cache the generated image for future use (skip data URIs and placeholders)
-              if (generatedImageUrl && !generatedImageUrl.includes('placeholder') && !generatedImageUrl.startsWith('data:')) {
-                try {
-                  generatedImageUrl = await cacheImage(imagePrompt, colorHexCodes, generatedImageUrl);
-                  logger.log(`✅ [OUTFIT ${outfitNumber}] Image cached to Firebase Storage`);
-                } catch (cacheError) {
-                  logger.log(`⚠️ [OUTFIT ${outfitNumber}] Failed to cache image, using original URL`);
-                }
-              }
-              
-              logger.log(`✅ [OUTFIT ${outfitNumber}] Image generation complete`);
-            }
+        // Cache non-placeholder images
+        const isSvgPlaceholder = url.startsWith('data:image/svg+xml');
+        const isPlaceholderUrl = url.includes('via.placeholder.com');
+        if (!isSvgPlaceholder && !isPlaceholderUrl) {
+          cacheImage(outfit._imagePrompt, outfit._colorHexCodes, url).catch(() => {});
+        }
 
-            // STEP 2: Try to extract colors from generated image (optional enhancement)
-            // PRIMARY: Use AI colors (more reliable and match the recommendation)
-            // SECONDARY: Extract from image (for validation/enhancement only)
-            let extractedColors: any = null;
-            try {
-              // Only extract colors if we have a valid image URL (not data URI or placeholder)
-              if (generatedImageUrl && !generatedImageUrl.startsWith('data:') && !generatedImageUrl.includes('placeholder')) {
-                extractedColors = await withTimeout(
-                  extractColorsFromUrl(generatedImageUrl),
-                  10000, // 10 second timeout
-                  `Color extraction timeout`
-                );
-                logger.log(`✅ [OUTFIT ${outfitNumber}] Extracted ${extractedColors.dominantColors.length} colors from generated image`);
-              }
-            } catch (colorError) {
-              logger.warn(`⚠️ [OUTFIT ${outfitNumber}] Color extraction failed, using AI colors:`, (colorError as Error).message);
-            }
-
-            // PRIMARY: Use AI colors (they match the recommendation text)
-            // FALLBACK: Use extracted colors only if AI colors unavailable
-            const accurateColorPalette = colorHexCodes.length > 0 
-              ? colorHexCodes.slice(0, 5)
-              : (extractedColors?.dominantColors?.slice(0, 5) || ['#000000', '#FFFFFF', '#808080']);
-            
-            logger.log(`🎨 Final color palette: ${accurateColorPalette.join(', ')}`);
-            
-            // STEP 3: Generate shopping links INSTANTLY using pattern-based URLs (< 5ms)
-            const shoppingLinksData = generateShoppingLinks({
-              gender,
-              items: outfit.items,
-              colorPalette: accurateColorPalette,
-              style: outfit.styleType || 'casual',
-              description: outfit.description
-            });
-
-            // Convert to expected format (take first link for each platform)
-            const shoppingLinks = {
-              amazon: shoppingLinksData.byPlatform.amazon[0]?.url || null,
-              myntra: shoppingLinksData.byPlatform.myntra[0]?.url || null,
-              tatacliq: shoppingLinksData.byPlatform.tataCliq[0]?.url || null,
-            };
-
-            logger.log(`⏱️ [PERF] Outfit ${outfitNumber} completed: ${Date.now() - outfitStart}ms`);
-
-            // Add enriched outfit to results
-            enrichedOutfits.push({
-              ...outfit,
-              imageUrl: generatedImageUrl,
-              colorPalette: accurateColorPalette,
-              generatedImageColors: extractedColors?.colorPalette?.slice(0, 6) || null,
-              shoppingLinks
-            });
-
-          } catch (error: any) {
-            // Check if error is from shopping search timeout vs image generation
-            const isShoppingError = error.message?.includes('Shopping search timeout');
-            const isColorError = error.message?.includes('Color extraction timeout');
-            
-            if (isShoppingError || isColorError) {
-              logger.warn(`⚠️ Outfit ${outfitNumber} - ${isShoppingError ? 'shopping' : 'color extraction'} failed but image OK`);
-              // Image generated successfully, only secondary features failed
-              enrichedOutfits.push({
-                ...outfit,
-                imageUrl: generatedImageUrl || `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
-                colorPalette: outfit.colorPalette || ['#000000', '#FFFFFF', '#808080'],
-                generatedImageColors: null,
-                shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
-                shoppingError: isShoppingError ? 'Shopping links temporarily unavailable' : undefined
-              });
-            } else {
-              logger.error(`❌ Outfit ${outfitNumber} failed:`, error.message);
-              logger.log(`⏱️ [PERF] Outfit ${outfitNumber} failed after: ${Date.now() - outfitStart}ms`);
-              
-              // Return failed outfit with placeholder
-              enrichedOutfits.push({
-                ...outfit,
-                imageUrl: `https://via.placeholder.com/800x1000/6366f1/ffffff?text=${encodeURIComponent('Image unavailable')}`,
-                colorPalette: outfit.colorPalette || ['#000000', '#FFFFFF', '#808080'],
-                generatedImageColors: null,
-                shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
-                error: error.message || 'Generation failed'
-              });
-            }
-          }
+        const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
+        return { ...cleanOutfit, imageUrl: url };
+      } catch (err: any) {
+        logger.warn(`⚠️ [OUTFIT ${outfitNumber}] Image failed: ${err.message}`);
+        const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
+        return { ...cleanOutfit, imageUrl: createFallbackPlaceholder(outfit._imagePrompt, outfit._colorHexCodes) };
       }
+    });
 
-    logger.log(`⏱️ [PERF] All outfits processed sequentially: ${Date.now() - outfitsStart}ms`);
+    // Wait for all images with a hard budget cap
+    const settled = await Promise.race([
+      Promise.all(imagePromises),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), IMAGE_BUDGET)),
+    ]);
+
+    if (settled) {
+      enrichedOutfits = settled as typeof enrichedOutfits;
+    } else {
+      // Budget expired — fill any remaining with placeholders
+      logger.warn(`⏱️ [IMAGES] Budget expired (${IMAGE_BUDGET}ms) — using placeholders for remaining`);
+      enrichedOutfits = enrichedOutfits.map((outfit) => {
+        if (outfit.imageUrl) return outfit;
+        const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
+        return { ...cleanOutfit, imageUrl: createFallbackPlaceholder(outfit._imagePrompt || '', outfit._colorHexCodes || []) };
+      });
+    }
+
+    logger.log(`⏱️ [PERF] All outfits processed: ${Date.now() - outfitsStart}ms`);
     logger.log('✅ All outfits processed!');
 
     // ✨ Apply diversification if user is authenticated and has preferences

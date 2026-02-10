@@ -169,7 +169,7 @@ export default function ColorMatchPage() {
             <Particles
                 className="absolute inset-0"
                 particleColors={['#3b82f6', '#93c5fd']}
-                particleCount={150}
+                particleCount={200}
                 particleSpread={10}
                 speed={0.5}
                 particleBaseSize={120}

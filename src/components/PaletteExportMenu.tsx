@@ -366,6 +366,7 @@ export function PaletteExportMenu({ palette, onClose }: PaletteExportMenuProps) 
                 </div>
               </div>
               <div className="p-6 bg-gray-50 dark:bg-gray-900/50">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={previewURL}
                   alt="Palette preview"

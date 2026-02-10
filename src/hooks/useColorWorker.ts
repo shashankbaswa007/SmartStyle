@@ -57,6 +57,7 @@ export const useColorWorker = () => {
     return () => {
       workerRef.current?.terminate();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const extractColors = useCallback(

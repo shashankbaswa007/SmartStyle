@@ -462,6 +462,17 @@ export function applyDiversificationRule(
  * Get anti-repetition cache for user
  */
 export async function getAntiRepetitionCache(userId: string): Promise<AntiRepetitionCache> {
+  // Server-side: Firestore client SDK lacks auth context — skip to avoid PERMISSION_DENIED
+  if (typeof window === 'undefined') {
+    return {
+      userId,
+      recentColorCombos: [],
+      recentStyles: [],
+      recentOccasions: [],
+      lastUpdated: new Date(),
+    };
+  }
+
   try {
     const cacheRef = doc(db, 'antiRepetitionCache', userId);
     const cacheDoc = await getDoc(cacheRef);
@@ -519,6 +530,9 @@ export async function addToAntiRepetitionCache(
     occasion?: string;
   }
 ): Promise<void> {
+  // Server-side: Firestore client SDK lacks auth context — skip
+  if (typeof window === 'undefined') return;
+
   try {
     const cache = await getAntiRepetitionCache(userId);
     const now = new Date();

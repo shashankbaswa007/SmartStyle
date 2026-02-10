@@ -85,6 +85,18 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'gen.pollinations.ai',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'replicate.delivery',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'www.freepik.com',
         port: '',
         pathname: '/**',
@@ -120,7 +132,23 @@ const nextConfig = {
     if (isServer) {
       config.externals.push({
         'require-in-the-middle': 'require-in-the-middle',
+        // ogl is a WebGL-only library — never bundle for server
+        'ogl': 'ogl',
       });
+    }
+
+    // Fix: vendor-chunk resolution failures for get-nonce and clsx
+    // Next.js dev server sometimes fails to create vendor-chunks/*.js for
+    // small CJS packages, causing ENOENT + 500 cascades on all static chunks.
+    // Pinning the resolved path in resolve.alias ensures the module is found
+    // in both client and server builds regardless of vendor-chunk state.
+    try {
+      config.resolve = config.resolve || {};
+      config.resolve.alias = config.resolve.alias || {};
+      config.resolve.alias['get-nonce'] = require.resolve('get-nonce');
+      config.resolve.alias['clsx'] = require.resolve('clsx');
+    } catch (_) {
+      // packages not installed — skip
     }
     
     return config;

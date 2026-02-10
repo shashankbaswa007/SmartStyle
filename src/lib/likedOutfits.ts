@@ -98,18 +98,27 @@ export async function saveLikedOutfit(
       };
     }
 
-    // Check for duplicates
+    // Check for duplicates using title only (imageUrl is too large for Firestore queries)
     const likesRef = collection(db, 'users', userId, 'likedOutfits');
     const duplicateQuery = query(
       likesRef,
-      where('title', '==', outfitData.title),
-      where('imageUrl', '==', outfitData.imageUrl)
+      where('title', '==', outfitData.title)
     );
     
     console.log('🔍 Checking for duplicates...');
     const duplicateSnapshot = await getDocs(duplicateQuery);
     
-    if (!duplicateSnapshot.empty) {
+    // Check if any of the matching titles have the same imageUrl
+    // (We do this client-side since imageUrl is too large for Firestore queries)
+    const isDuplicate = duplicateSnapshot.docs.some(doc => {
+      const data = doc.data();
+      // For data URIs, compare just the first 200 chars (header + format info)
+      const existingPrefix = data.imageUrl?.substring(0, 200) || '';
+      const newPrefix = outfitData.imageUrl.substring(0, 200);
+      return existingPrefix === newPrefix;
+    });
+    
+    if (isDuplicate) {
       console.log('⚠️ Duplicate found, outfit already liked');
       return {
         success: true,

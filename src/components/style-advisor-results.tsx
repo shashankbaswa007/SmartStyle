@@ -21,7 +21,6 @@ import { Button } from "./ui/button";
 import { saveRecommendationUsage } from "@/app/actions";
 import { EnhancedColorPalette } from "./EnhancedColorPalette";
 import { MatchScoreBadge } from "./match-score-badge";
-import { optimizeItemLinks, buildOutfitSearchUrls } from "@/lib/shopping-query-optimizer";
 
 interface StyleAdvisorResultsProps {
   analysisResult: AnalyzeImageAndProvideRecommendationsOutput;
@@ -403,7 +402,8 @@ export function StyleAdvisorResults({
     setImageStates(initial);
   }, [generatedImageUrls]);
 
-  // Safety timeout: force any still-loading images to 'error' after 12s
+  // Safety timeout: force any still-loading images to 'error' after 30s
+  // (accommodates the 8s per-outfit budget in smart-image-generation)
   useEffect(() => {
     const hasLoading = Array.from(imageStates.values()).some(s => s === 'loading');
     if (!hasLoading) return;
@@ -416,7 +416,7 @@ export function StyleAdvisorResults({
         return next;
       });
       console.warn('⏱️ Image load timeout — forced remaining images to error state');
-    }, 12000);
+    }, 30000);
     return () => clearTimeout(timer);
   }, [imageStates]);
 
@@ -996,7 +996,7 @@ export function StyleAdvisorResults({
           const hasOutfitError = (outfit as any).error && !(outfit as any).shoppingError;
           const isDataUri = imgUrl.startsWith('data:');
           const isPlaceholderUrl = imgUrl.includes('via.placeholder.com');
-          const hasRealImage = imgUrl && !isPlaceholderUrl && !hasOutfitError && !isDataUri;
+          const hasRealImage = imgUrl && !isPlaceholderUrl && !hasOutfitError; // Data URIs ARE real images!
 
           // Extract color hex codes for accent strip + compact dots
           const colorHexes = (outfit.colorPalette || []).map((c: ColorValue) => {
@@ -1092,6 +1092,7 @@ export function StyleAdvisorResults({
                         onLoad={() => handleImageLoad(index)}
                         onError={() => handleImageError(index)}
                         unoptimized={
+                          isDataUri ||
                           imgUrl.includes('together.xyz') ||
                           imgUrl.includes('together.ai') ||
                           imgUrl.includes('replicate.delivery')
@@ -1288,3 +1289,47 @@ export function StyleAdvisorResults({
     </motion.div>
   );
 }
+
+// Helper function to build optimized shopping URLs for individual items
+function optimizeItemLinks(item: string, gender?: string): { item: string; amazon: string; tatacliq: string; myntra: string } {
+  // Clean and optimize the item query
+  const cleanItem = item.trim().toLowerCase();
+  
+  // Build gender-aware search query
+  let searchQuery = item;
+  if (gender) {
+    // Add gender prefix for better results
+    searchQuery = `${gender} ${item}`;
+  }
+  
+  // URL-encode the search query
+  const encodedQuery = encodeURIComponent(searchQuery);
+  
+  return {
+    item,
+    amazon: `https://www.amazon.in/s?k=${encodedQuery}`,
+    tatacliq: `https://www.tatacliq.com/search/?searchCategory=all&text=${encodedQuery}`,
+    myntra: `https://www.myntra.com/${encodedQuery.replace(/\s+/g, '-')}`,
+  };
+}
+
+// Helper function to build optimized shopping URLs for complete outfits
+function buildOutfitSearchUrls(items: string[], gender?: string): { query: string; amazon: string; tatacliq: string; myntra: string } {
+  // Use first 2 items for focused search (e.g., "white shirt black pants")
+  const primaryItems = items.slice(0, 2).join(' ');
+  let query = primaryItems;
+  
+  if (gender) {
+    query = `${gender} ${primaryItems}`;
+  }
+  
+  const encodedQuery = encodeURIComponent(query);
+  
+  return {
+    query,
+    amazon: `https://www.amazon.in/s?k=${encodedQuery}`,
+    tatacliq: `https://www.tatacliq.com/search/?searchCategory=all&text=${encodedQuery}`,
+    myntra: `https://www.myntra.com/${encodedQuery.replace(/\s+/g, '-')}`,
+  };
+}
+

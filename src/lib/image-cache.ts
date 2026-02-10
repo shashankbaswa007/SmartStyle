@@ -30,6 +30,9 @@ export async function getCachedImage(
   prompt: string, 
   colors: string[]
 ): Promise<string | null> {
+  // Server-side: Firebase Storage client SDK lacks auth context — skip
+  if (typeof window === 'undefined') return null;
+
   try {
     const hash = generateCacheKey(prompt, colors);
     const imageRef = ref(storage, `generated-images/${hash}.jpg`);
@@ -52,6 +55,9 @@ export async function cacheImage(
   colors: string[],
   imageUrl: string
 ): Promise<string> {
+  // Server-side: Firebase Storage client SDK lacks auth context — skip
+  if (typeof window === 'undefined') return imageUrl;
+
   try {
     const hash = generateCacheKey(prompt, colors);
     const imageRef = ref(storage, `generated-images/${hash}.jpg`);

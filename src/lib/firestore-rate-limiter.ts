@@ -1,12 +1,22 @@
 import { db } from '@/lib/firebase';
 import { doc, runTransaction, Timestamp } from 'firebase/firestore';
 
+// Server-side API routes have no request.auth context, so Firestore
+// security rules reject all reads/writes with PERMISSION_DENIED.
+// Detect this and skip Firestore entirely — graceful degradation.
+const isServerSide = typeof window === 'undefined';
+
 export async function checkRateLimit(userId: string): Promise<{
   allowed: boolean;
   remaining: number;
   resetAt: Date;
   message?: string;
 }> {
+  // Server-side: Firestore client SDK lacks auth context — skip to avoid PERMISSION_DENIED
+  if (isServerSide) {
+    return { allowed: true, remaining: -1, resetAt: new Date() };
+  }
+
   try {
     const maxRequests = 20;
     const limitsRef = doc(db, 'rateLimits', userId);

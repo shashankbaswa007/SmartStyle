@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import Particles from '@/components/Particles';
+import dynamic from 'next/dynamic';
+const Particles = dynamic(() => import('@/components/Particles'), { ssr: false });
 import ShinyText from '@/components/ShinyText';
 import TextPressure from '@/components/TextPressure';
 import { useMounted } from '@/hooks/useMounted';
@@ -204,7 +205,7 @@ export default function LikesPage() {
           <Particles
             className="absolute inset-0"
             particleColors={['#ef4444', '#b91c1c ']}
-            particleCount={150}
+            particleCount={200}
             particleSpread={10}
             speed={0.5}
             particleBaseSize={150}

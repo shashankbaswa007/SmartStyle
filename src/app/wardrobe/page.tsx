@@ -273,6 +273,7 @@ export default function WardrobePage() {
     items = applySorting(items);
     
     setFilteredItems(items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFilter, wardrobeItems, contextMode, searchQuery, sortBy]);
 
   const fetchWardrobeItems = async (uid: string, silent = false) => {
@@ -792,6 +793,7 @@ export default function WardrobePage() {
 
     // Return prioritized insights (max 4 to keep it manageable)
     return insights.slice(0, 4);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wardrobeItems, contextMode]);
 
   // Get item-specific nudge badge (memoized helper)
@@ -938,7 +940,7 @@ export default function WardrobePage() {
               <Particles
                 className="absolute inset-0"
                 particleColors={['#14b8a6', '#0f766e']}
-                particleCount={150}
+                particleCount={200}
                 particleSpread={10}
                 speed={0.5}
                 particleBaseSize={120}

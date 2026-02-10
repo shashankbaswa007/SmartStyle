@@ -57,12 +57,20 @@ export async function POST(request: NextRequest) {
 
     // Parse request body
     const body = await request.json();
-    const { userId, occasion, date } = body;
+    const { userId, occasion, date, wardrobeItems } = body;
 
-    // Validate request
+    // Validate required fields
     if (!userId || !occasion) {
       return NextResponse.json(
         { error: 'Missing required fields: userId and occasion are required' },
+        { status: 400 }
+      );
+    }
+    
+    // Validate wardrobe items
+    if (!wardrobeItems || !Array.isArray(wardrobeItems) || wardrobeItems.length === 0) {
+      return NextResponse.json(
+        { error: 'Missing required field: wardrobeItems array is required' },
         { status: 400 }
       );
     }
@@ -106,6 +114,7 @@ export async function POST(request: NextRequest) {
     let result;
     try {
       result = await generateWardrobeOutfits(
+        wardrobeItems,
         userId, 
         occasion, 
         weatherData || undefined

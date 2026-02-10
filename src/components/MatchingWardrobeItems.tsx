@@ -195,6 +195,7 @@ export function MatchingWardrobeItems({
             className="group relative aspect-square rounded-lg overflow-hidden bg-muted hover:ring-4 hover:ring-purple-500/50 transition-all focus:outline-none focus:ring-4 focus:ring-purple-500/50"
             aria-label={`${item.description || item.itemType} - matching wardrobe item`}
           >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={item.imageUrl}
               alt={item.description || 'Wardrobe item'}

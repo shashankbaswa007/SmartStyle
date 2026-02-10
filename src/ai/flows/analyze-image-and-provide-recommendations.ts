@@ -292,19 +292,20 @@ const prompt = ai.definePrompt({
     * Format: ["#1A237E", "#FFFFFF", "#C0C0C0", "#8B4513"]
     * DO NOT include color names, only hex codes
     * Ensure high contrast for visual interest
-  - **imagePrompt**: ULTRA-DETAILED, PROFESSIONAL FASHION CATALOG PROMPT (150-200 words):
-    * **Photography Style**: Specify "professional fashion catalog photography", "high-end retail catalog", or "luxury brand product photography"
-    * **Subject & Display**: Full-body shot, outfit displayed on WHITE MANNEQUIN, professional retail display (centered, front-facing, or slight angle)
+  - **imagePrompt**: ULTRA-DETAILED OUTFIT VISUALIZATION PROMPT (150-200 words):
+    * **CRITICAL RULE**: The image must contain ZERO text, words, letters, numbers, banners, logos, watermarks, signs, or promotional graphics. Only the outfit on a mannequin.
+    * **Photography Style**: Describe as "fashion product photograph", "outfit visualization", or "clothing display shot" — do NOT use the word "professional" or "catalog" (image models render these as visible text)
+    * **Subject & Display**: Full-body shot, outfit displayed on WHITE MANNEQUIN, clean retail display (centered, front-facing, or slight angle)
     * **Clothing Details**: Exact garments with fabric types, textures, cuts, and fit (e.g., "tailored navy (#1A237E) wool blazer with notched lapels, structured shoulders, and gold horn buttons")
     * **Color Precision**: Use exact hex codes from colorPalette throughout (e.g., "crisp white (#FFFFFF) silk crepe blouse with French cuffs")
     * **Styling Details**: Layering, proportions, tucking, rolling, draping (e.g., "blouse tucked into high-waisted trousers, blazer sleeves pushed to three-quarter length")
     * **Accessories**: Specific items with materials and colors (e.g., "cognac brown (#8B4513) Italian leather belt with brass buckle, matching pointed-toe pumps, delicate 14k gold chain necklace")
-    * **Lighting**: "studio lighting with soft diffused key light", "natural window light", "golden hour lighting", or "bright even lighting with soft shadows"
-    * **Background**: "clean white seamless backdrop", "minimal grey studio background", "soft bokeh effect", or "modern interior setting"
-    * **Image Quality**: Include terms like "high resolution", "sharp focus", "professional quality", "magazine-ready", "8K quality"
-    * **Mood & Aesthetic**: "elegant and sophisticated", "effortlessly chic", "modern minimalist", "polished professional"
-    * **Technical Details**: "shot with 85mm lens", "shallow depth of field", "centered composition", "vertical format"
-    * Example: "Professional fashion editorial photography of a confident woman in a full-body shot. She wears a tailored navy blue (#1A237E) wool blazer with notched lapels and structured shoulders, layered over a crisp white (#FFFFFF) silk crepe blouse with subtle sheen. Paired with charcoal grey (#C0C0C0) wide-leg trousers with pressed center crease. Cognac brown (#8B4513) Italian leather belt with brass buckle cinches the waist. Matching pointed-toe leather pumps. Minimalist 14k gold jewelry: delicate chain necklace and small hoop earrings. Hair styled in a sleek low bun. Model stands confidently with slight angle, one hand at side, other relaxed. Studio lighting with soft diffused key light from 45-degree angle creating subtle shadows. Clean white seamless backdrop. High resolution, sharp focus throughout, professional quality, magazine-ready aesthetic. Shot with 85mm portrait lens, shallow depth of field, centered composition. Elegant and sophisticated mood, polished professional style."
+    * **Lighting**: "soft even studio lighting" or "soft diffused lighting from above" — do NOT mention specific equipment like "key light" or "45-degree angle" (models render visible light stands)
+    * **Background**: "clean white seamless background" or "plain light grey background"
+    * **Image Quality**: Include "high resolution", "sharp focus", "photorealistic" — do NOT use "8K", "magazine-ready", or "editorial" (models render these as text)
+    * **Mood & Aesthetic**: "elegant and sophisticated", "effortlessly chic", "modern minimalist"
+    * **MANDATORY SUFFIX**: Always end the prompt with: "absolutely no text, no words, no letters, no banners, no logos, no watermarks, no overlays"
+    * Example: "Fashion product photograph, full-body outfit displayed on plain white mannequin, front-facing centered view. Tailored navy blue (#1A237E) wool blazer with notched lapels and structured shoulders, layered over crisp white (#FFFFFF) silk crepe blouse with subtle sheen. Paired with charcoal grey (#C0C0C0) wide-leg trousers with pressed center crease. Cognac brown (#8B4513) Italian leather belt, matching pointed-toe leather pumps. Minimalist 14k gold jewelry: delicate chain necklace and small hoop earrings. Soft even studio lighting, clean white seamless background, high resolution, sharp focus, photorealistic. Absolutely no text, no words, no letters, no banners, no logos, no watermarks, no overlays."
   - **items**: Array of 3-5 specific, shoppable items:
     * Be VERY specific (e.g., "Navy cashmere turtleneck sweater" not just "sweater")
     * Include fabric types, cuts, and key details
@@ -374,19 +375,18 @@ const prompt = ai.definePrompt({
     * **occasion** (string): Specific occasion where this outfit would be appropriate
       - Examples: "office", "date night", "casual brunch", "night out", "business meeting", "weekend shopping", "cocktail party"
       - Should align with the user's input occasion but can be more specific
-    * **imagePrompt** (string): PROFESSIONAL FASHION CATALOG PROMPT (150-200 words)
-      - **START WITH:** "Professional fashion catalog photography" or "High-end retail catalog style"
-      - **Subject:** Full-body shot, outfit displayed on WHITE MANNEQUIN, professional retail display (centered, front-facing, or slight angle)
+    * **imagePrompt** (string): OUTFIT VISUALIZATION PROMPT (150-200 words)
+      - **START WITH:** "Fashion product photograph" or "Outfit visualization" — NEVER use the word "Professional" or "catalog" (image models render these as visible text in the image)
+      - **Subject:** Full-body shot, outfit displayed on WHITE MANNEQUIN, clean retail display (centered, front-facing, or slight angle)
       - **Garments:** Ultra-specific with fabric types, textures, cuts (e.g., "tailored navy wool blazer with notched lapels and structured shoulders")
       - **Colors:** Use EXACT hex codes from colorPalette (e.g., "navy (#1A237E)", "white (#FFFFFF)")
       - **Styling:** Details like tucking, rolling, layering, proportions (e.g., "blouse tucked, blazer sleeves pushed to three-quarter")
       - **Accessories:** Specific items with materials/colors (e.g., "cognac Italian leather belt with brass buckle, matching pumps")
-      - **Lighting:** ALWAYS specify: "studio lighting with soft diffused key light" OR "natural window light with soft shadows"
-      - **Background:** ALWAYS specify: "clean white seamless backdrop" OR "minimal grey studio background with soft bokeh"
-      - **Quality:** Include: "high resolution, sharp focus, professional quality, magazine-ready aesthetic"
-      - **Technical:** Add: "shot with 85mm portrait lens, shallow depth of field, centered composition"
-      - **Mood:** Describe aesthetic: "elegant and sophisticated", "effortlessly chic", "modern minimalist"
-      - Make it photorealistic and editorial-quality
+      - **Lighting:** ALWAYS specify: "soft even studio lighting" or "soft diffused lighting"
+      - **Background:** ALWAYS specify: "clean white seamless background" or "plain light grey background"
+      - **Quality:** Include: "high resolution, sharp focus, photorealistic"
+      - **MANDATORY SUFFIX:** Always end with: "absolutely no text, no words, no letters, no banners, no logos, no watermarks, no overlays"
+      - Make it photorealistic and clean
     * **shoppingLinks** (object): Must include all three keys:
       - amazon: null
       - tatacliq: null
@@ -401,20 +401,19 @@ const prompt = ai.definePrompt({
     * Make it personal, warm, and confidence-boosting
     * Should feel like advice from a trusted stylist friend
   
-  - **imagePrompt**: PROFESSIONAL FASHION CATALOG PROMPT for your #1 recommended outfit (150-200 words)
+  - **imagePrompt**: OUTFIT VISUALIZATION PROMPT for your #1 recommended outfit (150-200 words)
     * **MANDATORY ELEMENTS:**
-      - Photography type: "Professional fashion catalog photography" or "high-end retail catalog style"
-      - Display: Full-body shot, outfit on WHITE MANNEQUIN, professional retail display
+      - Start with: "Fashion product photograph" or "Outfit visualization" — NEVER write "Professional" or "catalog"
+      - Display: Full-body shot, outfit on WHITE MANNEQUIN, clean retail display
       - Clothing description: Ultra-specific with fabric types, cuts, and exact hex colors from colorPalette
       - Styling details: Proportions, layering, tucking, draping specifics
       - Accessories: Complete with materials and colors
-      - Lighting: "studio lighting with soft diffused key light" or "natural window light with soft shadows"
-      - Background: "clean white seamless backdrop" or "minimal grey studio background"
-      - Quality terms: "high resolution", "sharp focus", "professional quality", "magazine-ready", "8K quality"
-      - Technical: "shot with 85mm lens", "shallow depth of field", "centered composition"
-      - Mood: Describe the overall aesthetic (elegant, modern, casual-chic, etc.)
+      - Lighting: "soft even studio lighting" or "soft diffused lighting"
+      - Background: "clean white seamless background" or "plain light grey background"
+      - Quality terms: "high resolution", "sharp focus", "photorealistic"
+      - MANDATORY SUFFIX: "absolutely no text, no words, no letters, no banners, no logos, no watermarks, no overlays"
     * Make it vivid, specific, and ready for AI image generation
-    * Focus on creating a polished, editorial-quality visual
+    * Focus on creating a polished, clean visual with ZERO text or graphics
   
   **CRITICAL VALIDATION CHECKLIST:**
   ✅ feedback is 2-3 complete paragraphs (not empty)

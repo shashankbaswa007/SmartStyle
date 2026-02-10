@@ -303,6 +303,11 @@ export async function initializeUserPreferences(userId: string): Promise<void> {
  * Get user preferences with caching for faster responses
  */
 export async function getUserPreferences(userId: string): Promise<UserPreferences | null> {
+  // Server-side guard: Firestore client SDK lacks auth context on the server
+  if (typeof window === 'undefined') {
+    console.log('ℹ️ [Personalization] Server-side — skipping getUserPreferences (no auth context)');
+    return null;
+  }
   try {
     const validatedUserId = validateUserId(userId);
 
@@ -457,6 +462,11 @@ export async function getRecommendationHistory(
   userId: string,
   limitCount: number = 50 // OPTIMIZED: Increased default from 20 to 50
 ): Promise<RecommendationHistory[]> {
+  // Server-side guard: Firestore client SDK lacks auth context on the server
+  if (typeof window === 'undefined') {
+    console.log('ℹ️ [Personalization] Server-side — skipping getRecommendationHistory (no auth context)');
+    return [];
+  }
   try {
     // Check cache first
     const cacheKey = `history:${userId}:${limitCount}`;

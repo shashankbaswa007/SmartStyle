@@ -28,7 +28,7 @@ export default function StyleCheckPage() {
               <Particles
                 className="absolute inset-0"
                 particleColors={['#a855f7', '#c4b5fd']}
-                particleCount={150}
+                particleCount={200}
                 particleSpread={10}
                 speed={0.5}
                 particleBaseSize={120}

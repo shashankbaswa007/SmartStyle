@@ -473,7 +473,9 @@ export async function extractColorsFromUrl(imageUrl: string): Promise<ExtractedC
       )
     ]);
   } catch (error) {
-    console.error('❌ Failed to process image:', error);
+    // Log error without full data URI (can be huge and crash console)
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error('❌ Failed to process image:', errorMsg);
     
     // Return fallback colors on any error
     return {
