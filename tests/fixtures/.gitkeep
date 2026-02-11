@@ -1,6 +1,0 @@
-Sample test images should be placed here before running E2E tests.
-
-Required test images:
-- test-outfit.jpg (400x600px recommended)
-- blue-dress.jpg (sample dress image)
-- invalid-image.txt (for error testing)

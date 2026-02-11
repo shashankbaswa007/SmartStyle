@@ -17,7 +17,6 @@ import { toast } from '@/hooks/use-toast';
 import { Upload, Camera, X, Loader2, Info, Shield, Shirt } from 'lucide-react';
 import Image from 'next/image';
 import { addWardrobeItem } from '@/lib/wardrobeService';
-import { extractColorsFromUrl } from '@/lib/color-extraction';
 import { generateOptimizedImages, type OptimizedImages } from '@/lib/image-optimization';
 import { extractColorsFromDescription } from '@/lib/color-name-extraction';
 
@@ -1216,3 +1215,104 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     </Dialog>
   );
 }
+
+// Extract colors from an image URL using canvas analysis
+async function extractColorsFromUrl(imageUrl: string): Promise<{ dominantColors: string[] }> {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+    img.crossOrigin = 'anonymous';
+    
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        if (!ctx) {
+          reject(new Error('Canvas not supported'));
+          return;
+        }
+
+        // Use smaller canvas for faster analysis
+        const maxSize = 100;
+        const scale = Math.min(maxSize / img.width, maxSize / img.height);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        
+        // Sample pixels from the image
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const pixels = imageData.data;
+        
+        // Count color frequencies (simplified to basic color categories)
+        const colorCounts: Record<string, number> = {};
+        
+        for (let i = 0; i < pixels.length; i += 4) {
+          const r = pixels[i];
+          const g = pixels[i + 1];
+          const b = pixels[i + 2];
+          const a = pixels[i + 3];
+          
+          // Skip transparent pixels
+          if (a < 128) continue;
+          
+          // Categorize into basic colors
+          const color = categorizeColor(r, g, b);
+          colorCounts[color] = (colorCounts[color] || 0) + 1;
+        }
+        
+        // Sort by frequency and get top colors
+        const sortedColors = Object.entries(colorCounts)
+          .sort(([, a], [, b]) => b - a)
+          .slice(0, 3)
+          .map(([color]) => color);
+        
+        resolve({ dominantColors: sortedColors.length > 0 ? sortedColors : ['neutral'] });
+      } catch (error) {
+        reject(error);
+      }
+    };
+    
+    img.onerror = () => {
+      reject(new Error('Failed to load image'));
+    };
+    
+    img.src = imageUrl;
+  });
+}
+
+// Helper function to categorize RGB values into color names
+function categorizeColor(r: number, g: number, b: number): string {
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const diff = max - min;
+  
+  // Check for grayscale
+  if (diff < 30) {
+    if (max < 60) return 'black';
+    if (max < 160) return 'gray';
+    return 'white';
+  }
+  
+  // Determine dominant color
+  if (r > g && r > b) {
+    if (g > b * 1.5) return 'orange';
+    if (b > g * 1.2) return 'purple';
+    return 'red';
+  }
+  
+  if (g > r && g > b) {
+    if (r > b * 1.2) return 'yellow';
+    if (b > r * 0.8) return 'cyan';
+    return 'green';
+  }
+  
+  if (b > r && b > g) {
+    if (r > g * 1.2) return 'purple';
+    if (g > r * 0.8) return 'cyan';
+    return 'blue';
+  }
+  
+  return 'neutral';
+}
+
