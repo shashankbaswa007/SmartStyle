@@ -463,6 +463,7 @@ export default function WardrobePage() {
       
       await setDoc(docRef, {
         imageUrl: itemToRestore.imageUrl,
+        images: itemToRestore.images || undefined,
         itemType: itemToRestore.itemType,
         category: itemToRestore.category || '',
         brand: itemToRestore.brand || '',
@@ -1600,7 +1601,7 @@ export default function WardrobePage() {
                               {/* Image */}
                               <div className="relative h-64 overflow-hidden bg-gradient-to-br from-teal-50 to-emerald-50">
                                 <Image
-                                  src={item.imageUrl}
+                                  src={item.images?.thumbnail || item.imageUrl}
                                   alt={item.description}
                                   fill
                                   className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out will-change-transform"
@@ -1762,7 +1763,7 @@ export default function WardrobePage() {
                         {/* Image */}
                         <div className="relative h-64 overflow-hidden bg-gradient-to-br from-teal-50 to-emerald-50">
                           <Image
-                            src={item.imageUrl}
+                            src={item.images?.thumbnail || item.imageUrl}
                             alt={item.description}
                             fill
                             className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out will-change-transform"

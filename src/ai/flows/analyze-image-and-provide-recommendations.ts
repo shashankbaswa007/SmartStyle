@@ -307,10 +307,25 @@ const prompt = ai.definePrompt({
     * **MANDATORY SUFFIX**: Always end the prompt with: "absolutely no text, no words, no letters, no banners, no logos, no watermarks, no overlays"
     * Example: "Fashion product photograph, full-body outfit displayed on plain white mannequin, front-facing centered view. Tailored navy blue (#1A237E) wool blazer with notched lapels and structured shoulders, layered over crisp white (#FFFFFF) silk crepe blouse with subtle sheen. Paired with charcoal grey (#C0C0C0) wide-leg trousers with pressed center crease. Cognac brown (#8B4513) Italian leather belt, matching pointed-toe leather pumps. Minimalist 14k gold jewelry: delicate chain necklace and small hoop earrings. Soft even studio lighting, clean white seamless background, high resolution, sharp focus, photorealistic. Absolutely no text, no words, no letters, no banners, no logos, no watermarks, no overlays."
   - **items**: Array of 3-5 specific, shoppable items:
-    * Be VERY specific (e.g., "Navy cashmere turtleneck sweater" not just "sweater")
-    * Include fabric types, cuts, and key details
-    * Make items realistic and available in retail
-    * Consider layering and seasonal appropriateness
+    * **CRITICAL FORMAT RULE:** Write items as CONCISE shopping queries (3-4 words max)
+    * **STRICT FORMAT:** [COLOR] + [MATERIAL] + [PRODUCT TYPE] only
+    * **CORRECT EXAMPLES:**
+      - \"Black wool tuxedo jacket\" NOT \"Black peak lapel tuxedo jacket made of wool\"
+      - \"White cotton dress shirt\" NOT \"White dress shirt with a wingtip collar made of cotton\"
+      - \"Black leather oxford shoes\" NOT \"Black patent leather oxford shoes with formal styling\"
+      - \"Black silk bow tie\" NOT \"Black bow tie made of silk with elegant design\"
+      - \"Navy wool blazer\" NOT \"Navy blue (#1A237E) wool blazer with notched lapels\"
+    * **FORBIDDEN PATTERNS - Never include:**
+      - Hex codes: (#032B44), (#FFFFFF), etc.
+      - \"Made of\" or \"crafted from\" phrases
+      - Collar details: \"wingtip collar\", \"spread collar\", \"button-down collar\"
+      - Lapel details: \"peak lapel\", \"notched lapel\", \"shawl lapel\"
+      - Construction phrases: \"with a\", \"featuring\", \"designed with\"
+      - Adjectives: \"crisp\", \"elegant\", \"sophisticated\", \"modern\", \"sleek\"
+      - Fit details: \"tailored\", \"slim-fit\", \"relaxed-fit\"
+    * **GOOD:** \"Burgundy silk tie\" → e-commerce search finds many options
+    * **BAD:** \"Burgundy silk tie (#8B0A1A) with elegant diagonal stripes\" → too specific, poor results
+    * Keep items general enough to match retail inventory (e.g., \"navy wool blazer\" not \"navy single-breasted wool blazer with brass buttons\")
   - **shoppingLinks**: Provide searchable keywords for each platform:
     * amazon: null (but mention good search terms in description)
     * tatacliq: null (but mention good search terms in description)
@@ -394,8 +409,13 @@ const prompt = ai.definePrompt({
       (Include search terms in description instead)
     * **isExistingMatch** (boolean): true/false based on trends and user preferences
     * **items** (array): 3-5 specific clothing items (very detailed)
-      - Include fabric, color, style details
-      - Example: "Tailored charcoal grey wool trousers with subtle pinstripes"
+      - **CRITICAL FORMAT:** Write as clean shopping terms WITHOUT hex codes or parentheses
+      - **CORRECT:** "Navy blue wool blazer", "White cotton dress shirt", "Burgundy silk tie"
+      - **WRONG:** "Navy blue wool blazer (#032B44)", "White cotton shirt (#FFFFFF) with styling"
+      - Include fabric, color, style details in natural language
+      - Format: [COLOR] + [MATERIAL] + [PRODUCT TYPE]
+      - Example: "Tailored charcoal grey wool trousers"
+      - NO hex codes, NO parentheses, NO verbose descriptions in this array
   
   - **notes**: One powerful, memorable sentence (final pro tip)
     * Make it personal, warm, and confidence-boosting

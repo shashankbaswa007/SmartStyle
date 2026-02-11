@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import admin from '@/lib/firebase-admin';
 import { generateWardrobeOutfits } from '@/lib/wardrobeOutfitGenerator';
 import { fetchWeatherForecast } from '@/lib/weather-service';
+import { 
+  generateWardrobeHash, 
+  generateRequestHash, 
+  getCachedRecommendation, 
+  cacheRecommendation 
+} from '@/lib/recommendations-cache';
 
 // Rate limiting using simple in-memory store (consider Redis for production)
 const rateLimits = new Map<string, { count: number; resetTime: number }>();
@@ -110,15 +116,42 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate outfit suggestions
+    // Generate hashes for caching
+    const wardrobeHash = generateWardrobeHash(wardrobeItems);
+    const requestHash = generateRequestHash({
+      userId,
+      occasion,
+      wardrobeItemIds: wardrobeItems.map(item => item.id || ''),
+    });
+
+    // Check cache first for instant results
+    const cachedResult = getCachedRecommendation(requestHash, wardrobeHash);
+    if (cachedResult) {
+      console.log('✅ Returning cached outfit recommendations');
+      return NextResponse.json(
+        { 
+          ...cachedResult,
+          weather: weatherData,
+          cached: true, // Indicate this is a cached response
+        },
+        { status: 200 }
+      );
+    }
+
+    // Generate outfit suggestions (expensive AI call)
     let result;
     try {
+      console.log('🤖 Generating new outfit recommendations with AI...');
       result = await generateWardrobeOutfits(
         wardrobeItems,
         userId, 
         occasion, 
         weatherData || undefined
       );
+      
+      // Cache the result for future requests
+      cacheRecommendation(requestHash, wardrobeHash, result);
+      console.log('💾 Cached new recommendations for future requests');
     } catch (generationError) {
       console.error('Outfit generation failed:', generationError);
       
@@ -154,7 +187,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         ...result,
-        weather: weatherData 
+        weather: weatherData,
+        cached: false, // Freshly generated
       },
       { status: 200 }
     );

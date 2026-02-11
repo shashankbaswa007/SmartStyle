@@ -1,15 +1,28 @@
-const CACHE_NAME = 'smartstyle-v2';
-const STATIC_CACHE = 'smartstyle-static-v2';
-const DYNAMIC_CACHE = 'smartstyle-dynamic-v2';
-const IMAGE_CACHE = 'smartstyle-images-v2';
+const CACHE_NAME = 'smartstyle-v3';
+const STATIC_CACHE = 'smartstyle-static-v3';
+const DYNAMIC_CACHE = 'smartstyle-dynamic-v3';
+const IMAGE_CACHE = 'smartstyle-images-v3';
+const WARDROBE_CACHE = 'smartstyle-wardrobe-v3';
+const API_CACHE = 'smartstyle-api-v3';
+
+// Cache duration in milliseconds
+const CACHE_DURATION = {
+  STATIC: 7 * 24 * 60 * 60 * 1000,  // 7 days
+  DYNAMIC: 24 * 60 * 60 * 1000,      // 1 day
+  IMAGE: 30 * 24 * 60 * 60 * 1000,   // 30 days
+  WARDROBE: 7 * 24 * 60 * 60 * 1000, // 7 days
+  API: 5 * 60 * 1000,                 // 5 minutes
+};
 
 // Assets to cache on install
 const STATIC_ASSETS = [
   '/',
+  '/offline.html',
   '/style-check',
   '/color-match',
   '/likes',
   '/analytics',
+  '/wardrobe',
   '/manifest.json',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
@@ -39,7 +52,9 @@ self.addEventListener('activate', (event) => {
           .filter((name) => {
             return name !== STATIC_CACHE && 
                    name !== DYNAMIC_CACHE && 
-                   name !== IMAGE_CACHE;
+                   name !== IMAGE_CACHE &&
+                   name !== WARDROBE_CACHE &&
+                   name !== API_CACHE;
           })
           .map((name) => {
             console.log('[Service Worker] Deleting old cache:', name);
@@ -74,6 +89,8 @@ self.addEventListener('fetch', (event) => {
   // Handle different types of requests
   if (request.destination === 'image') {
     event.respondWith(handleImageRequest(request));
+  } else if (url.pathname.startsWith('/api/wardrobe')) {
+    event.respondWith(handleWardrobeAPIRequest(request));
   } else if (url.pathname.startsWith('/api/')) {
     event.respondWith(handleAPIRequest(request));
   } else {
@@ -145,8 +162,17 @@ async function handleAPIRequest(request) {
     
     // Cache successful API responses
     if (networkResponse && networkResponse.status === 200) {
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, networkResponse.clone());
+      const cache = await caches.open(API_CACHE);
+      const responseWithTimestamp = new Response(networkResponse.body, {
+        status: networkResponse.status,
+        statusText: networkResponse.statusText,
+        headers: new Headers({
+          ...Object.fromEntries(networkResponse.headers),
+          'sw-cache-time': Date.now().toString(),
+        }),
+      });
+      cache.put(request, responseWithTimestamp.clone());
+      return networkResponse;
     }
     
     return networkResponse;
@@ -155,7 +181,13 @@ async function handleAPIRequest(request) {
     
     // Try cache as fallback
     const cachedResponse = await caches.match(request);
-    if (cachedResponse) return cachedResponse;
+    if (cachedResponse) {
+      // Check cache age
+      const cacheTime = cachedResponse.headers.get('sw-cache-time');
+      if (cacheTime && (Date.now() - parseInt(cacheTime)) < CACHE_DURATION.API) {
+        return cachedResponse;
+      }
+    }
     
     // Return error response
     return new Response(
@@ -165,6 +197,92 @@ async function handleAPIRequest(request) {
         headers: { 'Content-Type': 'application/json' } 
       }
     );
+  }
+}
+
+// Handle wardrobe API requests - cache-first for offline support
+async function handleWardrobeAPIRequest(request) {
+  try {
+    // For GET requests, try cache first (for offline viewing)
+    if (request.method === 'GET') {
+      const cachedResponse = await caches.match(request);
+      if (cachedResponse) {
+        const cacheTime = cachedResponse.headers.get('sw-cache-time');
+        if (cacheTime && (Date.now() - parseInt(cacheTime)) < CACHE_DURATION.WARDROBE) {
+          // Return cached data and update in background
+          fetchAndUpdateWardrobeCache(request);
+          return cachedResponse;
+        }
+      }
+    }
+    
+    // Fetch from network
+    const networkResponse = await fetch(request);
+    
+    // Cache successful GET responses
+    if (networkResponse && networkResponse.status === 200 && request.method === 'GET') {
+      const cache = await caches.open(WARDROBE_CACHE);
+      const responseWithTimestamp = new Response(networkResponse.body, {
+        status: networkResponse.status,
+        statusText: networkResponse.statusText,
+        headers: new Headers({
+          ...Object.fromEntries(networkResponse.headers),
+          'sw-cache-time': Date.now().toString(),
+        }),
+      });
+      cache.put(request, responseWithTimestamp.clone());
+      return networkResponse;
+    }
+    
+    return networkResponse;
+  } catch (error) {
+    console.error('[Service Worker] Wardrobe API fetch failed:', error);
+    
+    // For offline mode, return cached data
+    const cachedResponse = await caches.match(request);
+    if (cachedResponse) {
+      return new Response(cachedResponse.body, {
+        status: 200,
+        statusText: 'OK (Offline)',
+        headers: new Headers({
+          ...Object.fromEntries(cachedResponse.headers),
+          'X-Offline-Mode': 'true',
+        }),
+      });
+    }
+    
+    // Return empty array for wardrobe items when offline
+    return new Response(
+      JSON.stringify([]),
+      { 
+        status: 200,
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Offline-Mode': 'true',
+        } 
+      }
+    );
+  }
+}
+
+// Background wardrobe cache update
+async function fetchAndUpdateWardrobeCache(request) {
+  try {
+    const networkResponse = await fetch(request);
+    if (networkResponse && networkResponse.status === 200) {
+      const cache = await caches.open(WARDROBE_CACHE);
+      const responseWithTimestamp = new Response(networkResponse.body, {
+        status: networkResponse.status,
+        statusText: networkResponse.statusText,
+        headers: new Headers({
+          ...Object.fromEntries(networkResponse.headers),
+          'sw-cache-time': Date.now().toString(),
+        }),
+      });
+      cache.put(request, responseWithTimestamp.clone());
+    }
+  } catch (error) {
+    // Silent fail for background updates
   }
 }
 

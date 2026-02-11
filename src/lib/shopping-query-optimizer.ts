@@ -51,6 +51,8 @@ const PRODUCT_TYPE_MAP: Record<string, string> = {
 
   // Outerwear
   jacket: 'jacket', jackets: 'jacket',
+  'tuxedo jacket': 'tuxedo jacket', tuxedo: 'tuxedo jacket',
+  'suit jacket': 'jacket', 'sports jacket': 'jacket',
   blazer: 'blazer', blazers: 'blazer',
   coat: 'coat', coats: 'coat',
   overcoat: 'overcoat',
@@ -84,13 +86,14 @@ const PRODUCT_TYPE_MAP: Record<string, string> = {
   // Accessories
   scarf: 'scarf', scarves: 'scarf',
   stole: 'stole', muffler: 'muffler',
-  belt: 'belt', belts: 'belt',
-  watch: 'watch', watches: 'watch',
-  bag: 'bag', handbag: 'handbag', tote: 'tote bag',
+  belt: 'belt', belts: 'belt', 'leather belt': 'belt',
+  watch: 'watch', watches: 'watch', wristwatch: 'watch', timepiece: 'watch',
+  bag: 'bag', handbag: 'handbag', tote: 'tote bag', purse: 'handbag',
   backpack: 'backpack',
   hat: 'hat', cap: 'cap', beanie: 'beanie',
-  sunglasses: 'sunglasses',
-  tie: 'tie', necktie: 'tie', 'bow tie': 'bow tie',
+  sunglasses: 'sunglasses', shades: 'sunglasses',
+  tie: 'tie', necktie: 'tie', 'bow tie': 'bow tie', 'silk tie': 'tie',
+  'pocket square': 'pocket square', handkerchief: 'pocket square',
 
   // Footwear
   shoe: 'shoe', shoes: 'shoe',
@@ -101,8 +104,11 @@ const PRODUCT_TYPE_MAP: Record<string, string> = {
   heel: 'heel', heels: 'heel',
   flat: 'flat', flats: 'flat',
   slipper: 'slipper', slippers: 'slipper',
-  oxford: 'oxford shoe', oxfords: 'oxford shoe',
-  derby: 'derby shoe',
+  oxford: 'oxford shoe', oxfords: 'oxford shoe', 'oxford shoes': 'oxford shoe',
+  'patent leather oxford': 'oxford shoe', 'patent leather oxfords': 'oxford shoe',
+  derby: 'derby shoe', derbies: 'derby shoe',
+  brogue: 'brogue', brogues: 'brogue',
+  monk: 'monk strap', 'monk strap': 'monk strap',
   moccasin: 'moccasin', moccasins: 'moccasin',
   kolhapuri: 'kolhapuri chappal',
   juttis: 'jutti', mojari: 'mojari',
@@ -113,21 +119,28 @@ const PRODUCT_TYPE_MAP: Record<string, string> = {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const KNOWN_COLORS = [
-  'navy blue', 'sky blue', 'powder blue', 'royal blue', 'light blue', 'dark blue', 'cobalt blue',
-  'light green', 'dark green', 'olive green', 'mint green', 'emerald green', 'sage green', 'forest green',
-  'light grey', 'dark grey', 'charcoal grey', 'slate grey',
-  'light pink', 'hot pink', 'dusty pink', 'baby pink',
-  'off white', 'off-white',
-  'burnt orange',
-  'burgundy', 'magenta', 'fuchsia', 'crimson', 'scarlet',
-  'turquoise',
+  // Multi-word colors (check these first - longest to shortest)
+  'navy blue', 'sky blue', 'powder blue', 'royal blue', 'light blue', 'dark blue', 'cobalt blue', 'electric blue',
+  'light green', 'dark green', 'olive green', 'mint green', 'emerald green', 'sage green', 'forest green', 'lime green',
+  'light grey', 'dark grey', 'charcoal grey', 'slate grey', 'ash grey',
+  'light pink', 'hot pink', 'dusty pink', 'baby pink', 'rose pink',
+  'off white', 'off-white', 'eggshell white',
+  'burnt orange', 'burnt sienna',
+  'deep red', 'wine red', 'blood red',
+  'pastel blue', 'pastel pink', 'pastel yellow', 'pastel green',
+  
+  // Single-word colors with high recognition value
+  'burgundy', 'magenta', 'fuchsia', 'crimson', 'scarlet', 'vermillion',
+  'turquoise', 'teal', 'aqua', 'cyan',
   'lavender', 'charcoal', 'mustard', 'emerald', 'maroon',
-  'indigo', 'salmon', 'copper', 'bronze', 'silver',
+  'indigo', 'salmon', 'copper', 'bronze', 'silver', 'gold', 'rose gold',
   'coral', 'peach', 'olive', 'khaki', 'ivory', 'cream',
   'beige', 'camel', 'taupe', 'mauve', 'lilac',
-  'slate', 'denim', 'rust', 'teal', 'aqua', 'cyan', 'mint', 'sage', 'wine', 'plum', 'gold',
+  'slate', 'denim', 'rust', 'mint', 'sage', 'wine', 'plum',
+  
+  // Basic colors (check last)
   'black', 'white', 'brown', 'green', 'blue', 'grey', 'gray', 'navy',
-  'red', 'pink', 'yellow', 'orange', 'purple', 'tan',
+  'red', 'pink', 'yellow', 'orange', 'purple', 'tan', 'violet',
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -136,9 +149,12 @@ const KNOWN_COLORS = [
 
 const MATERIAL_KEYWORDS = [
   'cotton', 'linen', 'silk', 'denim', 'wool', 'polyester', 'rayon',
-  'chiffon', 'velvet', 'satin', 'leather', 'suede', 'khaki',
+  'chiffon', 'velvet', 'satin', 'leather', 'patent leather', 'suede', 'khaki',
   'georgette', 'crepe', 'tweed', 'corduroy', 'flannel', 'jersey',
   'lycra', 'spandex', 'nylon', 'cashmere', 'fleece', 'chambray',
+  'canvas', 'acrylic', 'viscose', 'modal', 'bamboo', 'hemp',
+  'oxford', 'poplin', 'muslin', 'taffeta', 'organza', 'tulle',
+  'metal', 'silver', 'gold', 'brass', 'stainless steel', // for accessories
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -180,6 +196,99 @@ export interface ParsedItem {
 }
 
 /**
+ * Normalize raw AI-generated item text by removing hex codes, verbose phrases, and tailoring jargon.
+ * 
+ * Examples:
+ *   "Black peak lapel tuxedo jacket made of wool" → "black wool tuxedo jacket"
+ *   "White dress shirt with a wingtip collar made of cotton" → "white cotton dress shirt"
+ *   "Crisp white cotton dress shirt (#FFFFFF) with elegant styling" → "white cotton dress shirt"
+ */
+function normalizeItemText(rawItem: string): string {
+  let text = rawItem.trim();
+  
+  // 1. Remove hex codes: (#RRGGBB) or (hex: #RRGGBB) or #RRGGBB anywhere
+  text = text.replace(/\(\s*#?[0-9A-Fa-f]{6}\s*\)/g, '');
+  text = text.replace(/\(\s*hex:\s*#?[0-9A-Fa-f]{6}\s*\)/gi, '');
+  text = text.replace(/\s+#[0-9A-Fa-f]{6}\b/g, '');
+  
+  // 2. Remove "made of [material]" patterns (redundant since material is already in text)
+  text = text.replace(/\bmade\s+of\s+\w+/gi, '');
+  text = text.replace(/\bcrafted\s+from\s+\w+/gi, '');
+  text = text.replace(/\bin\s+\w+\s+fabric/gi, '');
+  
+  // 3. Remove collar/lapel/neckline details (too specific for e-commerce search)
+  const tailoringDetails = [
+    /\bwith\s+a\s+(wingtip|spread|point|button-down|mandarin|club|cutaway)\s+collar/gi,
+    /\b(peak|notch|shawl|lapel)\s+lapel/gi,
+    /\bwith\s+(peak|notch|shawl)\s+lapels?/gi,
+    /\b(v-neck|crew\s+neck|round\s+neck|boat\s+neck|cowl\s+neck|mock\s+neck)/gi,
+    /\bwith\s+a\s+(single|double)\s+button/gi,
+    /\b(single|double)-breasted/gi,
+  ];
+  
+  for (const pattern of tailoringDetails) {
+    text = text.replace(pattern, '');
+  }
+  
+  // 4. Remove construction/fit details (e.g., "with pleated front", "with flat front")
+  const constructionDetails = [
+    /\bwith\s+(pleated|flat|pressed)\s+(front|back|sides?)/gi,
+    /\bwith\s+(side|welt|patch)\s+pockets?/gi,
+    /\b(full|half|three-quarter)\s+sleeves?/gi,
+    /\bwith\s+functional\s+buttons?/gi,
+    /\bfully\s+lined/gi,
+  ];
+  
+  for (const pattern of constructionDetails) {
+    text = text.replace(pattern, '');
+  }
+  
+  // 5. Remove verbose AI phrasing patterns
+  const verbosePatterns = [
+    /\bwith\s+(elegant|sophisticated|modern|classic|timeless|perfect|ideal|great|beautiful|clean|sharp|polished)\s+\w+/gi,
+    /\bfeaturing\s+[^,\.]+/gi,
+    /\b(elegant|sophisticated|modern|classic|timeless|perfect|polished|refined|tailored)\s+(styling|design|look|aesthetic|finish|details?)/gi,
+    /\s+(for|to)\s+(create|achieve|ensure|provide|give|add|complete)\s+[^,\.]+/gi,
+    /\bthat\s+(creates?|adds?|provides?|ensures?)\s+[^,\.]+/gi,
+  ];
+  
+  for (const pattern of verbosePatterns) {
+    text = text.replace(pattern, '');
+  }
+  
+  // 6. Clean up common redundant adjectives (only when not color-related)
+  const redundantWords = [
+    'crisp', 'simple', 'elegant', 'sophisticated', 'modern', 'classic', 'perfect', 'ideal',
+    'sleek', 'polished', 'refined', 'sharp', 'clean', 'contemporary', 'timeless',
+    'premium', 'luxurious', 'quality', 'stylish', 'fashionable'
+  ];
+  
+  const words = text.split(/\s+/);
+  const filtered = words.filter((word, idx) => {
+    const lower = word.toLowerCase().replace(/[,\.;]/g, '');
+    // Keep if it's not a redundant word
+    if (!redundantWords.includes(lower)) return true;
+    
+    // Keep adjectives only if they precede essential product terms
+    const nextWord = words[idx + 1]?.toLowerCase().replace(/[,\.;]/g, '');
+    const essentialTerms = ['shirt', 'jacket', 'trouser', 'shoe', 'watch', 'tie', 'belt', 'dress', 'blazer'];
+    return nextWord && essentialTerms.some(t => nextWord.includes(t));
+  });
+  text = filtered.join(' ');
+  
+  // 7. Remove material type when it appears after the product (redundant position)
+  // e.g., "tuxedo jacket wool" → "wool tuxedo jacket" (will be reordered by parser)
+  // We'll let the parser handle this via proper extraction
+  
+  // 8. Normalize whitespace and punctuation
+  text = text.replace(/[,\(\)]+/g, ' ');
+  text = text.replace(/\s+/g, ' ');
+  text = text.trim();
+  
+  return text;
+}
+
+/**
  * Parse a verbose AI-generated item description into structured attributes.
  *
  *   "Light Grey Cotton Slim-Fit Trousers with Flat Front"
@@ -187,24 +296,52 @@ export interface ParsedItem {
  *
  *   "Navy Blue Linen Shirt"
  *     → { productType: "shirt", color: "navy blue", material: "linen", descriptor: null }
+ *
+ *   "Navy blue wool suit jacket (#032B44)" 
+ *     → { productType: "jacket", color: "navy blue", material: "wool", descriptor: null }
  */
 export function parseItemDescription(rawItem: string): ParsedItem {
-  const text = rawItem.trim();
+  // First normalize the text to remove hex codes and verbosity
+  const normalized = normalizeItemText(rawItem);
+  const text = normalized.trim();
   const lower = text.toLowerCase();
 
   // 1. Extract product type — multi-word matches first (up to 3 words), then single
   let productType = '';
   const words = lower.split(/\s+/);
 
-  for (let len = 3; len >= 1; len--) {
+  // Special handling for compound terms like "suit jacket" → "jacket"
+  const compoundHandling: Record<string, string> = {
+    'suit jacket': 'jacket',
+    'dress shirt': 'shirt',
+    'oxford shoe': 'oxford shoe',
+    'polo shirt': 'polo shirt',
+  };
+  
+  // Check compound terms first
+  for (let len = 3; len >= 2; len--) {
     for (let i = 0; i <= words.length - len; i++) {
       const phrase = words.slice(i, i + len).join(' ');
-      if (PRODUCT_TYPE_MAP[phrase]) {
-        productType = PRODUCT_TYPE_MAP[phrase];
+      if (compoundHandling[phrase]) {
+        productType = compoundHandling[phrase];
         break;
       }
     }
     if (productType) break;
+  }
+  
+  // Then check standard product type map
+  if (!productType) {
+    for (let len = 3; len >= 1; len--) {
+      for (let i = 0; i <= words.length - len; i++) {
+        const phrase = words.slice(i, i + len).join(' ');
+        if (PRODUCT_TYPE_MAP[phrase]) {
+          productType = PRODUCT_TYPE_MAP[phrase];
+          break;
+        }
+      }
+      if (productType) break;
+    }
   }
 
   // Fallback: use last non-noise word
@@ -383,7 +520,15 @@ export interface OptimizedItemLinks {
  * //   }
  */
 export function optimizeItemLinks(rawItem: string, gender?: string): OptimizedItemLinks {
+  console.log('🔍 [SHOPPING] Processing item:', rawItem);
+  
   const parsed = parseItemDescription(rawItem);
+  console.log('📊 [SHOPPING] Parsed attributes:', {
+    productType: parsed.productType,
+    color: parsed.color,
+    material: parsed.material,
+    descriptor: parsed.descriptor,
+  });
 
   // Amazon + Myntra: include gender as the 4th keyword when space permits
   const queryWithGender = buildOptimizedQuery(parsed, {
@@ -394,6 +539,11 @@ export function optimizeItemLinks(rawItem: string, gender?: string): OptimizedIt
   // Tata CLiQ: gender-neutral query (searchCategory=all handles filtering)
   const queryNoGender = buildOptimizedQuery(parsed, {
     includeMaterial: true,
+  });
+  
+  console.log('✅ [SHOPPING] Generated queries:', {
+    withGender: queryWithGender,
+    noGender: queryNoGender,
   });
 
   return {

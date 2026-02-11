@@ -62,21 +62,51 @@ export function MatchingWardrobeItems({
     items: WardrobeItemData[],
     colors: string[]
   ): WardrobeItemData[] => {
-    const DELTA_E_THRESHOLD = 30; // Color difference threshold
+    const DELTA_E_THRESHOLD = 40; // Color matching threshold - allows reasonable matches
+    const INPUT_SIMILARITY_THRESHOLD = 35; // Threshold to exclude colors too similar to input
+    
+    // The first color is the input color
+    const inputColor = colors[0];
+    
+    // Filter out ALL colors that are too similar to the input color
+    // This removes not just the input itself, but also tints/shades like "Light Blue", "Navy", etc.
+    let complementaryColors: string[] = [];
+    try {
+      const inputChroma = chroma(inputColor);
+      complementaryColors = colors.slice(1).filter((color) => {
+        try {
+          const colorChroma = chroma(color);
+          const deltaE = chroma.deltaE(inputChroma, colorChroma);
+          return deltaE >= INPUT_SIMILARITY_THRESHOLD;
+        } catch (e) {
+          return true; // Keep if we can't parse
+        }
+      });
+    } catch (e) {
+      // If input color parsing fails, use all colors except first
+      complementaryColors = colors.slice(1);
+    }
+    
+    if (complementaryColors.length === 0) {
+      return []; // No complementary colors to match against
+    }
 
-    return items.filter((item) => {
+    const matched = items.filter((item) => {
       if (!item.dominantColors || item.dominantColors.length === 0) {
         return false;
       }
 
-      // Check if any item color matches any palette color
+      // Check if any item color matches any COMPLEMENTARY color
+      // (we already filtered out colors similar to input)
       return item.dominantColors.some((itemColor) => {
         try {
           const itemChroma = chroma(itemColor);
-          return colors.some((paletteColor) => {
+          
+          // Check if it matches any complementary color
+          return complementaryColors.some((complementaryColor) => {
             try {
-              const paletteChroma = chroma(paletteColor);
-              const deltaE = chroma.deltaE(itemChroma, paletteChroma);
+              const complementaryChroma = chroma(complementaryColor);
+              const deltaE = chroma.deltaE(itemChroma, complementaryChroma);
               return deltaE < DELTA_E_THRESHOLD;
             } catch (e) {
               return false;
@@ -87,6 +117,8 @@ export function MatchingWardrobeItems({
         }
       });
     });
+    
+    return matched;
   };
 
   if (!user) {
@@ -197,7 +229,7 @@ export function MatchingWardrobeItems({
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={item.imageUrl}
+              src={item.images?.thumbnail || item.imageUrl}
               alt={item.description || 'Wardrobe item'}
               className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
             />

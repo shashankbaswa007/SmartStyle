@@ -18,6 +18,8 @@ import { Upload, Camera, X, Loader2, Info, Shield, Shirt } from 'lucide-react';
 import Image from 'next/image';
 import { addWardrobeItem } from '@/lib/wardrobeService';
 import { extractColorsFromUrl } from '@/lib/color-extraction';
+import { generateOptimizedImages, type OptimizedImages } from '@/lib/image-optimization';
+import { extractColorsFromDescription } from '@/lib/color-name-extraction';
 
 interface WardrobeItemUploadProps {
   open: boolean;
@@ -543,32 +545,50 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     onOpenChange(newOpen);
   };
 
-  // Convert image to base64 data URI (no Firebase Storage billing required - 100% FREE!)
-  const uploadImageToStorage = async (file: File, userId: string): Promise<string> => {
+  // Convert image to base64 data URI and generate optimized versions
+  // (no Firebase Storage billing required - 100% FREE!)
+  const uploadImageToStorage = async (file: File, userId: string): Promise<OptimizedImages> => {
     return new Promise((resolve, reject) => {
-      // Check file size - Firestore documents have a 1MB limit
-      // We use 800KB as a safe limit to account for other document fields
-      const MAX_SIZE = 800 * 1024; // 800KB
+      // Check file size - Firestore documents have a 1MB limit per field
+      // Total document size limit is 1MB, so we'll keep all images under that combined
+      const MAX_SIZE = 5 * 1024 * 1024; // 5MB original (will be compressed)
       if (file.size > MAX_SIZE) {
-        const sizeMB = (file.size / 1024).toFixed(0);
-        reject(new Error(`Image too large (${sizeMB}KB). Please use an image under 800KB. Tip: Take a photo at lower resolution or compress it.`));
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        reject(new Error(`Image too large (${sizeMB}MB). Please use an image under 5MB.`));
         return;
       }
 
       const reader = new FileReader();
       
-      reader.onload = () => {
-        const result = reader.result as string;
-        const sizeKB = Math.round(result.length / 1024);
-        console.log(`✅ Image converted to base64 (${sizeKB}KB) - stored in Firestore (no storage costs!)`);
-        
-        // Simulate progress for better UX
-        setUploadProgress(50);
-        setTimeout(() => {
-          setUploadProgress(100);
-          setUploadStatus('processing');
-          resolve(result);
-        }, 200);
+      reader.onload = async () => {
+        try {
+          const originalDataUri = reader.result as string;
+          setUploadProgress(30);
+          
+          // Generate optimized images at multiple resolutions
+          console.log('🖼️ Generating optimized images...');
+          const optimizedImages = await generateOptimizedImages(originalDataUri);
+          
+          // Calculate total size
+          const totalSizeKB = Math.round(
+            (optimizedImages.thumbnail.length + 
+             optimizedImages.medium.length + 
+             optimizedImages.full.length) / 1024
+          );
+          
+          console.log(`✅ Optimized images generated (${totalSizeKB}KB total) - stored in Firestore (no storage costs!)`);
+          
+          // Simulate progress for better UX
+          setUploadProgress(50);
+          setTimeout(() => {
+            setUploadProgress(100);
+            setUploadStatus('processing');
+            resolve(optimizedImages);
+          }, 200);
+        } catch (error) {
+          console.error('❌ Image optimization error:', error);
+          reject(new Error('Failed to optimize image. Please try again.'));
+        }
       };
       
       reader.onerror = () => {
@@ -647,10 +667,12 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
         return;
       }
 
-      // Step 1: Convert image to base64 (no Firebase Storage, no billing!)
-      console.log('📤 Converting image to base64 (free storage in Firestore)...');
+      // Step 1: Generate optimized images (thumbnail, medium, full)
+      console.log('🖼️ Generating optimized images (free storage in Firestore)...');
       let uploadAttempt = 0;
-      while (uploadAttempt < MAX_RETRIES && !uploadUrl) {
+      let optimizedImages: OptimizedImages | null = null;
+      
+      while (uploadAttempt < MAX_RETRIES && !optimizedImages) {
         // Check if submission was cancelled
         if (submissionId !== submissionIdRef.current) {
           console.log('🚫 Upload cancelled');
@@ -658,52 +680,62 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
         }
 
         try {
-          console.log(`📤 Conversion attempt ${uploadAttempt + 1}/${MAX_RETRIES}...`);
-          uploadUrl = await uploadImageToStorage(imageFile, user.uid);
-          console.log('✅ Image converted to base64 successfully (data URI):', uploadUrl.substring(0, 30) + '...');
+          console.log(`🖼️ Optimization attempt ${uploadAttempt + 1}/${MAX_RETRIES}...`);
+          optimizedImages = await uploadImageToStorage(imageFile, user.uid);
+          console.log('✅ Optimized images generated:', {
+            thumbnail: `${Math.round(optimizedImages.thumbnail.length / 1024)}KB`,
+            medium: `${Math.round(optimizedImages.medium.length / 1024)}KB`,
+            full: `${Math.round(optimizedImages.full.length / 1024)}KB`
+          });
         } catch (uploadError) {
           uploadAttempt++;
           setRetryCount(uploadAttempt);
-          console.error(`❌ Upload attempt ${uploadAttempt} failed:`, uploadError);
+          console.error(`❌ Optimization attempt ${uploadAttempt} failed:`, uploadError);
           
           if (uploadAttempt >= MAX_RETRIES) {
             const errorMsg = uploadError instanceof Error 
               ? uploadError.message 
               : `Upload failed after ${MAX_RETRIES} attempts`;
             setUploadError(errorMsg);
-            console.error('❌ All upload attempts failed:', errorMsg);
+            console.error('❌ All optimization attempts failed:', errorMsg);
             throw new Error(errorMsg);
           }
           
-          console.warn(`⏳ Retrying upload in ${uploadAttempt}s...`);
+          console.warn(`⏳ Retrying optimization in ${uploadAttempt}s...`);
           await new Promise(resolve => setTimeout(resolve, 1000 * uploadAttempt)); // Exponential backoff
         }
       }
 
-      if (!uploadUrl) {
-        console.error('❌ Upload failed: No URL returned');
-        throw new Error('Failed to upload image');
+      if (!optimizedImages) {
+        console.error('❌ Optimization failed: No images returned');
+        throw new Error('Failed to optimize images');
       }
+      
+      // Use full-size image for display
+      uploadUrl = optimizedImages.full;
 
       // Check cancellation after upload
       if (submissionId !== submissionIdRef.current) {
         return;
       }
 
-      // Step 2: Save immediately with placeholder colors for fast response
+      // Step 2: Extract colors from description text
+      console.log('🎨 Extracting colors from description...');
+      const extractedColors = extractColorsFromDescription(description);
+      console.log('✅ Colors extracted from description:', extractedColors);
+
+      // Step 3: Save with extracted colors
       setUploadStatus('processing');
       console.log('💾 Preparing to save to Firestore...');
       
-      // Use neutral placeholder colors - will be updated in background
-      const placeholderColors = ['#808080', '#A0A0A0'];
-      
       const itemData = {
-        imageUrl: uploadUrl,
+        images: optimizedImages, // Store all three sizes
+        imageUrl: optimizedImages.full, // Legacy compatibility
         itemType: itemType as any,
         description: description.trim(),
         category: category.trim() || undefined,
         brand: brand.trim() || undefined,
-        dominantColors: placeholderColors,
+        dominantColors: extractedColors,
         season: selectedSeasons.length > 0 ? selectedSeasons as any : undefined,
         occasions: selectedOccasions.length > 0 ? selectedOccasions as any : undefined,
         purchaseDate: purchaseDate || undefined,
@@ -711,11 +743,14 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
         addedDate: Date.now(),
         wornCount: 0,
         isActive: true,
-        colorsProcessed: false,
+        colorsProcessed: true,
       };
       
       console.log('📦 Item data prepared:', {
-        imageUrl: itemData.imageUrl.substring(0, 50) + '...',
+        hasOptimizedImages: !!itemData.images,
+        thumbnail: `${Math.round(optimizedImages.thumbnail.length / 1024)}KB`,
+        medium: `${Math.round(optimizedImages.medium.length / 1024)}KB`,
+        full: `${Math.round(optimizedImages.full.length / 1024)}KB`,
         itemType: itemData.itemType,
         description: itemData.description.substring(0, 30),
         hasSeasons: !!itemData.season,
@@ -759,13 +794,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
 
       setUploadStatus('complete');
       
-      // Start background color processing (non-blocking)
-      if (saveResult?.itemId) {
-        setBackgroundProcessing(true);
-        processColorsInBackground(saveResult.itemId, uploadUrl, user.uid).finally(() => {
-          setBackgroundProcessing(false);
-        });
-      }
+      // Colors already extracted during upload - no background processing needed
       
       toast({
         title: 'Item Added! 🎉',
@@ -986,11 +1015,14 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
           {/* Description */}
           <div className="space-y-2">
             <Label htmlFor="description">Description *</Label>
+            <p className="text-xs text-muted-foreground">
+              💡 <strong>Include the color</strong> in your description (e.g., "Red cotton dress", "Navy blue jeans", "White sneakers")
+            </p>
             <Input
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="e.g., Blue cotton t-shirt"
+              placeholder="e.g., Red cotton summer dress"
               className="border-teal-300"
               required
             />

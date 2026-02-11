@@ -1,10 +1,13 @@
 import { db, auth } from './firebase';
 import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, updateDoc, serverTimestamp, increment, onSnapshot } from 'firebase/firestore';
 import { logDeletion } from './audit-log';
+import type { OptimizedImages } from './image-optimization';
+import { invalidateUserCache } from './recommendations-cache';
 
 export interface WardrobeItemData {
   id?: string;
-  imageUrl: string;
+  imageUrl: string; // Legacy: single image (for backward compatibility)
+  images?: OptimizedImages; // New: multi-resolution images (thumbnail, medium, full)
   itemType: 'top' | 'bottom' | 'dress' | 'shoes' | 'accessory' | 'outerwear';
   category?: string; // e.g., "t-shirt", "jeans", "sneakers"
   brand?: string;
@@ -86,6 +89,7 @@ export async function addWardrobeItem(
     
     const dataToSave = {
       imageUrl: itemData.imageUrl,
+      images: itemData.images || undefined, // New: optimized images (thumbnail, medium, full)
       itemType: itemData.itemType,
       category: itemData.category || '',
       brand: itemData.brand || '',
@@ -104,6 +108,9 @@ export async function addWardrobeItem(
 
     const docRef = await addDoc(itemsRef, dataToSave);
     console.log('✅ Wardrobe item saved with ID:', docRef.id);
+
+    // Invalidate recommendations cache since wardrobe changed
+    invalidateUserCache(userId);
 
     return {
       success: true,
@@ -339,6 +346,9 @@ export async function deleteWardrobeItem(
       console.warn('⚠️ Failed to log deletion (non-critical):', logError);
       // Continue - deletion succeeded even if logging failed
     }
+
+    // Invalidate recommendations cache since wardrobe changed
+    invalidateUserCache(userId);
 
     console.log('✅ Wardrobe item deleted:', itemId);
     return { success: true, message: 'Item removed from wardrobe' };
