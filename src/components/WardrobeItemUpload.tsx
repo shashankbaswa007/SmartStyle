@@ -1015,7 +1015,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
           <div className="space-y-2">
             <Label htmlFor="description">Description *</Label>
             <p className="text-xs text-muted-foreground">
-              💡 <strong>Include the color</strong> in your description (e.g., "Red cotton dress", "Navy blue jeans", "White sneakers")
+              💡 <strong>Include the color</strong> in your description (e.g., &quot;Red cotton dress&quot;, &quot;Navy blue jeans&quot;, &quot;White sneakers&quot;)
             </p>
             <Input
               id="description"
