@@ -1,9 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import { auth } from '@/lib/firebase';
-import { motion } from 'framer-motion';
-import { Sparkles, ChevronRight, TrendingUp, Calendar, Shirt, AlertCircle, Cloud, CloudRain, Sun } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Sparkles, ChevronRight, Calendar, Shirt, AlertCircle,
+  Cloud, CloudRain, Sun, ArrowLeft, Footprints, Watch, Gem, Package,
+  Loader2, ImageIcon, Star, Lightbulb, ShoppingBag, ChevronDown, ChevronUp,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -20,7 +24,9 @@ import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { getWardrobeItems } from '@/lib/wardrobeService';
+import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
+import { getWardrobeItems, WardrobeItemData } from '@/lib/wardrobeService';
 
 interface OutfitItem {
   itemId: string;
@@ -52,12 +58,61 @@ interface OutfitResult {
 }
 
 export default function WardrobeSuggestPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-teal-600" /></div>}>
+      <WardrobeSuggestPageContent />
+    </Suspense>
+  );
+}
+
+function WardrobeSuggestPageContent() {
+  const CONTEXT_MODES = ['all', 'work', 'casual', 'travel', 'weather', 'occasion'] as const;
+  type ContextMode = typeof CONTEXT_MODES[number];
+
   const isMounted = useMounted();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [occasion, setOccasion] = useState<string>('');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [result, setResult] = useState<OutfitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [wardrobeItemsMap, setWardrobeItemsMap] = useState<Map<string, WardrobeItemData>>(new Map());
+  const [expandedOutfit, setExpandedOutfit] = useState<number | null>(null);
+
+  // Read context from URL params or sessionStorage
+  const [activeContext, setActiveContext] = useState<ContextMode>(() => {
+    const urlContext = searchParams.get('context') as ContextMode | null;
+    if (urlContext && CONTEXT_MODES.includes(urlContext)) return urlContext;
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('wardrobeContext') as ContextMode | null;
+      if (stored && CONTEXT_MODES.includes(stored)) return stored;
+    }
+    return 'all';
+  });
+
+  // Pre-fill occasion from context
+  useEffect(() => {
+    if (!occasion && activeContext !== 'all') {
+      const contextHints: Record<string, string> = {
+        work: 'Business / Professional setting',
+        casual: 'Casual outing',
+        travel: 'Travel / Comfortable day out',
+        weather: 'Weather-appropriate outfit',
+        occasion: 'Special event / Formal occasion',
+      };
+      setOccasion(contextHints[activeContext] || '');
+    }
+  }, [activeContext]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Build back link with context preserved
+  const backToWardrobeHref = activeContext !== 'all'
+    ? `/wardrobe?context=${activeContext}`
+    : '/wardrobe';
+
+  // Lookup a wardrobe item by its ID
+  const getWardrobeItem = useCallback((itemId: string): WardrobeItemData | undefined => {
+    return wardrobeItemsMap.get(itemId);
+  }, [wardrobeItemsMap]);
 
   const handleGetSuggestions = async () => {
     if (!occasion || !occasion.trim()) {
@@ -94,7 +149,7 @@ export default function WardrobeSuggestPage() {
 
       // Fetch user's wardrobe items from client-side
       const wardrobeItems = await getWardrobeItems(user.uid);
-      
+
       if (wardrobeItems.length === 0) {
         toast({
           variant: 'destructive',
@@ -104,6 +159,13 @@ export default function WardrobeSuggestPage() {
         setLoading(false);
         return;
       }
+
+      // Build a lookup map for quick access by ID
+      const itemMap = new Map<string, WardrobeItemData>();
+      wardrobeItems.forEach(item => {
+        if (item.id) itemMap.set(item.id, item);
+      });
+      setWardrobeItemsMap(itemMap);
 
       const idToken = await user.getIdToken();
 
@@ -117,7 +179,7 @@ export default function WardrobeSuggestPage() {
           userId: user.uid,
           occasion: occasion.trim(),
           date: selectedDate.toISOString(),
-          wardrobeItems: wardrobeItems, // Send wardrobe items from client
+          wardrobeItems: wardrobeItems,
         }),
       });
 
@@ -128,24 +190,27 @@ export default function WardrobeSuggestPage() {
 
       const data = await response.json();
       setResult(data);
+      // Auto-expand first outfit
+      if (data.outfits && data.outfits.length > 0) {
+        setExpandedOutfit(0);
+      }
 
       toast({
-        title: 'Outfits Generated! ✨',
+        title: 'Outfits Generated!',
         description: `${data.outfits.length} outfit combinations created from your wardrobe.`,
       });
     } catch (err) {
       console.error('Error getting outfit suggestions:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate suggestions';
       setError(errorMessage);
-      
-      // Provide more helpful error messages
+
       let toastDescription = errorMessage;
       if (errorMessage.includes('Empty wardrobe') || errorMessage.includes('add items')) {
         toastDescription = 'Add items to your wardrobe first, then come back for outfit suggestions!';
       } else if (errorMessage.includes('Insufficient items') || errorMessage.includes('at least')) {
         toastDescription = 'Add a few more items to your wardrobe to create better outfit combinations.';
       }
-      
+
       toast({
         variant: 'destructive',
         title: 'Cannot Generate Outfits',
@@ -157,15 +222,84 @@ export default function WardrobeSuggestPage() {
   };
 
   const getItemTypeIcon = (type: string) => {
+    const iconClass = 'h-4 w-4';
     switch (type) {
-      case 'top': return '👕';
-      case 'bottom': return '👖';
-      case 'dress': return '👗';
-      case 'shoes': return '👟';
-      case 'accessory': return '👜';
-      case 'outerwear': return '🧥';
-      default: return '👔';
+      case 'top': return <Shirt className={iconClass} />;
+      case 'bottom': return <span className={`inline-flex items-center justify-center ${iconClass}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M4 4h4l2 4h4l2-4h4v16H4z"/></svg></span>;
+      case 'dress': return <Gem className={iconClass} />;
+      case 'shoes': return <Footprints className={iconClass} />;
+      case 'accessory': return <Watch className={iconClass} />;
+      case 'outerwear': return <Package className={iconClass} />;
+      default: return <Shirt className={iconClass} />;
     }
+  };
+
+  // Render a single outfit item with image from wardrobe
+  const renderOutfitItem = (item: OutfitItem, index: number) => {
+    const wardrobeItem = getWardrobeItem(item.itemId);
+    const imageSrc = wardrobeItem?.images?.thumbnail || wardrobeItem?.imageUrl;
+    const colors = wardrobeItem?.dominantColors || [];
+
+    return (
+      <motion.div
+        key={item.itemId + '-' + index}
+        initial={{ opacity: 0, x: -12 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: index * 0.07, duration: 0.3 }}
+      >
+        <div className="flex items-stretch gap-3 p-2.5 rounded-xl border border-teal-100 bg-white hover:border-teal-300 hover:shadow-md transition-all duration-300 group">
+          {/* Image */}
+          <div className="relative flex-shrink-0 w-[72px] h-[72px] sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-gradient-to-br from-teal-50 to-emerald-50 ring-1 ring-teal-200/60">
+            {imageSrc ? (
+              <Image
+                src={imageSrc}
+                alt={item.description}
+                fill
+                className="object-cover group-hover:scale-105 transition-transform duration-500"
+                sizes="80px"
+                loading="lazy"
+                quality={75}
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center text-teal-400">
+                <ImageIcon className="h-5 w-5 mb-0.5" />
+                <span className="text-[9px] font-medium">No image</span>
+              </div>
+            )}
+          </div>
+
+          {/* Details */}
+          <div className="flex-1 min-w-0 flex flex-col justify-center gap-1 py-0.5">
+            <p className="text-sm font-semibold text-gray-900 leading-snug line-clamp-2">
+              {item.description}
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Badge variant="outline" className="h-5 px-1.5 text-[10px] gap-1 text-teal-700 border-teal-200 bg-teal-50/60">
+                {getItemTypeIcon(item.type)}
+                <span className="capitalize">{item.type}</span>
+              </Badge>
+              {wardrobeItem?.brand && (
+                <span className="text-[10px] text-gray-400 font-medium truncate">{wardrobeItem.brand}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Color dots */}
+          {colors.length > 0 && (
+            <div className="flex flex-col items-center justify-center gap-1.5 flex-shrink-0 pr-1">
+              {colors.slice(0, 3).map((color, idx) => (
+                <div
+                  key={idx}
+                  className="w-3.5 h-3.5 rounded-full ring-1 ring-black/10 shadow-sm"
+                  style={{ backgroundColor: color.startsWith('#') ? color : `#${color}` }}
+                  title={color}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    );
   };
 
   return (
@@ -191,13 +325,13 @@ export default function WardrobeSuggestPage() {
         <div className="relative z-10 max-w-6xl mx-auto">
           {/* Header */}
           <header className="text-center mb-12">
-            <div style={{ 
-              position: 'relative', 
-              height: '300px', 
-              display: 'flex', 
-              alignItems: 'center', 
+            <div style={{
+              position: 'relative',
+              height: '300px',
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: 'center',
-              paddingTop: '60px', 
+              paddingTop: '60px',
               paddingBottom: '60px',
             }}>
               {isMounted && (
@@ -217,7 +351,14 @@ export default function WardrobeSuggestPage() {
           {/* Input Section */}
           <Card className="max-w-2xl mx-auto mb-12 border-teal-200">
             <CardHeader>
-              <CardTitle className="text-teal-900">Plan Your Outfit</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-teal-900">Plan Your Outfit</CardTitle>
+                {activeContext !== 'all' && (
+                  <Badge className="bg-teal-100 text-teal-700 capitalize">
+                    {activeContext} mode
+                  </Badge>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Occasion Input */}
@@ -264,7 +405,7 @@ export default function WardrobeSuggestPage() {
                 <p className="text-sm text-teal-600">We&apos;ll check the weather forecast for that day!</p>
               </div>
 
-              <Button 
+              <Button
                 onClick={handleGetSuggestions}
                 disabled={loading || !occasion.trim() || !selectedDate}
                 className="w-full bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white gap-2"
@@ -272,7 +413,7 @@ export default function WardrobeSuggestPage() {
               >
                 {loading ? (
                   <>
-                    <span className="animate-spin">⏳</span>
+                    <Loader2 className="h-5 w-5 animate-spin" />
                     Generating Outfits...
                   </>
                 ) : (
@@ -283,9 +424,15 @@ export default function WardrobeSuggestPage() {
                 )}
               </Button>
 
-              <Link href="/wardrobe">
-                <Button variant="outline" className="w-full border-teal-300 text-teal-700 hover:bg-teal-50">
-                  ← Back to Wardrobe
+              <Link href={backToWardrobeHref}>
+                <Button variant="outline" className="w-full border-teal-300 text-teal-700 hover:bg-teal-50 gap-2">
+                  <ArrowLeft className="h-4 w-4" />
+                  Back to Wardrobe
+                  {activeContext !== 'all' && (
+                    <Badge variant="secondary" className="ml-1 bg-teal-100 text-teal-700 text-xs capitalize">
+                      {activeContext}
+                    </Badge>
+                  )}
                 </Button>
               </Link>
             </CardContent>
@@ -299,7 +446,7 @@ export default function WardrobeSuggestPage() {
                 {error}
                 {(error.includes('Empty wardrobe') || error.includes('Insufficient items')) && (
                   <div className="mt-3">
-                    <Link href="/wardrobe">
+                    <Link href={backToWardrobeHref}>
                       <Button variant="outline" size="sm" className="bg-white hover:bg-gray-50">
                         <Shirt className="h-4 w-4 mr-2" />
                         Go to Wardrobe
@@ -311,16 +458,48 @@ export default function WardrobeSuggestPage() {
             </Alert>
           )}
 
-          {/* Results */}
+          {/* Loading Skeleton */}
+          {loading && (
+            <div className="max-w-4xl mx-auto space-y-6">
+              {[1, 2].map((i) => (
+                <Card key={i} className="border-teal-200 animate-pulse overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-teal-50/60 to-emerald-50/60 pb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-teal-200/60" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-5 bg-teal-200/50 rounded-md w-48" />
+                        <div className="h-3 bg-teal-100/50 rounded w-32" />
+                      </div>
+                      <div className="h-6 w-20 bg-teal-200/50 rounded-full" />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-5 space-y-3">
+                    {[1, 2, 3].map((j) => (
+                      <div key={j} className="flex gap-3 p-2.5 rounded-xl border border-gray-100">
+                        <div className="w-20 h-20 bg-teal-50 rounded-lg flex-shrink-0" />
+                        <div className="flex-1 space-y-2 py-1">
+                          <div className="h-4 bg-gray-100 rounded w-3/4" />
+                          <div className="h-3 bg-gray-50 rounded w-1/3" />
+                        </div>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {/* ─── Results ─── */}
           {result && result.outfits.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
+              className="max-w-4xl mx-auto"
             >
               {/* Weather Card */}
               {result.weather && (
-                <Card className="max-w-2xl mx-auto mb-8 border-teal-200 bg-gradient-to-br from-teal-50 to-sky-50">
+                <Card className="mb-8 border-teal-200 bg-gradient-to-br from-teal-50 to-sky-50">
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-4">
                       {result.weather.condition.toLowerCase().includes('rain') ? (
@@ -340,14 +519,14 @@ export default function WardrobeSuggestPage() {
                         </p>
                         <div className="flex items-center gap-3 mt-2">
                           <span className="text-2xl font-bold text-teal-900">
-                            {result.weather.temp}°C
+                            {result.weather.temp}&deg;C
                           </span>
                           <span className="text-teal-800 capitalize">
                             {result.weather.description}
                           </span>
                         </div>
                         {result.weather.location && (
-                          <p className="text-sm text-teal-600 mt-1">📍 {result.weather.location}</p>
+                          <p className="text-sm text-teal-600 mt-1">{result.weather.location}</p>
                         )}
                       </div>
                     </div>
@@ -355,7 +534,7 @@ export default function WardrobeSuggestPage() {
                 </Card>
               )}
 
-              {/* Stats */}
+              {/* Stats Row */}
               <div className="flex flex-wrap gap-4 justify-center mb-8">
                 <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2">
                   <span className="text-teal-900 font-semibold">{result.outfits.length}</span>
@@ -367,65 +546,138 @@ export default function WardrobeSuggestPage() {
                 </div>
               </div>
 
-              {/* Outfit Cards */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
-                {result.outfits.map((outfit, idx) => (
-                  <motion.div
-                    key={idx}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.1 }}
-                  >
-                    <Card className="border-teal-200 hover:border-teal-400 hover:shadow-xl transition-all duration-500 ease-out will-change-transform">
-                      <CardHeader className="bg-gradient-to-r from-teal-50 to-emerald-50">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-teal-900 flex items-center gap-2">
-                            <Sparkles className="h-5 w-5 text-teal-600" />
-                            {outfit.name}
-                          </CardTitle>
-                          <Badge className="bg-teal-600 text-white">
-                            {outfit.confidence}% match
-                          </Badge>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-6 space-y-4">
-                        {/* Items */}
-                        <div className="space-y-3">
-                          <h4 className="font-semibold text-gray-900 flex items-center gap-2">
-                            <Shirt className="h-4 w-4" />
-                            Items to Wear:
-                          </h4>
-                          {outfit.items.map((item, itemIdx) => (
-                            <div key={itemIdx} className="flex items-center gap-3 p-3 bg-teal-50 rounded-lg">
-                              <span className="text-2xl">{getItemTypeIcon(item.type)}</span>
-                              <div className="flex-1">
-                                <div className="font-medium text-gray-900">{item.description}</div>
-                                <div className="text-sm text-teal-700 capitalize">{item.type}</div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
+              {/* ─── Outfit Cards ─── */}
+              <AnimatePresence>
+                <div className="space-y-6 mb-12">
+                  {result.outfits.map((outfit, outfitIdx) => {
+                    const isExpanded = expandedOutfit === outfitIdx;
+                    const matchedItems = outfit.items.filter(i => wardrobeItemsMap.has(i.itemId));
+                    const previewItems = matchedItems.slice(0, 4);
 
-                        {/* Reasoning */}
-                        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-                          <h4 className="font-semibold text-emerald-900 mb-2 flex items-center gap-2">
-                            <TrendingUp className="h-4 w-4" />
-                            Why This Works:
-                          </h4>
-                          <p className="text-emerald-800 text-sm leading-relaxed">{outfit.reasoning}</p>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
-              </div>
+                    return (
+                      <motion.div
+                        key={outfitIdx}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: outfitIdx * 0.08 }}
+                      >
+                        <Card className={`overflow-hidden border-2 transition-all duration-300 ${
+                          isExpanded
+                            ? 'border-teal-400 shadow-xl shadow-teal-100/40'
+                            : 'border-teal-200 hover:border-teal-300 hover:shadow-lg'
+                        }`}>
+                          {/* ── Card Header (clickable) ── */}
+                          <button
+                            onClick={() => setExpandedOutfit(isExpanded ? null : outfitIdx)}
+                            className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2 rounded-t-xl"
+                          >
+                            <CardHeader className="bg-gradient-to-r from-teal-50/80 to-emerald-50/80 pb-4">
+                              <div className="flex items-center gap-3">
+                                {/* Outfit icon */}
+                                <div className="p-2.5 bg-gradient-to-br from-teal-500 to-emerald-600 rounded-xl shadow-md flex-shrink-0">
+                                  <Star className="h-5 w-5 text-white" />
+                                </div>
+
+                                {/* Title & badge */}
+                                <div className="flex-1 min-w-0">
+                                  <CardTitle className="text-base sm:text-lg text-teal-900 truncate">
+                                    {outfit.name}
+                                  </CardTitle>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <Badge className="bg-teal-600/90 text-white text-[10px] px-1.5 py-0 h-5">
+                                      {outfit.confidence}% match
+                                    </Badge>
+                                    <span className="text-xs text-teal-600 capitalize">{outfit.occasion}</span>
+                                  </div>
+                                </div>
+
+                                {/* Preview thumbnails (collapsed) */}
+                                {!isExpanded && previewItems.length > 0 && (
+                                  <div className="hidden sm:flex -space-x-3">
+                                    {previewItems.map((pItem, pIdx) => {
+                                      const wItem = getWardrobeItem(pItem.itemId);
+                                      const src = wItem?.images?.thumbnail || wItem?.imageUrl;
+                                      return src ? (
+                                        <div
+                                          key={pIdx}
+                                          className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow-sm flex-shrink-0"
+                                        >
+                                          <Image src={src} alt="" fill className="object-cover" sizes="36px" />
+                                        </div>
+                                      ) : null;
+                                    })}
+                                    {matchedItems.length > 4 && (
+                                      <div className="w-9 h-9 rounded-full bg-teal-100 border-2 border-white shadow-sm flex items-center justify-center text-[10px] font-bold text-teal-700 flex-shrink-0">
+                                        +{matchedItems.length - 4}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Chevron */}
+                                <div className="flex-shrink-0 p-1">
+                                  {isExpanded ? (
+                                    <ChevronUp className="h-5 w-5 text-teal-500" />
+                                  ) : (
+                                    <ChevronDown className="h-5 w-5 text-teal-400" />
+                                  )}
+                                </div>
+                              </div>
+                            </CardHeader>
+                          </button>
+
+                          {/* ── Expanded content ── */}
+                          <AnimatePresence initial={false}>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3, ease: 'easeInOut' }}
+                                className="overflow-hidden"
+                              >
+                                <CardContent className="pt-4 pb-6 space-y-5">
+                                  {/* Items list */}
+                                  <div>
+                                    <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5 mb-3">
+                                      <Shirt className="h-4 w-4 text-teal-600" />
+                                      Items to Wear
+                                      <Badge variant="outline" className="ml-auto text-[10px] h-5 border-teal-200 text-teal-600">
+                                        {outfit.items.length} piece{outfit.items.length !== 1 ? 's' : ''}
+                                      </Badge>
+                                    </h4>
+                                    <div className="space-y-2">
+                                      {outfit.items.map((item, itemIdx) =>
+                                        renderOutfitItem(item, itemIdx)
+                                      )}
+                                    </div>
+                                  </div>
+
+                                  {/* Reasoning */}
+                                  <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl">
+                                    <h4 className="text-sm font-semibold text-emerald-900 mb-2 flex items-center gap-1.5">
+                                      <Lightbulb className="h-4 w-4 text-emerald-600" />
+                                      Why This Works
+                                    </h4>
+                                    <p className="text-sm text-emerald-800 leading-relaxed">{outfit.reasoning}</p>
+                                  </div>
+                                </CardContent>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </Card>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </AnimatePresence>
 
               {/* Missing Pieces */}
               {result.missingPieces && result.missingPieces.length > 0 && (
-                <Card className="max-w-2xl mx-auto border-amber-200 bg-amber-50">
+                <Card className="max-w-2xl mx-auto border-amber-200 bg-amber-50 mb-8">
                   <CardHeader>
                     <CardTitle className="text-amber-900 flex items-center gap-2">
-                      <ChevronRight className="h-5 w-5" />
+                      <ShoppingBag className="h-5 w-5" />
                       Wardrobe Suggestions
                     </CardTitle>
                   </CardHeader>
@@ -436,8 +688,8 @@ export default function WardrobeSuggestPage() {
                     <ul className="space-y-2">
                       {result.missingPieces.map((piece, idx) => (
                         <li key={idx} className="flex items-start gap-2">
-                          <span className="text-amber-600 mt-1">•</span>
-                          <span className="text-amber-900">{piece}</span>
+                          <ChevronRight className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                          <span className="text-amber-900 text-sm">{piece}</span>
                         </li>
                       ))}
                     </ul>
@@ -459,7 +711,7 @@ export default function WardrobeSuggestPage() {
                   We couldn&apos;t create outfit combinations with your current wardrobe items.
                   Try adding more items to get personalized suggestions!
                 </p>
-                <Link href="/wardrobe">
+                <Link href={backToWardrobeHref}>
                   <Button className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white">
                     Add More Items
                   </Button>

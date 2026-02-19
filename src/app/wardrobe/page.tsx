@@ -5,7 +5,8 @@ import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Shirt, Plus, Filter, Trash2, TrendingUp, Sparkles, Calendar, Loader2, Shield, Info, Undo2, Camera, Upload as UploadIcon, LightbulbIcon, Clock, Heart, AlertCircle, ChevronDown, ChevronUp, Zap, Star, Briefcase, Coffee, Plane, CloudSun, PartyPopper, Home, Search, ArrowUpDown, Palette } from 'lucide-react';
+import { Shirt, Plus, Filter, Trash2, TrendingUp, Sparkles, Calendar, Loader2, Shield, Info, Undo2, LightbulbIcon, Clock, Heart, AlertCircle, ChevronDown, ChevronUp, Zap, Star, Briefcase, Coffee, Plane, CloudSun, PartyPopper, Home, Search, ArrowUpDown, Palette, Footprints, Watch, Gem, Package, RefreshCw, Flame, CheckCircle2 } from 'lucide-react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -49,7 +50,17 @@ const itemVariants = {
 };
 
 export default function WardrobePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-teal-600" /></div>}>
+      <WardrobePageContent />
+    </Suspense>
+  );
+}
+
+function WardrobePageContent() {
   const isMounted = useMounted();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItemData[]>([]);
   const [filteredItems, setFilteredItems] = useState<WardrobeItemData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -93,7 +104,32 @@ export default function WardrobePage() {
   // Context mode for smart filtering
   const CONTEXT_MODES = ['all', 'work', 'casual', 'travel', 'weather', 'occasion'] as const;
   type ContextMode = typeof CONTEXT_MODES[number];
-  const [contextMode, setContextMode] = useState<ContextMode>('all');
+  const [contextMode, setContextMode] = useState<ContextMode>(() => {
+    // Initialize from URL param or sessionStorage
+    const urlContext = searchParams.get('context') as ContextMode | null;
+    if (urlContext && CONTEXT_MODES.includes(urlContext)) return urlContext;
+    if (typeof window !== 'undefined') {
+      const stored = sessionStorage.getItem('wardrobeContext') as ContextMode | null;
+      if (stored && CONTEXT_MODES.includes(stored)) return stored;
+    }
+    return 'all';
+  });
+
+  // Persist context mode to sessionStorage and URL
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('wardrobeContext', contextMode);
+    }
+    // Update URL without full navigation
+    const params = new URLSearchParams(searchParams.toString());
+    if (contextMode !== 'all') {
+      params.set('context', contextMode);
+    } else {
+      params.delete('context');
+    }
+    const newUrl = params.toString() ? `?${params.toString()}` : '/wardrobe';
+    window.history.replaceState(null, '', newUrl);
+  }, [contextMode, searchParams]);
   
   // Search and discovery features
   const [searchQuery, setSearchQuery] = useState('');
@@ -574,14 +610,16 @@ export default function WardrobePage() {
   };
 
   const getItemTypeIcon = (type: string) => {
+    const iconClass = 'h-4 w-4';
     switch (type) {
-      case 'top': return '👕';
-      case 'bottom': return '👖';
-      case 'dress': return '👗';
-      case 'shoes': return '👟';
-      case 'accessory': return '👜';
-      case 'outerwear': return '🧥';
-      default: return '👔';
+      case 'top': return <Shirt className={iconClass} />;
+      case 'bottom': return <span className={`inline-flex items-center justify-center ${iconClass}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4"><path d="M4 4h4l2 4h4l2-4h4v16H4z"/></svg></span>;
+      case 'dress': return <Gem className={iconClass} />;
+      case 'shoes': return <Footprints className={iconClass} />;
+      case 'accessory': return <Watch className={iconClass} />;
+      case 'outerwear': return <Package className={iconClass} />;
+      case 'all': return <Shirt className={iconClass} />;
+      default: return <Shirt className={iconClass} />;
     }
   };
 
@@ -812,39 +850,39 @@ export default function WardrobePage() {
 
     // High usage - worn significantly more than average
     if (avgWearCount > 0 && item.wornCount > avgWearCount * 2 && item.wornCount >= 8) {
-      return { label: `${item.wornCount}x`, color: 'bg-blue-100 text-blue-700 border-blue-300', icon: '🔥' };
+      return { label: `${item.wornCount}x`, color: 'bg-blue-100 text-blue-700 border-blue-300', icon: Flame };
     }
 
     // Favorite milestone (worn 5+ times)
     if (item.wornCount >= 5) {
-      return { label: `${item.wornCount}x`, color: 'bg-rose-100 text-rose-700 border-rose-300', icon: '❤️' };
+      return { label: `${item.wornCount}x`, color: 'bg-rose-100 text-rose-700 border-rose-300', icon: Heart };
     }
 
     // Never worn but old enough to notice
     if (!item.wornCount || item.wornCount === 0) {
       const daysSinceAdded = item.addedDate ? Math.floor((now - item.addedDate) / (24 * 60 * 60 * 1000)) : 0;
       if (daysSinceAdded < 7) {
-        return { label: 'New', color: 'bg-teal-100 text-teal-700 border-teal-300', icon: '✨' };
+        return { label: 'New', color: 'bg-teal-100 text-teal-700 border-teal-300', icon: Sparkles };
       }
       if (daysSinceAdded > 30) {
-        return { label: 'Try me!', color: 'bg-amber-100 text-amber-700 border-amber-300', icon: '👀' };
+        return { label: 'Try me', color: 'bg-amber-100 text-amber-700 border-amber-300', icon: Star };
       }
-      return { label: 'Unworn', color: 'bg-gray-100 text-gray-700 border-gray-300', icon: '📦' };
+      return { label: 'Unworn', color: 'bg-gray-100 text-gray-700 border-gray-300', icon: Package };
     }
 
     // Worn once or twice but not recently - good rotation candidate
     if (item.wornCount <= 2 && item.lastWornDate && (now - item.lastWornDate) > ONE_MONTH) {
-      return { label: 'Rotate in?', color: 'bg-purple-100 text-purple-700 border-purple-300', icon: '🔄' };
+      return { label: 'Rotate in', color: 'bg-purple-100 text-purple-700 border-purple-300', icon: RefreshCw };
     }
 
     // Long-term neglected (was favorite, now forgotten)
     if (item.wornCount >= 3 && item.lastWornDate && (now - item.lastWornDate) > THREE_MONTHS) {
-      return { label: 'Miss me?', color: 'bg-purple-100 text-purple-700 border-purple-300', icon: '💜' };
+      return { label: 'Rediscover', color: 'bg-purple-100 text-purple-700 border-purple-300', icon: Sparkles };
     }
 
     // Recently worn (within 2 weeks)
     if (item.lastWornDate && (now - item.lastWornDate) < TWO_WEEKS) {
-      return { label: 'Recent', color: 'bg-emerald-100 text-emerald-700 border-emerald-300', icon: '✓' };
+      return { label: 'Recent', color: 'bg-emerald-100 text-emerald-700 border-emerald-300', icon: CheckCircle2 };
     }
 
     return null;
@@ -1613,24 +1651,29 @@ export default function WardrobePage() {
                                 />
                                 
                                 {/* Item Type Badge */}
-                                <Badge className="absolute top-3 left-3 bg-teal-600 text-white">
-                                  {getItemTypeIcon(item.itemType)} {item.itemType}
+                                <Badge className="absolute top-3 left-3 bg-teal-600/90 backdrop-blur-sm text-white gap-1.5">
+                                  {getItemTypeIcon(item.itemType)}
+                                  <span className="capitalize">{item.itemType}</span>
                                 </Badge>
                                 
                                 {/* Smart Nudge Badge with wear info tooltip */}
-                                {getItemNudge(item) && (
-                                  <Tooltip>
-                                    <TooltipTrigger asChild>
-                                      <Badge className={`absolute top-3 right-3 ${getItemNudge(item)!.color} border font-medium shadow-sm cursor-help`}>
-                                        <span className="mr-1">{getItemNudge(item)!.icon}</span>
-                                        {getItemNudge(item)!.label}
-                                      </Badge>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="left" className="max-w-xs">
-                                      <p className="text-sm">{getWearInfo(item)}</p>
-                                    </TooltipContent>
-                                  </Tooltip>
-                                )}
+                                {getItemNudge(item) && (() => {
+                                  const nudge = getItemNudge(item)!;
+                                  const NudgeIcon = nudge.icon;
+                                  return (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Badge className={`absolute top-3 right-3 ${nudge.color} border font-medium shadow-sm cursor-help gap-1`}>
+                                          <NudgeIcon className="h-3 w-3" />
+                                          {nudge.label}
+                                        </Badge>
+                                      </TooltipTrigger>
+                                      <TooltipContent side="left" className="max-w-xs">
+                                        <p className="text-sm">{getWearInfo(item)}</p>
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  );
+                                })()}
                                 
                                 {/* Worn Count Badge (only show if no nudge) */}
                                 {!getItemNudge(item) && item.wornCount > 0 && (
@@ -1775,24 +1818,29 @@ export default function WardrobePage() {
                           />
                           
                           {/* Item Type Badge */}
-                          <Badge className="absolute top-3 left-3 bg-teal-600 text-white">
-                            {getItemTypeIcon(item.itemType)} {item.itemType}
+                          <Badge className="absolute top-3 left-3 bg-teal-600/90 backdrop-blur-sm text-white gap-1.5">
+                            {getItemTypeIcon(item.itemType)}
+                            <span className="capitalize">{item.itemType}</span>
                           </Badge>
                           
                           {/* Smart Nudge Badge with wear info tooltip */}
-                          {getItemNudge(item) && (
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge className={`absolute top-3 right-3 ${getItemNudge(item)!.color} border font-medium shadow-sm cursor-help`}>
-                                  <span className="mr-1">{getItemNudge(item)!.icon}</span>
-                                  {getItemNudge(item)!.label}
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent side="left" className="max-w-xs">
-                                <p className="text-sm">{getWearInfo(item)}</p>
-                              </TooltipContent>
-                            </Tooltip>
-                          )}
+                          {getItemNudge(item) && (() => {
+                            const nudge = getItemNudge(item)!;
+                            const NudgeIcon = nudge.icon;
+                            return (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge className={`absolute top-3 right-3 ${nudge.color} border font-medium shadow-sm cursor-help gap-1`}>
+                                    <NudgeIcon className="h-3 w-3" />
+                                    {nudge.label}
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent side="left" className="max-w-xs">
+                                  <p className="text-sm">{getWearInfo(item)}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })()}
                           
                           {/* Worn Count Badge (only show if no nudge) */}
                           {!getItemNudge(item) && item.wornCount > 0 && (
