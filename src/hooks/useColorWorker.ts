@@ -45,11 +45,9 @@ export const useColorWorker = () => {
       // Set timeout for worker initialization
       setTimeout(() => {
         if (!workerAvailable) {
-          console.warn('Color worker initialization timeout - worker may not be available');
         }
       }, 2000);
     } catch (error) {
-      console.error('Failed to initialize color worker:', error);
       setWorkerAvailable(false);
     }
 

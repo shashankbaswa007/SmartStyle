@@ -59,7 +59,6 @@ export async function createUserDocument(
         photoURL: userData.photoURL || userSnap.data().photoURL,
       });
       
-      console.log('✅ User document updated:', userId);
     } else {
       // New user, create document with full profile data
       await setDoc(userRef, {
@@ -68,10 +67,8 @@ export async function createUserDocument(
         lastLoginAt: new Date().toISOString(),
       });
       
-      console.log('✅ User document created:', userId);
     }
   } catch (error) {
-    console.error('❌ Error creating/updating user document:', error);
     throw error;
   }
 }
@@ -93,7 +90,6 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     
     return null;
   } catch (error) {
-    console.error('Error fetching user profile:', error);
     return null;
   }
 }
@@ -113,9 +109,7 @@ export async function updateUserProfile(
     const userRef = doc(db, 'users', userId);
     await updateDoc(userRef, updates);
     
-    console.log('User profile updated:', userId);
   } catch (error) {
-    console.error('Error updating user profile:', error);
     throw error;
   }
 }
@@ -132,7 +126,6 @@ export async function userExists(userId: string): Promise<boolean> {
     const userSnap = await getDoc(userRef);
     return userSnap.exists();
   } catch (error) {
-    console.error('Error checking user existence:', error);
     return false;
   }
 }

@@ -67,8 +67,8 @@ export const metadata: Metadata = {
 export const viewport = {
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
+  userScalable: true,
   themeColor: '#7B68EE',
 };
 
@@ -113,13 +113,11 @@ export default function RootLayout({
                   const po = new PerformanceObserver((list) => {
                     for (const entry of list.getEntries()) {
                       if (entry.entryType === 'largest-contentful-paint') {
-                        console.log('LCP:', Math.round(entry.startTime) + 'ms');
                       }
                     }
                   });
                   po.observe({ type: 'largest-contentful-paint', buffered: true });
                 } catch (e) {
-                  console.warn('⚠️ Web Vitals reporting failed:', e);
                 }
               }
             `,

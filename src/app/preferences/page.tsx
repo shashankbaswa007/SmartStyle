@@ -84,7 +84,6 @@ export default function PreferencesPage() {
         setBlocklists(blocklistDoc.data() as BlocklistData);
       }
     } catch (error) {
-      console.error("Error loading preferences:", error);
       toast({
         title: "Error",
         description: "Failed to load your preferences",

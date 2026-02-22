@@ -43,13 +43,11 @@ export default function UnicornStudioBackground({
           if (window.UnicornStudio && !window.UnicornStudio.isInitialized) {
             window.UnicornStudio.init();
             window.UnicornStudio.isInitialized = true;
-            console.log('✨ UnicornStudio initialized');
           }
           setIsLoaded(true);
         };
 
         script.onerror = () => {
-          console.error('❌ Failed to load UnicornStudio script');
           setIsLoaded(true); // Still show the page even if animation fails
         };
 

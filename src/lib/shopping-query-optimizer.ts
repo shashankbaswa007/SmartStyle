@@ -520,15 +520,8 @@ export interface OptimizedItemLinks {
  * //   }
  */
 export function optimizeItemLinks(rawItem: string, gender?: string): OptimizedItemLinks {
-  console.log('🔍 [SHOPPING] Processing item:', rawItem);
   
   const parsed = parseItemDescription(rawItem);
-  console.log('📊 [SHOPPING] Parsed attributes:', {
-    productType: parsed.productType,
-    color: parsed.color,
-    material: parsed.material,
-    descriptor: parsed.descriptor,
-  });
 
   // Amazon + Myntra: include gender as the 4th keyword when space permits
   const queryWithGender = buildOptimizedQuery(parsed, {
@@ -541,10 +534,6 @@ export function optimizeItemLinks(rawItem: string, gender?: string): OptimizedIt
     includeMaterial: true,
   });
   
-  console.log('✅ [SHOPPING] Generated queries:', {
-    withGender: queryWithGender,
-    noGender: queryNoGender,
-  });
 
   return {
     item: rawItem,

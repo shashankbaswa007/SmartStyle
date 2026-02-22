@@ -29,12 +29,10 @@ export async function generateWithReplicate(
   colors: string[]
 ): Promise<string | null> {
   if (!REPLICATE_API_TOKEN) {
-    console.warn('⚠️ [REPLICATE] API token not configured, skipping...');
     return null;
   }
 
   try {
-    console.log('🎨 [REPLICATE] Starting premium image generation...');
     
     // Enhance prompt with colors
     const colorList = colors.map(c => c.replace('#', '')).join(', ');
@@ -62,19 +60,16 @@ export async function generateWithReplicate(
     if (!createResponse.ok) {
       // 402 Payment Required = no credits — throw so circuit breaker trips
       if (createResponse.status === 402) {
-        console.warn('💳 [REPLICATE] Account has no credits (402 Payment Required), skipping...');
         throw new Error('Replicate API error: 402 Payment Required — no credits');
       }
       // 429 Too Many Requests — skip immediately, circuit breaker will handle
       if (createResponse.status === 429) {
-        console.warn('🚦 [REPLICATE] Rate limited (429 Too Many Requests), skipping...');
         throw new Error('Replicate API error: 429 Too Many Requests');
       }
       throw new Error(`Replicate API error: ${createResponse.status} ${createResponse.statusText}`);
     }
 
     const prediction: ReplicatePrediction = await createResponse.json();
-    console.log(`🔄 [REPLICATE] Prediction created: ${prediction.id}`);
 
     // Poll for completion
     const startTime = Date.now();
@@ -82,7 +77,6 @@ export async function generateWithReplicate(
     
     while (attempts < MAX_RETRIES) {
       if (Date.now() - startTime > MAX_WAIT_TIME) {
-        console.warn('⏱️ [REPLICATE] Timeout waiting for image generation');
         return null;
       }
 
@@ -105,12 +99,10 @@ export async function generateWithReplicate(
       const status: ReplicatePrediction = await statusResponse.json();
       
       if (status.status === 'succeeded' && status.output && status.output[0]) {
-        console.log('✅ [REPLICATE] Image generated successfully');
         return status.output[0];
       }
       
       if (status.status === 'failed' || status.status === 'canceled') {
-        console.error('❌ [REPLICATE] Generation failed:', status.error);
         return null;
       }
       
@@ -118,11 +110,9 @@ export async function generateWithReplicate(
       attempts++;
     }
 
-    console.warn('⚠️ [REPLICATE] Max retries reached');
     return null;
 
   } catch (error: any) {
-    console.error('❌ [REPLICATE] Error generating image:', error);
     // Re-throw 402/429 so the circuit breaker in smart-image-generation.ts can trip
     if (error?.message?.includes('402') || error?.message?.includes('429')) {
       throw error;

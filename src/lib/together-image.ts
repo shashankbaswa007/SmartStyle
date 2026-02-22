@@ -29,12 +29,10 @@ export async function generateWithTogether(
   colors: string[]
 ): Promise<string | null> {
   if (!TOGETHER_API_KEY) {
-    console.warn('⚠️ [TOGETHER] API key not configured, skipping...');
     return null;
   }
 
   try {
-    console.log('🎨 [TOGETHER] Starting image generation...');
 
     // Enhance prompt with color context for fashion relevance
     const colorList = colors
@@ -72,7 +70,6 @@ export async function generateWithTogether(
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'unknown');
-      console.warn(`⚠️ [TOGETHER] API error ${response.status}: ${errorText}`);
       return null;
     }
 
@@ -80,24 +77,19 @@ export async function generateWithTogether(
 
     const imageUrl = data?.data?.[0]?.url;
     if (imageUrl) {
-      console.log('✅ [TOGETHER] Image generated successfully');
       return imageUrl;
     }
 
     // Handle base64 response as fallback
     const b64 = data?.data?.[0]?.b64_json;
     if (b64) {
-      console.log('✅ [TOGETHER] Image generated (base64)');
       return `data:image/png;base64,${b64}`;
     }
 
-    console.warn('⚠️ [TOGETHER] No image URL in response');
     return null;
   } catch (error) {
     if (error instanceof DOMException && error.name === 'TimeoutError') {
-      console.warn('⏱️ [TOGETHER] Request timed out');
     } else {
-      console.error('❌ [TOGETHER] Error:', error);
     }
     return null;
   }

@@ -47,7 +47,6 @@ export async function analyzeStylePreferences(input: AnalyzeStylePreferencesInpu
       // Convert to string for prompt
       personalizationContext = JSON.stringify(contextData, null, 2);
     } catch (error) {
-      console.error("Error fetching personalization:", error);
     }
   }
 

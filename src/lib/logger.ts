@@ -37,31 +37,26 @@ class Logger {
 
   debug(...args: unknown[]): void {
     if (this.shouldLog('debug')) {
-      console.debug('[DEBUG]', ...args);
     }
   }
 
   log(...args: unknown[]): void {
     if (this.shouldLog('info')) {
-      console.log(...args);
     }
   }
 
   info(...args: unknown[]): void {
     if (this.shouldLog('info')) {
-      console.info('[INFO]', ...args);
     }
   }
 
   warn(...args: unknown[]): void {
     if (this.shouldLog('warn')) {
-      console.warn(...args);
     }
   }
 
   error(...args: unknown[]): void {
     if (this.shouldLog('error')) {
-      console.error(...args);
     }
   }
 

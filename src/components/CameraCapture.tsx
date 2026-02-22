@@ -38,7 +38,6 @@ export function CameraCapture({ onCapture, onClose, className }: CameraCapturePr
         setIsCameraActive(true);
       }
     } catch (err) {
-      console.error('Error accessing camera:', err);
       alert('Could not access camera. Please ensure camera permissions are granted.');
     }
   }, [facingMode]);

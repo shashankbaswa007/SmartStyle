@@ -47,7 +47,6 @@ export function MatchingWardrobeItems({
           setMatchingItems(matches);
         }
       } catch (error) {
-        console.error('Error loading matching items:', error);
         if (!cancelled) setLoadError(true);
       } finally {
         if (!cancelled) setIsLoading(false);

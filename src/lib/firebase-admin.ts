@@ -24,7 +24,6 @@ if (!admin.apps.length) {
         });
         logger.log('✅ Firebase Admin SDK initialized with service account');
       } catch (jsonError) {
-        console.error('❌ Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY:', jsonError);
         throw new Error('Invalid FIREBASE_SERVICE_ACCOUNT_KEY format - must be valid JSON');
       }
     } else {

@@ -43,7 +43,6 @@ const defaultLifecycle: LifecycleCallback = (e) => {
     e.status === 'success' ? '✅' :
     '❌';
   const dur = e.duration ? ` (${(e.duration / 1000).toFixed(2)}s)` : '';
-  console.log(`${icon} [IMG] ${e.provider} → ${e.status}${dur}${e.error ? ' — ' + e.error : ''}`);
 };
 
 // ─── Helper: unique seed ────────────────────────────────────────────────────

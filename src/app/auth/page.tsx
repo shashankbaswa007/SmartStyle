@@ -77,7 +77,6 @@ export default function AuthPage() {
         router.push('/');
       }
     } catch (error: any) {
-      console.error('Google sign-in error:', error);
       toast({
         variant: 'destructive',
         title: 'Authentication Error',

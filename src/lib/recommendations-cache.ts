@@ -90,21 +90,18 @@ export function getCachedRecommendation(
   const entry = cache.get(cacheKey);
   
   if (!entry) {
-    console.log('💡 Cache MISS: No cached recommendation found');
     return null;
   }
   
   // Check if cache is expired
   const age = Date.now() - entry.value.timestamp;
   if (age > CACHE_DURATION_MS) {
-    console.log(`💡 Cache EXPIRED: ${Math.round(age / 1000 / 60)} minutes old (max: ${CACHE_DURATION_MS / 1000 / 60})`);
     cache.delete(cacheKey);
     return null;
   }
   
   // Check if wardrobe has changed
   if (entry.value.wardrobeHash !== wardrobeHash) {
-    console.log('💡 Cache INVALID: Wardrobe has changed');
     cache.delete(cacheKey);
     return null;
   }
@@ -112,7 +109,6 @@ export function getCachedRecommendation(
   // Update last accessed time for LRU
   entry.lastAccessed = Date.now();
   
-  console.log(`✅ Cache HIT: Returning cached recommendation (${Math.round(age / 1000)}s old)`);
   return entry.value.recommendations;
 }
 
@@ -141,7 +137,6 @@ export function cacheRecommendation(
     lastAccessed: Date.now(),
   });
   
-  console.log(`💾 Cached recommendation (total: ${cache.size}/${MAX_CACHE_SIZE})`);
 }
 
 /**
@@ -160,7 +155,6 @@ function evictLeastRecentlyUsed(): void {
   
   if (oldestKey) {
     cache.delete(oldestKey);
-    console.log('🗑️ Evicted LRU cache entry');
   }
 }
 
@@ -179,7 +173,6 @@ export function invalidateUserCache(userId: string): void {
   }
   
   if (deletedCount > 0) {
-    console.log(`🗑️ Invalidated ${deletedCount} cached recommendations for user`);
   }
 }
 
@@ -189,7 +182,6 @@ export function invalidateUserCache(userId: string): void {
 export function clearAllCache(): void {
   const size = cache.size;
   cache.clear();
-  console.log(`🗑️ Cleared ${size} cached recommendations`);
 }
 
 /**

@@ -37,7 +37,6 @@ export default function SavedPalettesPage() {
       const data = await getSavedPalettes(user.uid);
       setPalettes(data);
     } catch (error) {
-      console.error('Error loading palettes:', error);
       toast({
         title: 'Error',
         description: 'Failed to load saved palettes',
@@ -71,7 +70,6 @@ export default function SavedPalettesPage() {
         throw new Error(result.message);
       }
     } catch (error) {
-      console.error('Error deleting palette:', error);
       toast({
         title: 'Error',
         description: 'Failed to delete palette',

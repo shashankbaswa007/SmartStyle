@@ -56,22 +56,11 @@ export function RecommendationFeedback({
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    console.log('🔍 RecommendationFeedback: Setting up auth listener...');
-    
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('🔥 RecommendationFeedback auth state:', {
-        hasUser: !!user,
-        uid: user?.uid,
-        email: user?.email,
-        isAnonymous: user?.isAnonymous,
-      });
-
       if (user && !user.isAnonymous) {
         setIsAuthenticated(true);
-        console.log('✅ RecommendationFeedback: User is authenticated');
       } else {
         setIsAuthenticated(false);
-        console.log('⚠️ RecommendationFeedback: User is not authenticated or anonymous');
       }
       
       setAuthChecked(true);
@@ -82,7 +71,6 @@ export function RecommendationFeedback({
 
   const handleQuickFeedback = async (isLiked: boolean) => {
     if (!isAuthenticated) {
-      console.log('⚠️ User not authenticated, showing sign-in prompt');
       toast({
         title: "Sign in required",
         description: "Please sign in to save feedback on recommendations",
@@ -110,7 +98,6 @@ export function RecommendationFeedback({
       }
       
       const idToken = await currentUser.getIdToken();
-      console.log('🔑 Got ID token, calling provideFeedback...');
 
       // Use the new server action
       const result = await provideFeedback(
@@ -158,7 +145,6 @@ export function RecommendationFeedback({
         setLiked(null);
       }
     } catch (error) {
-      console.error('Error submitting quick feedback:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -172,7 +158,6 @@ export function RecommendationFeedback({
 
   const handleDetailedFeedback = async () => {
     if (!isAuthenticated) {
-      console.log('⚠️ User not authenticated, showing sign-in prompt');
       toast({
         title: "Sign in required",
         description: "Please sign in to save detailed feedback",
@@ -199,7 +184,6 @@ export function RecommendationFeedback({
       }
       
       const idToken = await currentUser.getIdToken();
-      console.log('🔑 Got ID token, calling provideFeedback...');
 
       // Use the new server action with notes
       const result = await provideFeedback(
@@ -251,7 +235,6 @@ export function RecommendationFeedback({
         }
       }
     } catch (error) {
-      console.error('Error submitting detailed feedback:', error);
       toast({
         variant: 'destructive',
         title: 'Error',

@@ -127,7 +127,6 @@ export async function validateAndSanitizeImage(
       sanitizedDataUri,
     };
   } catch (error) {
-    console.error('Server-side image validation error:', error);
     return {
       isValid: false,
       error: 'Failed to validate image. Please try a different image.',

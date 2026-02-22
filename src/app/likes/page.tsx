@@ -10,10 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { lazy, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 const Particles = dynamic(() => import('@/components/Particles'), { ssr: false });
-import ShinyText from '@/components/ShinyText';
-import TextPressure from '@/components/TextPressure';
+const ShinyText = lazy(() => import('@/components/ShinyText'));
+const TextPressure = lazy(() => import('@/components/TextPressure'));
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { getLikedOutfits, removeLikedOutfit } from '@/lib/likedOutfits';
@@ -93,7 +94,6 @@ export default function LikesPage() {
 
   const handleRefresh = () => {
     if (userId) {
-      console.log('🔄 Manual refresh triggered');
       setError(null);
       setLoading(true);
       fetchLikedOutfits(userId);
@@ -122,7 +122,6 @@ export default function LikesPage() {
         });
       }
     } catch (error) {
-      console.error('Error removing like:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -135,32 +134,12 @@ export default function LikesPage() {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔍 Fetching liked outfits for user:', uid);
-      console.log('🔍 Firebase db object:', db);
-      console.log('🔍 Auth current user:', auth.currentUser?.uid);
-      
       // Use the centralized getLikedOutfits function
       const outfitsData = await getLikedOutfits(uid);
       
-      console.log('✅ Fetched outfits:', outfitsData.length, 'valid outfits');
-      if (outfitsData.length > 0) {
-        console.log('📊 First outfit:', outfitsData[0]);
-        console.log('📊 All outfit titles:', outfitsData.map(o => o.title));
-      }
-      
       // Data already has the id field from getLikedOutfits
       setLikedOutfits(outfitsData as LikedOutfit[]);
-      
-      if (outfitsData.length === 0) {
-        console.log('ℹ️ No liked outfits found in database - user may need to like some outfits first');
-      }
     } catch (error) {
-      console.error('❌ Error fetching liked outfits:', error);
-      console.error('Error details:', {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        code: (error as any)?.code,
-      });
       
       // Set user-friendly error message
       let errorMessage = 'Failed to load your liked outfits';
@@ -231,15 +210,17 @@ export default function LikesPage() {
             paddingRight: '40px'
           }}>
             {isMounted && (
-              <TextPressure
-                text="Your Likes"
-                stroke={true}
-                width={false}
-                weight={true}
-                textColor="#fca5a5"
-                strokeColor="#dc2626"
-                minFontSize={32}
-              />
+              <Suspense fallback={<h1 className="text-6xl font-bold bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">Your Likes</h1>}>
+                <TextPressure
+                  text="Your Likes"
+                  stroke={true}
+                  width={false}
+                  weight={true}
+                  textColor="#fca5a5"
+                  strokeColor="#dc2626"
+                  minFontSize={32}
+                />
+              </Suspense>
             )}
             {/* Refresh button - only show when there are liked outfits */}
             {likedOutfits.length > 0 && (
@@ -269,10 +250,12 @@ export default function LikesPage() {
               </Button>
             )}
           </div>
-          <ShinyText
-            className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto"
-            text="Your curated collection of favorite outfit recommendations"
-          />
+          <Suspense fallback={<p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">Your curated collection of favorite outfit recommendations</p>}>
+            <ShinyText
+              className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto"
+              text="Your curated collection of favorite outfit recommendations"
+            />
+          </Suspense>
         </header>
 
         {/* Content */}

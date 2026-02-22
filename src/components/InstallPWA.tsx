@@ -62,9 +62,7 @@ export function InstallPWA() {
     const { outcome } = await deferredPrompt.userChoice;
 
     if (outcome === 'accepted') {
-      console.log('PWA installed');
     } else {
-      console.log('PWA installation dismissed');
       localStorage.setItem('pwa-install-dismissed', new Date().toISOString());
     }
 

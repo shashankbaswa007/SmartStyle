@@ -116,7 +116,6 @@ const convertColorNameToHex = (colorName: string): string => {
   
   // Log if we had to use the default
   if (hexValue === '#808080' && normalized !== 'gray' && normalized !== 'grey') {
-    console.warn(`⚠️ Unknown color name: "${colorName}" - using gray as fallback`);
   }
   
   return hexValue;
@@ -415,87 +414,45 @@ export function StyleAdvisorResults({
         }
         return next;
       });
-      console.warn('⏱️ Image load timeout — forced remaining images to error state');
     }, 30000);
     return () => clearTimeout(timer);
   }, [imageStates]);
 
   const handleImageLoad = (index: number) => {
-    console.log('🖼️ Image loaded:', index);
     setImageStates(prev => new Map(prev).set(index, 'loaded'));
   };
 
   const handleImageError = (index: number) => {
-    console.log('❌ Image error:', index);
     setImageStates(prev => new Map(prev).set(index, 'error'));
   };
 
   useEffect(() => {
-    console.log('🔍 StyleAdvisorResults: Setting up Firebase auth listener...');
     
     // Direct Firebase auth state listener (bypassing custom wrapper)
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('🔥 Firebase auth state update:', {
-        timestamp: new Date().toISOString(),
-        hasUser: !!user,
-        uid: user?.uid,
-        email: user?.email,
-        displayName: user?.displayName,
-        isAnonymous: user?.isAnonymous,
-        providerData: user?.providerData,
-      });
-
       if (user) {
         setUserId(user.uid);
         setUserEmail(user.email);
         setIsAnonymous(user.isAnonymous);
-        console.log(`✅ User authenticated: ${user.email || user.uid} (Anonymous: ${user.isAnonymous})`);
       } else {
         setUserId(null);
         setUserEmail(null);
         setIsAnonymous(true);
-        console.log('⚠️ No authenticated user found');
       }
       
       setAuthChecked(true);
     });
 
-    // Also log current user immediately
+    // Also check current user immediately
     const currentUser = auth.currentUser;
-    console.log('📌 Current auth.currentUser on mount:', {
-      hasUser: !!currentUser,
-      uid: currentUser?.uid,
-      email: currentUser?.email,
-      isAnonymous: currentUser?.isAnonymous,
-    });
 
     return () => {
-      console.log('� Cleaning up Firebase auth listener');
       unsubscribe();
     };
   }, []);
 
   const handleUseOutfit = async (outfitIndex: number, outfitTitle: string) => {
-    console.log('❤️ User liked outfit', { 
-      outfitIndex, 
-      outfitTitle,
-      userId, 
-      recommendationId,
-      isAnonymous,
-      authChecked,
-      checks: {
-        hasUserId: !!userId,
-        hasRecommendationId: !!recommendationId,
-        isNotAnonymous: !isAnonymous
-      }
-    });
-    
     if (!userId || !recommendationId || isAnonymous) {
-      console.error('❌ Auth check failed:', {
-        missingUserId: !userId,
-        missingRecommendationId: !recommendationId,
-        userIsAnonymous: isAnonymous
-      });
       
       toast({
         title: "Sign in required",
@@ -522,7 +479,6 @@ export function StyleAdvisorResults({
       }
       
       const idToken = await currentUser.getIdToken();
-      console.log('� Got ID token, calling saveRecommendationUsage...');
       
       const result = await saveRecommendationUsage(idToken, recommendationId, outfitIndex, outfitTitle);
       
@@ -533,26 +489,15 @@ export function StyleAdvisorResults({
         try {
           await trackOutfitSelection(userId, recommendationId, `outfit${outfitIndex + 1}` as any);  // Fixed: Add + 1
         } catch (trackError) {
-          console.warn('⚠️ Failed to track outfit selection (non-critical):', trackError);
           // Don't throw - this is non-critical, the like still succeeded
         }
         
         // Save to liked outfits collection
         const outfit = enrichedOutfits[outfitIndex];
         if (outfit) {
-          console.log('💾 Attempting to save outfit to likes...', {
-            userId,
-            outfitTitle: outfit.title,
-            hasImageUrl: !!generatedImageUrls[outfitIndex],
-            imageUrl: generatedImageUrls[outfitIndex]?.substring(0, 50) + '...',
-            hasShoppingLinks: !!outfit.shoppingLinks,
-            shoppingLinks: outfit.shoppingLinks,
-          });
-          
           // Ensure we have valid data before saving
           const imageUrl = generatedImageUrls[outfitIndex];
           if (!imageUrl) {
-            console.error('❌ No image URL available for outfit', outfitIndex);
             toast({
               title: "Cannot Save",
               description: "Image not available for this outfit",
@@ -581,9 +526,6 @@ export function StyleAdvisorResults({
             };
           });
           
-          console.log('🔥 BEFORE calling saveLikedOutfit - Function exists?', typeof saveLikedOutfit);
-          console.log('🔥 UserId:', userId);
-          console.log('🔥 ImageUrl:', imageUrl?.substring(0, 50));
           
           let likedOutfitResult: { success: boolean; message: string; isDuplicate?: boolean } | undefined;
           try {
@@ -605,23 +547,16 @@ export function StyleAdvisorResults({
               recommendationId: recommendationId || `rec_${Date.now()}`,
             });
           } catch (saveError) {
-            console.error('🔥 ERROR inside saveLikedOutfit call:', saveError);
-            console.error('🔥 Error type:', saveError instanceof Error ? saveError.constructor.name : typeof saveError);
-            console.error('🔥 Error message:', saveError instanceof Error ? saveError.message : String(saveError));
-            console.error('🔥 Error stack:', saveError instanceof Error ? saveError.stack : 'No stack');
             throw saveError; // Re-throw to be caught by outer try-catch
           }
           
-          console.log('📊 Save liked outfit result:', likedOutfitResult);
           
           if (likedOutfitResult.isDuplicate) {
-            console.log('ℹ️ Outfit already in likes');
             toast({
               title: "Already Liked ❤️",
               description: "This outfit is already in your favorites!",
             });
           } else if (likedOutfitResult.success) {
-            console.log('✅ Outfit saved to likes collection');
             
             // Update preferences from like (+2 weight)
             try {
@@ -632,18 +567,9 @@ export function StyleAdvisorResults({
               });
               
               if (prefResult.success) {
-                console.log('✅ Preferences updated from like (+2 weight)');
               } else {
-                console.warn('⚠️ Preference update returned unsuccessful:', prefResult.message);
               }
             } catch (prefError) {
-              console.error('❌ Error updating preferences from like:', prefError);
-              console.error('   Error details:', {
-                name: prefError instanceof Error ? prefError.name : 'Unknown',
-                message: prefError instanceof Error ? prefError.message : String(prefError),
-                userId,
-                outfitTitle: outfit.title
-              });
               // Non-critical error - don't block the like action
             }
             
@@ -652,7 +578,6 @@ export function StyleAdvisorResults({
               description: `"${outfit.title}" has been saved to your likes! View it in your Likes page.`,
             });
           } else {
-            console.error('❌ Failed to save to likes:', likedOutfitResult.message);
             toast({
               title: "Couldn't Save to Likes",
               description: likedOutfitResult.message || "Failed to add to favorites",
@@ -661,7 +586,6 @@ export function StyleAdvisorResults({
             // Don't return here - still track the selection for preferences
           }
         } else {
-          console.error('❌ Outfit data not found at index:', outfitIndex);
           toast({
             title: "Error",
             description: "Outfit data not available",
@@ -697,11 +621,10 @@ export function StyleAdvisorResults({
           });
         }
       }
-    } catch (error) {
-      console.error('❌ Error using outfit:', error);
+    } catch {
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to save outfit selection. Please try again.",
+        description: "Failed to save outfit selection. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -711,15 +634,24 @@ export function StyleAdvisorResults({
 
   const findSimilar = async (query: string, colors?: string[], genderParam?: string): Promise<ShoppingLinks | null> => {
     try {
+      // Build auth headers
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (auth.currentUser) {
+        try {
+          const idToken = await auth.currentUser.getIdToken();
+          headers['Authorization'] = `Bearer ${idToken}`;
+        } catch {
+          // Continue without auth
+        }
+      }
       const res = await fetch('/api/tavily/search', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ query, colors, gender: genderParam }),
       });
       const data = await res.json();
       return data?.links as ShoppingLinks | null;
-    } catch (err) {
-      console.warn('Find similar failed', err);
+    } catch {
       return null;
     }
   };
@@ -733,7 +665,6 @@ export function StyleAdvisorResults({
 
     const fetchShoppingLinks = async () => {
       try {
-        console.log('🛍️ Checking shopping links for outfits...');
         setLoadingLinks(true);
         
         const updatedOutfits = await Promise.all(
@@ -746,16 +677,10 @@ export function StyleAdvisorResults({
             );
 
             if (hasValidLinks) {
-              console.log(`✅ Outfit ${index} already has shopping links from API:`, {
-                amazon: !!outfit.shoppingLinks?.amazon,
-                tatacliq: !!outfit.shoppingLinks?.tatacliq,
-                myntra: !!outfit.shoppingLinks?.myntra,
-              });
               return outfit;
             }
 
             // No links from API - fetch them now as fallback
-            console.log(`⚠️ Outfit ${index} missing shopping links, fetching now...`);
             
             // Build optimized search query from individual items
             const allItems = outfit.items || [];
@@ -763,14 +688,11 @@ export function StyleAdvisorResults({
               ? allItems[0] // Use first item for focused search
               : outfit.title;
             
-            console.log(`🔍 Searching for: "${firstItemQuery}" (${allItems.length} total items)`);
-            console.log(`   Gender: ${gender || 'not specified'}`);
             
             const links = await findSimilar(firstItemQuery, outfit.colorPalette, gender);
             
             // If Tavily returns links, use them
             if (links && (links.amazon || links.tatacliq || links.myntra)) {
-              console.log(`✅ Found Tavily links for outfit ${index}:`, links);
               return {
                 ...outfit,
                 shoppingLinks: {
@@ -782,9 +704,7 @@ export function StyleAdvisorResults({
             }
             
             // Fallback: Generate optimized search URLs
-            console.log(`⚠️ No Tavily links found for outfit ${index}, generating optimized URLs`);
             const searchUrls = generateSearchUrls(allItems, gender);
-            console.log(`🔗 Generated optimized URLs (query: "${searchUrls.query}"):`, searchUrls);
             
             return {
               ...outfit,
@@ -798,9 +718,7 @@ export function StyleAdvisorResults({
         );
 
         setEnrichedOutfits(updatedOutfits);
-        console.log('✅ All shopping links ready');
       } catch (error) {
-        console.error('❌ Error fetching shopping links:', error);
         // Keep original outfits on error
       } finally {
         setLoadingLinks(false);
@@ -840,18 +758,15 @@ export function StyleAdvisorResults({
     }
 
     setIsMarkingWorn(outfitIndex);
-    console.log('🔄 Marking outfit as worn:', { outfitIndex, userId, outfit: outfit.title });
     
     try {
       const season = getCurrentSeason();
-      console.log('📅 Current season:', season);
       
       const result = await updatePreferencesFromWear(userId, outfit, {
         occasion: outfit.occasion || 'casual',
         season,
       });
 
-      console.log('📊 Update result:', result);
 
       if (result.success) {
         setWornOutfits(prev => new Set(prev).add(outfitIndex));
@@ -859,27 +774,10 @@ export function StyleAdvisorResults({
           title: "Marked as Worn! 👔",
           description: `We'll remember you love "${outfit.title}" style! Future recommendations will be even better.`,
         });
-        console.log('✅ Preferences updated from wear (+5 weight):', {
-          colors: outfit.colorPalette || outfit.colors,
-          style: outfit.styleType || outfit.style,
-          occasion: outfit.occasion
-        });
       } else {
         throw new Error(result.message || 'Unknown error');
       }
     } catch (error) {
-      console.error('❌ Error marking outfit as worn:', error);
-      console.error('   Error details:', {
-        name: error instanceof Error ? error.name : 'Unknown',
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        userId,
-        outfitIndex,
-        outfitTitle: outfit.title,
-        hasColorPalette: !!outfit.colorPalette,
-        hasColors: !!outfit.colors,
-        season: getCurrentSeason()
-      });
       
       // Provide user-friendly error messages based on error type
       let userMessage = 'Failed to mark as worn. Please try again.';
@@ -910,9 +808,7 @@ export function StyleAdvisorResults({
     if (userId) {
       try {
         await trackShoppingClick(userId, platform, item);
-        console.log(`✅ Shopping click tracked: ${platform} - ${item}`);
       } catch (error) {
-        console.warn('⚠️ Failed to track shopping click (non-critical):', error);
       }
     }
   };
@@ -975,7 +871,6 @@ export function StyleAdvisorResults({
                 size="sm"
                 className="ml-4 whitespace-nowrap"
                 onClick={() => {
-                  console.log('🔄 Redirecting to /auth...');
                   window.location.href = '/auth';
                 }}
               >

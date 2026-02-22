@@ -18,7 +18,6 @@ async function verifyUserToken(idToken: string): Promise<string | null> {
     );
 
     if (!response.ok) {
-      console.error('❌ Token verification failed:', response.statusText);
       return null;
     }
 
@@ -26,14 +25,11 @@ async function verifyUserToken(idToken: string): Promise<string | null> {
     
     if (data.users && data.users.length > 0) {
       const userId = data.users[0].localId;
-      console.log('✅ Token verified successfully for user:', userId);
       return userId;
     }
 
-    console.error('❌ No user found in token verification response');
     return null;
   } catch (error) {
-    console.error('❌ Error verifying token:', error);
     return null;
   }
 }
@@ -47,34 +43,27 @@ export async function getWeatherData(coords: z.infer<typeof WeatherSchema>) {
   const { lat, lon } = coords;
   const apiKey = process.env.OPENWEATHER_API_KEY;
 
-  console.log(`🌤️ Weather API called for coordinates: [${lat}, ${lon}]`);
 
   if (!apiKey) {
-    console.error('❌ OpenWeather API key not found.');
     return 'Weather data not available. API key missing.';
   }
 
   try {
     const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
-    console.log(`🔄 Fetching weather from OpenWeather API...`);
     
     const response = await fetch(url);
     
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('❌ OpenWeather API error:', errorData);
       return `Could not fetch weather. Status: ${response.status}`;
     }
     
     const data = await response.json();
     const result = `The weather in ${data.name} is ${data.main.temp}°C with ${data.weather[0].description}.`;
     
-    console.log(`✅ Weather retrieved: ${data.name}, ${data.sys.country} - ${data.main.temp}°C`);
-    console.log(`   Coordinates verified: [${data.coord.lat}, ${data.coord.lon}]`);
     
     return result;
   } catch (error) {
-    console.error('❌ Failed to fetch weather data:', error);
     return 'Failed to fetch weather data.';
   }
 }
@@ -89,14 +78,12 @@ export async function provideFeedback(
     const userId = await verifyUserToken(idToken);
     
     if (!userId) {
-      console.warn('⚠️ User not authenticated - feedback will not be saved');
       return { 
         success: false, 
         error: 'Please sign in to save feedback on recommendations' 
       };
     }
 
-    console.log(`✅ User ${userId} authenticated, saving feedback...`);
 
     // Save to Firestore using REST API
     const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${userId}/feedback/${recommendationId}`;
@@ -118,20 +105,17 @@ export async function provideFeedback(
 
     if (!firestoreResponse.ok) {
       const errorText = await firestoreResponse.text();
-      console.error('❌ Firestore error:', errorText);
       return {
         success: false,
         error: 'Failed to save feedback to database.',
       };
     }
 
-    console.log(`✅ Feedback saved: ${rating} for recommendation ${recommendationId}`);
     return { success: true };
   } catch (error) {
-    console.error('❌ Error saving feedback:', error);
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Failed to save feedback. Please try again.' 
+      error: 'Failed to save feedback. Please try again.' 
     };
   }
 }
@@ -146,20 +130,16 @@ export async function saveRecommendationUsage(
     const userId = await verifyUserToken(idToken);
     
     if (!userId) {
-      console.warn('⚠️ User not authenticated - recommendation usage will not be tracked');
       return { 
         success: false, 
         error: 'Please sign in to save outfits' 
       };
     }
 
-    console.log(`✅ User ${userId} authenticated, checking recommendation...`);
 
     // ✅ FIX: Skip Firestore lookup for temporary IDs AND rec_ IDs (development mode)
     // In dev mode without Firebase Admin, recommendations aren't saved to Firestore
     if (recommendationId.startsWith('temp_') || recommendationId.startsWith('rec_')) {
-      console.log(`⚠️ Skipping Firestore lookup for development ID: ${recommendationId} (development mode)`);
-      console.log(`✅ Outfit liked successfully (client-side only)`);
       return { 
         success: true, // Return success to avoid breaking the UI
       };
@@ -177,9 +157,6 @@ export async function saveRecommendationUsage(
     });
 
     if (!getResponse.ok) {
-      console.error('❌ Recommendation not found in Firestore:', recommendationId);
-      console.warn('ℹ️ This may be because Firebase Admin credentials are not configured (development mode)');
-      console.log(`✅ Outfit liked successfully (client-side only)`);
       // Return success anyway so the UI works in development mode
       return { 
         success: true,
@@ -192,7 +169,6 @@ export async function saveRecommendationUsage(
     const outfits = recommendationData.fields?.analysis?.mapValue?.fields?.outfitRecommendations?.arrayValue?.values;
     
     if (!outfits || !outfits[outfitIndex]) {
-      console.error('❌ Outfit not found at index:', outfitIndex);
       return { 
         success: false, 
         error: 'Outfit not found in recommendation data.' 
@@ -221,7 +197,6 @@ export async function saveRecommendationUsage(
 
     if (!usageResponse.ok) {
       const errorText = await usageResponse.text();
-      console.error('❌ Firestore error saving usage:', errorText);
       return {
         success: false,
         error: 'Failed to save outfit to database.',
@@ -244,13 +219,11 @@ export async function saveRecommendationUsage(
       }),
     });
 
-    console.log(`✅ Outfit marked as used: ${recommendationId}[${outfitIndex}] - ${outfitTitle}`);
     return { success: true };
   } catch (error) {
-    console.error('❌ Error using recommendation:', error);
     return { 
       success: false, 
-      error: error instanceof Error ? error.message : 'Failed to save outfit. Please try again.' 
+      error: 'Failed to save outfit. Please try again.' 
     };
   }
 }

@@ -65,13 +65,11 @@ export async function generateImageWithRetry(
   const key = dedupKey(prompt, colors);
   const existing = inflightRequests.get(key);
   if (existing) {
-    console.log('♻️ [IMG] Reusing in-flight request for identical prompt');
     return existing;
   }
 
   // ── Throttle: wait until a slot opens ─────────────────────────────────────
   if (activeRequests >= MAX_CONCURRENT) {
-    console.log(`⏳ [IMG] Throttled — ${activeRequests}/${MAX_CONCURRENT} active, waiting...`);
     await new Promise<void>((resolve) => {
       const check = setInterval(() => {
         if (activeRequests < MAX_CONCURRENT) {
@@ -93,7 +91,6 @@ export async function generateImageWithRetry(
       e.status === 'in-progress' ? '⏳' :
       e.status === 'success' ? '✅' : '❌';
     const dur = e.duration ? ` (${(e.duration / 1000).toFixed(2)}s)` : '';
-    console.log(`${icon} [IMG] ${e.provider} → ${e.status}${dur}${e.error ? ' — ' + e.error : ''}`);
   };
 
   const promise = _generateWithChain(prompt, colors, onLifecycle, maxBudgetMs);
@@ -121,12 +118,10 @@ async function _generateWithChain(
   const elapsed = () => Date.now() - chainStart;
   const budgetLeft = () => effectiveTimeout - elapsed();
 
-  console.log(`🎨 [IMG] Starting image generation chain (${(effectiveTimeout / 1000).toFixed(1)}s budget)...`);
 
   // ── Provider 1: Pollinations.ai (turbo model, 10 s, circuit breaker) ─────────
   const pollinationsAllowed = Date.now() > pollinationsDisabledUntil;
   if (!pollinationsAllowed) {
-    console.log('🛡️ [IMG] Pollinations skipped (circuit breaker active — recent timeout)');
   }
   if (budgetLeft() > 2000 && pollinationsAllowed) {
     const pollinationsController = new AbortController();
@@ -148,16 +143,13 @@ async function _generateWithChain(
       // Pollinations is the sole provider — don't disable it for slow responses
       if (err.message?.includes('401') || err.message?.includes('403')) {
         pollinationsDisabledUntil = Date.now() + 60_000;
-        console.log('🛡️ [IMG] Pollinations circuit breaker tripped (auth error) — disabled for 60s');
       }
     }
   }
 
   // ── Provider 2: Together.ai FLUX-schnell (single attempt) ─────────────────
   if (!isTogetherAvailable()) {
-    console.log('⚠️ [IMG] Together.ai skipped — TOGETHER_API_KEY not configured');
   } else if (budgetLeft() <= 1000) {
-    console.log('⚠️ [IMG] Together.ai skipped — insufficient budget');
   }
   if (budgetLeft() > 1000 && isTogetherAvailable()) {
     try {
@@ -193,15 +185,12 @@ async function _generateWithChain(
       // Circuit breaker: disable Replicate for 10 minutes on payment/rate errors
       if (err.message?.includes('402') || err.message?.includes('429') || err.message?.includes('credits')) {
         replicateDisabledUntil = Date.now() + 10 * 60 * 1000;
-        console.log('🛡️ [IMG] Replicate circuit breaker tripped — disabled for 10 min');
       }
     }
   } else if (!replicateAllowed && isReplicateAvailable()) {
-    console.log('🛡️ [IMG] Replicate skipped (circuit breaker active)');
   }
 
   // ── Final fallback: gradient SVG placeholder (instant) ────────────────────
-  console.log('📦 [IMG] All providers exhausted — using SVG placeholder');
   onLifecycle({ provider: 'svg-placeholder', status: 'success', timestamp: Date.now(), duration: elapsed() });
   return createFallbackPlaceholder(prompt, colors);
 }

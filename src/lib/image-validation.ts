@@ -42,7 +42,6 @@ export interface ImageValidationResult {
 export async function validateImageForStyleAnalysis(
   imageDataUri: string
 ): Promise<ImageValidationResult> {
-  console.log("🔍 Starting CLIENT-SIDE image validation (no data sent to servers)...");
   
   return new Promise((resolve) => {
     const img = new Image();
@@ -67,10 +66,8 @@ export async function validateImageForStyleAnalysis(
       try {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const result = analyzeImageForPerson(imageData, canvas.width, canvas.height);
-        console.log("✅ Client-side validation result:", result);
         resolve(result);
       } catch (error) {
-        console.error("❌ Validation error:", error);
         resolve({
           isValid: false,
           hasPerson: false,
@@ -169,13 +166,6 @@ function analyzeImageForPerson(
   const colorVarietyScore = colorVariety.size;
   const edgeScore = (verticalEdges + horizontalEdges) / totalPixels;
   
-  console.log("📊 Detection metrics:", {
-    skinPercentage: skinPercentage.toFixed(2),
-    fabricPercentage: fabricPercentage.toFixed(2),
-    colorVariety: colorVarietyScore,
-    edgeScore: edgeScore.toFixed(4),
-    imageSize: `${width}x${height}`
-  });
   
   // Decision logic based on heuristics
   let confidence = 0;

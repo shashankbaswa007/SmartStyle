@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { User, LogOut, Settings, Loader2, BarChart3, Wand2 } from 'lucide-react';
+import { User, LogOut, Settings, Loader2, BarChart3 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export function UserProfileDropdown() {
@@ -66,7 +66,6 @@ export function UserProfileDropdown() {
         router.push('/auth');
       }
     } catch (error) {
-      console.error('Sign out error:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
@@ -133,7 +132,7 @@ export function UserProfileDropdown() {
         {dropdownOpen && (
           <DropdownMenuContent
             align="end"
-            className="w-64 mt-2"
+            className="w-72 mt-2 rounded-xl shadow-lg border-border/50"
             asChild
             forceMount
           >
@@ -144,50 +143,45 @@ export function UserProfileDropdown() {
               transition={{ duration: 0.2 }}
             >
               {/* User Info Section */}
-              <DropdownMenuLabel className="font-normal">
-                <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-semibold leading-none">
-                    {user.displayName || 'User'}
-                  </p>
-                  <p className="text-xs leading-none text-muted-foreground">
-                    {user.email}
-                  </p>
+              <DropdownMenuLabel className="px-3 py-3">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-9 w-9 border border-accent/20">
+                    <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} />
+                    <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground text-xs font-semibold">
+                      {userInitials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <p className="text-sm font-semibold leading-none truncate">
+                      {user.displayName || 'User'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1 break-all leading-normal">
+                      {user.email}
+                    </p>
+                  </div>
                 </div>
               </DropdownMenuLabel>
 
               <DropdownMenuSeparator />
 
-              {/* Navigation Links */}
-              <DropdownMenuItem
-                onClick={() => {
-                  setDropdownOpen(false);
-                  router.push('/style-check');
-                }}
-                className="cursor-pointer"
-              >
-                <Wand2 className="mr-2 h-4 w-4" />
-                <span>Style Check</span>
-              </DropdownMenuItem>
-
+              {/* Analytics */}
               <DropdownMenuItem
                 onClick={() => {
                   setDropdownOpen(false);
                   router.push('/analytics');
                 }}
-                className="cursor-pointer"
+                className="cursor-pointer gap-2 px-3 py-2.5 text-sm"
               >
-                <BarChart3 className="mr-2 h-4 w-4" />
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
                 <span>Analytics</span>
               </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
 
               {/* Account Settings */}
               <DropdownMenuItem
                 onClick={handleAccountSettings}
-                className="cursor-pointer"
+                className="cursor-pointer gap-2 px-3 py-2.5 text-sm"
               >
-                <Settings className="mr-2 h-4 w-4" />
+                <Settings className="h-4 w-4 text-muted-foreground" />
                 <span>Account Settings</span>
               </DropdownMenuItem>
 
@@ -197,16 +191,16 @@ export function UserProfileDropdown() {
               <DropdownMenuItem
                 onClick={handleSignOut}
                 disabled={signOutLoading}
-                className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10"
+                className="cursor-pointer gap-2 px-3 py-2.5 text-sm text-destructive focus:text-destructive focus:bg-destructive/10"
               >
                 {signOutLoading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     <span>Signing out...</span>
                   </>
                 ) : (
                   <>
-                    <LogOut className="mr-2 h-4 w-4" />
+                    <LogOut className="h-4 w-4" />
                     <span>Sign Out</span>
                   </>
                 )}

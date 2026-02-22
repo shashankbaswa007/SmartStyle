@@ -121,7 +121,6 @@ class RequestCache {
     const existingLock = this.locks.get(key);
     if (existingLock) {
       this.stats.stampedePrevented++;
-      console.log(`⏳ [Cache] Waiting for concurrent fetch of key: ${key.substring(0, 30)}...`);
       return existingLock as Promise<T>;
     }
 

@@ -52,7 +52,6 @@ export async function POST(request: NextRequest) {
     try {
       decodedToken = await admin.auth().verifyIdToken(idToken);
     } catch (authError) {
-      console.error('Auth verification failed:', authError);
       return NextResponse.json(
         { error: 'Unauthorized - Invalid token' },
         { status: 401 }
@@ -108,10 +107,8 @@ export async function POST(request: NextRequest) {
         weatherData = await fetchWeatherForecast(targetDate);
         
         if (weatherData) {
-          console.log('Weather fetched for', targetDate.toDateString(), ':', weatherData);
         }
       } catch (weatherError) {
-        console.error('Failed to fetch weather:', weatherError);
         // Continue without weather data rather than failing the entire request
       }
     }
@@ -127,7 +124,6 @@ export async function POST(request: NextRequest) {
     // Check cache first for instant results
     const cachedResult = getCachedRecommendation(requestHash, wardrobeHash);
     if (cachedResult) {
-      console.log('✅ Returning cached outfit recommendations');
       return NextResponse.json(
         { 
           ...cachedResult,
@@ -141,7 +137,6 @@ export async function POST(request: NextRequest) {
     // Generate outfit suggestions (expensive AI call)
     let result;
     try {
-      console.log('🤖 Generating new outfit recommendations with AI...');
       result = await generateWardrobeOutfits(
         wardrobeItems,
         userId, 
@@ -151,9 +146,7 @@ export async function POST(request: NextRequest) {
       
       // Cache the result for future requests
       cacheRecommendation(requestHash, wardrobeHash, result);
-      console.log('💾 Cached new recommendations for future requests');
     } catch (generationError) {
-      console.error('Outfit generation failed:', generationError);
       
       // Handle specific errors
       if (generationError instanceof Error) {
@@ -194,7 +187,6 @@ export async function POST(request: NextRequest) {
     );
 
   } catch (error) {
-    console.error('Wardrobe outfit API error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -221,7 +213,6 @@ export async function GET(request: NextRequest) {
     try {
       decodedToken = await admin.auth().verifyIdToken(idToken);
     } catch (authError) {
-      console.error('Auth verification failed:', authError);
       return NextResponse.json(
         { error: 'Unauthorized - Invalid token' },
         { status: 401 }
@@ -241,7 +232,6 @@ export async function GET(request: NextRequest) {
     );
 
   } catch (error) {
-    console.error('Get saved outfits error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

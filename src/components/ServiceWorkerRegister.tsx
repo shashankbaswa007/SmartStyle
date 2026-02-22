@@ -12,7 +12,6 @@ export function ServiceWorkerRegister() {
       navigator.serviceWorker
         .register('/sw.js')
         .then((registration) => {
-          console.log('Service Worker registered:', registration);
 
           // Check for updates
           registration.addEventListener('updatefound', () => {
@@ -40,18 +39,15 @@ export function ServiceWorkerRegister() {
           });
         })
         .catch((error) => {
-          console.error('Service Worker registration failed:', error);
         });
 
       // Handle controller change
       navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('Service Worker controller changed');
       });
 
       // Listen for messages from service worker
       navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data && event.data.type === 'CACHE_UPDATED') {
-          console.log('Cache updated:', event.data.url);
         }
       });
     }

@@ -44,10 +44,8 @@ export async function logAuditEvent(
       timestamp: Timestamp.fromDate(auditLogData.timestamp as Date),
     });
 
-    console.log(`✅ Audit log created: ${auditLogId} (${event.action} on ${event.collection}/${event.documentId})`);
     return auditLogId;
   } catch (error) {
-    console.error('❌ Failed to create audit log:', error);
     // Don't throw - audit logging failure shouldn't break the main operation
     return '';
   }
@@ -95,9 +93,7 @@ export async function trackPreferenceChange(
       newData,
     });
 
-    console.log(`✅ Preference change tracked: ${changeId}`);
   } catch (error) {
-    console.error('❌ Failed to track preference change:', error);
   }
 }
 
@@ -147,10 +143,8 @@ export async function logDeletion(
       previousData: deletedData,
     });
 
-    console.log(`✅ Deletion logged: ${deletionId} (${collection}/${documentId})`);
     return deletionId;
   } catch (error) {
-    console.error('❌ Failed to log deletion:', error);
     // Return deletionId anyway - logging failure shouldn't block the operation
     return deletionId;
   }
@@ -226,13 +220,11 @@ export async function recoverDeletedData(deletionId: string): Promise<{
       },
     });
 
-    console.log(`✅ Data recovered: ${deletionId}`);
     return {
       success: true,
       data: deletionData.deletedData,
     };
   } catch (error) {
-    console.error('❌ Failed to recover data:', error);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -265,7 +257,6 @@ export async function getUserAuditLogs(
     const querySnap = await getDocs(auditQuery);
     return querySnap.docs.map((doc) => doc.data() as AuditLog);
   } catch (error) {
-    console.error('❌ Failed to fetch audit logs:', error);
     return [];
   }
 }
@@ -294,7 +285,6 @@ export async function getAuditLogsByAction(
     const querySnap = await getDocs(auditQuery);
     return querySnap.docs.map((doc) => doc.data() as AuditLog);
   } catch (error) {
-    console.error('❌ Failed to fetch audit logs by action:', error);
     return [];
   }
 }
@@ -323,7 +313,6 @@ export async function getAuditLogsByCollection(
     const querySnap = await getDocs(auditQuery);
     return querySnap.docs.map((doc) => doc.data() as AuditLog);
   } catch (error) {
-    console.error('❌ Failed to fetch audit logs by collection:', error);
     return [];
   }
 }
@@ -349,7 +338,6 @@ export async function getPreferenceHistory(
     const querySnap = await getDocs(historyQuery);
     return querySnap.docs.map((doc) => doc.data());
   } catch (error) {
-    console.error('❌ Failed to fetch preference history:', error);
     return [];
   }
 }
@@ -372,7 +360,6 @@ export async function getRecoverableItems(userId: string): Promise<any[]> {
     const querySnap = await getDocs(deletionsQuery);
     return querySnap.docs.map((doc) => doc.data());
   } catch (error) {
-    console.error('❌ Failed to fetch recoverable items:', error);
     return [];
   }
 }
@@ -436,7 +423,6 @@ export async function generateComplianceReport(
       actions: filteredLogs,
     };
   } catch (error) {
-    console.error('❌ Failed to generate compliance report:', error);
     throw error;
   }
 }
@@ -484,15 +470,12 @@ export async function archiveOldAuditLogs(olderThanMonths: number = 12): Promise
           archived++;
         }
       } catch (error) {
-        console.error(`❌ Failed to archive log ${docSnap.id}:`, error);
         errors++;
       }
     }
 
-    console.log(`✅ Archived ${archived} audit logs (${errors} errors)`);
     return { archived, errors };
   } catch (error) {
-    console.error('❌ Failed to archive audit logs:', error);
     throw error;
   }
 }

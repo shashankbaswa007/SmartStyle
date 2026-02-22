@@ -103,7 +103,6 @@ function setCachedQuery<T>(key: string, data: T): void {
       queryCache.delete(entries[i][0]);
     }
     
-    console.warn(`⚠️ Query cache limit reached (${MAX_QUERY_CACHE_SIZE}). Evicted ${toRemove} oldest entries.`);
   }
   
   queryCache.set(key, { data, timestamp: Date.now() });
@@ -295,7 +294,6 @@ export async function initializeUserPreferences(userId: string): Promise<void> {
     };
 
     await setDoc(prefsRef, initialPrefs);
-    console.log('✅ User preferences initialized for:', userId);
   }
 }
 
@@ -305,7 +303,6 @@ export async function initializeUserPreferences(userId: string): Promise<void> {
 export async function getUserPreferences(userId: string): Promise<UserPreferences | null> {
   // Server-side guard: Firestore client SDK lacks auth context on the server
   if (typeof window === 'undefined') {
-    console.log('ℹ️ [Personalization] Server-side — skipping getUserPreferences (no auth context)');
     return null;
   }
   try {
@@ -315,7 +312,6 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
     const cacheKey = `prefs:${validatedUserId}`;
     const cached = getCachedQuery<UserPreferences>(cacheKey);
     if (cached) {
-      console.log('✅ User preferences loaded from 5-min cache');
       return cached;
     }
 
@@ -326,12 +322,10 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
       const prefs = prefsDoc.data() as UserPreferences;
       // Cache for 5 minutes in-memory
       setCachedQuery(cacheKey, prefs);
-      console.log('✅ User preferences fetched and cached (5-min TTL)');
       return prefs;
     }
 
     // Initialize if doesn't exist
-    console.log('📝 Initializing new user preferences for:', validatedUserId);
     await initializeUserPreferences(validatedUserId);
     const newPrefsDoc = await getDoc(prefsRef);
     
@@ -345,9 +339,7 @@ export async function getUserPreferences(userId: string): Promise<UserPreference
     return null;
   } catch (error) {
     if (error instanceof FirebaseError && error.code === 'permission-denied') {
-      console.warn('🔒 Personalization skipped: missing Firestore permissions for current user context.');
     } else {
-      console.error('❌ Error fetching user preferences:', error);
     }
     // Don't throw - return null to allow app to continue without personalization
     return null;
@@ -366,7 +358,6 @@ export async function updateUserPreferences(
     // If we clear after update, concurrent reads might cache stale data
     userPreferencesCache.clear();
     clearQueryCache(userId);
-    console.log('🔄 User preferences cache cleared before update (prevents race condition)');
     
     const prefsRef = doc(db, 'userPreferences', userId);
     await updateDoc(prefsRef, {
@@ -374,7 +365,6 @@ export async function updateUserPreferences(
       updatedAt: Timestamp.now(),
     });
   } catch (error) {
-    console.error('Error updating user preferences:', error);
     throw error;
   }
 }
@@ -413,7 +403,6 @@ export async function saveRecommendation(
       });
     } catch (prefsError) {
       // If preferences don't exist, initialize them
-      console.log('📝 Initializing user preferences during recommendation save');
       await initializeUserPreferences(userId);
       await updateDoc(prefsRef, {
         totalRecommendations: increment(1),
@@ -426,7 +415,6 @@ export async function saveRecommendation(
 
     return docRef.id;
   } catch (error) {
-    console.error('Error saving recommendation:', error);
     throw error;
   }
 }
@@ -449,7 +437,6 @@ export async function submitRecommendationFeedback(
     // Update user preferences based on feedback
     await updatePreferencesFromFeedback(userId, recommendationId, feedback);
   } catch (error) {
-    console.error('Error submitting feedback:', error);
     throw error;
   }
 }
@@ -464,7 +451,6 @@ export async function getRecommendationHistory(
 ): Promise<RecommendationHistory[]> {
   // Server-side guard: Firestore client SDK lacks auth context on the server
   if (typeof window === 'undefined') {
-    console.log('ℹ️ [Personalization] Server-side — skipping getRecommendationHistory (no auth context)');
     return [];
   }
   try {
@@ -472,7 +458,6 @@ export async function getRecommendationHistory(
     const cacheKey = `history:${userId}:${limitCount}`;
     const cached = getCachedQuery<RecommendationHistory[]>(cacheKey);
     if (cached) {
-      console.log(`✅ Recommendation history loaded from cache (${cached.length} items)`);
       return cached;
     }
 
@@ -495,7 +480,6 @@ export async function getRecommendationHistory(
       
       // Cache results for 5 minutes
       setCachedQuery(cacheKey, results);
-      console.log(`✅ Fetched ${results.length} recommendation history items from subcollection (cached for 5min)`);
       return results;
     }
     
@@ -516,11 +500,9 @@ export async function getRecommendationHistory(
     
     // Cache results for 5 minutes
     setCachedQuery(cacheKey, results);
-    console.log(`✅ Fetched ${results.length} recommendation history items from root collection (cached for 5min)`);
     
     return results;
   } catch (error) {
-    console.error('Error fetching recommendation history:', error);
     return [];
   }
 }
@@ -664,7 +646,6 @@ async function updatePreferencesFromFeedback(
     // Apply updates
     await updateUserPreferences(userId, updates);
   } catch (error) {
-    console.error('Error updating preferences from feedback:', error);
   }
 }
 
@@ -677,41 +658,29 @@ export async function trackOutfitSelection(
   recommendationId: string,
   outfitId: 'outfit1' | 'outfit2' | 'outfit3'
 ): Promise<void> {
-  console.log('📝 trackOutfitSelection called with:', { userId, recommendationId, outfitId });
   
   // ✅ FIX: Skip Firestore lookup for temporary IDs and rec_ IDs (development mode)
   if (recommendationId.startsWith('temp_') || recommendationId.startsWith('rec_')) {
-    console.log(`⚠️ Skipping outfit selection tracking for development ID: ${recommendationId} (development mode)`);
-    console.log(`✅ Outfit selection recorded (client-side only)`);
     return; // Exit early to avoid Firestore lookup
   }
   
   try {
     // Get the recommendation details from the user's nested collection
     const historyRef = doc(db, `users/${userId}/recommendationHistory`, recommendationId);
-    console.log('🔍 Fetching recommendation from Firestore...', recommendationId);
     const historyDoc = await getDoc(historyRef);
     
     if (!historyDoc.exists()) {
-      console.error('❌ Recommendation not found in Firestore:', recommendationId);
-      console.warn('ℹ️ This may be because Firebase Admin credentials are not configured (development mode)');
-      console.log(`✅ Outfit selection recorded (client-side only)`);
       return; // Return gracefully instead of throwing error
     }
 
-    console.log('✅ Recommendation found:', historyDoc.id);
     const history = historyDoc.data() as RecommendationHistory;
     const selectedOutfit = history.recommendations[outfitId];
-    console.log('👔 Selected outfit details:', selectedOutfit);
 
     // Get user preferences
-    console.log('🔍 Fetching user preferences...', userId);
     const prefs = await getUserPreferences(userId);
     if (!prefs) {
-      console.error('❌ User preferences not found:', userId);
       return;
     }
-    console.log('✅ User preferences found');
 
     // Create selected outfit record
     const selectedOutfitRecord: SelectedOutfit = {
@@ -722,7 +691,6 @@ export async function trackOutfitSelection(
       occasion: history.occasion,
       timestamp: Timestamp.now(),
     };
-    console.log('📦 Created outfit record:', selectedOutfitRecord);
 
     // Update selected outfits array (keep last 10)
     const selectedOutfits = prefs.selectedOutfits || [];
@@ -760,7 +728,6 @@ export async function trackOutfitSelection(
     const updatedLikedIds = recentLikedOutfitIds.slice(0, 10);
 
     // Update preferences with denormalized data
-    console.log('💾 Updating user preferences in Firestore...');
     await updateUserPreferences(userId, {
       selectedOutfits: updatedSelectedOutfits,
       colorWeights,
@@ -771,25 +738,15 @@ export async function trackOutfitSelection(
       recentLikedOutfitIds: updatedLikedIds, // OPTIMIZED: Denormalized recent likes
       totalSelections: (prefs.totalSelections || 0) + 1,
     });
-    console.log('✅ User preferences updated');
 
     // Update recommendation history with selection
-    console.log('💾 Updating recommendation history...');
     await updateDoc(historyRef, {
       'feedback.selected': outfitId,
       feedbackAt: Timestamp.now(),
     });
-    console.log('✅ Recommendation history updated');
 
-    console.log('✅ Outfit selection tracked successfully');
   } catch (error) {
-    console.error('❌ Error tracking outfit selection:', error);
     if (error instanceof Error) {
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
     }
     throw error;
   }
@@ -904,7 +861,6 @@ export async function getStyleInsights(userId: string): Promise<StyleInsights> {
       improvementSuggestions,
     };
   } catch (error) {
-    console.error('Error getting style insights:', error);
     return {
       topColors: [],
       topStyles: [],
@@ -975,7 +931,6 @@ export async function getPersonalizationContext(userId?: string, occasion?: stri
   const preferenceStrength = preferences ? getPreferenceStrength(preferences) : undefined;
 
   const loadTime = Date.now() - startTime;
-  console.log(`⚡ [PERF] Personalization loaded in ${loadTime}ms (${preferences ? 'with' : 'without'} prefs, ${recentHistory.length} history)`);
 
   return {
     preferences,

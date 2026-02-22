@@ -97,7 +97,6 @@ export default function AccountSettingsPage() {
         description: 'Your profile has been updated successfully',
       });
     } catch (error: any) {
-      console.error('Profile update error:', error);
       toast({
         variant: 'destructive',
         title: 'Update Failed',
@@ -131,7 +130,6 @@ export default function AccountSettingsPage() {
       // Redirect to auth page
       router.push('/auth');
     } catch (error: any) {
-      console.error('Account deletion error:', error);
       
       // If re-authentication is required
       if (error.code === 'auth/requires-recent-login') {

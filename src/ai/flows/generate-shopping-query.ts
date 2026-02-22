@@ -34,7 +34,6 @@ export const generateShoppingQuery = ai.defineFlow(
     // Check cache first
     const cached = queryCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-      console.log('✅ Using cached shopping query');
       return cached.result;
     }
     

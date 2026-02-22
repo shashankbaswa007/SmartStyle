@@ -87,7 +87,6 @@ export function PaletteExportMenu({ palette, onClose }: PaletteExportMenuProps) 
       await downloadPaletteImage(palette, format);
       showSuccessToast('Image downloaded successfully!');
     } catch (error) {
-      console.error('Error downloading image:', error);
       showErrorToast('Failed to download image');
     } finally {
       setIsGenerating(false);
@@ -101,7 +100,6 @@ export function PaletteExportMenu({ palette, onClose }: PaletteExportMenuProps) 
       setTimeout(() => setCopiedFormat(null), 2000);
       showSuccessToast(`Colors copied as ${format.toUpperCase()}`);
     } catch (error) {
-      console.error('Error copying colors:', error);
       showErrorToast('Failed to copy colors');
     }
   };
@@ -114,7 +112,6 @@ export function PaletteExportMenu({ palette, onClose }: PaletteExportMenuProps) 
       setPreviewURL(dataURL);
       setShowPreview(true);
     } catch (error) {
-      console.error('Error generating preview:', error);
       showErrorToast('Failed to generate preview');
     } finally {
       setIsGenerating(false);

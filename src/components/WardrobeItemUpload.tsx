@@ -138,7 +138,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
                 }
 
                 const sizeKB = blob.size / 1024;
-                console.log(`🖼️ Compressed to ${sizeKB.toFixed(0)}KB at quality ${quality}`);
 
                 if (blob.size < 800 * 1024 || quality <= 0.5) {
                   // Success! Convert blob back to File
@@ -181,7 +180,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     }
 
     const originalSizeKB = (file.size / 1024).toFixed(0);
-    console.log(`📸 Original image: ${originalSizeKB}KB`);
 
     // Show compressing toast if image is large
     let compressionToast: any = null;
@@ -199,7 +197,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       if (file.size > 800 * 1024) {
         processedFile = await compressImage(file);
         const newSizeKB = (processedFile.size / 1024).toFixed(0);
-        console.log(`✅ Compressed: ${originalSizeKB}KB → ${newSizeKB}KB`);
         
         // Update toast with success
         if (compressionToast) {
@@ -222,7 +219,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       reader.readAsDataURL(processedFile);
       
     } catch (error) {
-      console.error('Image compression failed:', error);
       if (compressionToast) compressionToast.dismiss();
       
       toast({
@@ -448,7 +444,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
         });
       }
     } catch (error) {
-      console.error('Error generating suggestions:', error);
       // Silently fail - suggestions are optional
     }
   };
@@ -464,7 +459,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
   // Process colors in background after item is saved
   const processColorsInBackground = async (itemId: string, imageUrl: string, userId: string) => {
     try {
-      console.log('🎨 Starting background color extraction for item:', itemId);
       backgroundProcessingRef.current = itemId;
       
       const extractedColors = await extractColorsFromUrl(imageUrl);
@@ -481,10 +475,8 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
         lastUpdated: Date.now(),
       });
 
-      console.log('✅ Background color extraction completed for item:', itemId);
       backgroundProcessingRef.current = null;
     } catch (error) {
-      console.error('❌ Background color extraction failed:', error);
       // Silently fail - item is already saved with default colors
       backgroundProcessingRef.current = null;
     }
@@ -565,7 +557,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
           setUploadProgress(30);
           
           // Generate optimized images at multiple resolutions
-          console.log('🖼️ Generating optimized images...');
           const optimizedImages = await generateOptimizedImages(originalDataUri);
           
           // Calculate total size
@@ -575,7 +566,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
              optimizedImages.full.length) / 1024
           );
           
-          console.log(`✅ Optimized images generated (${totalSizeKB}KB total) - stored in Firestore (no storage costs!)`);
           
           // Simulate progress for better UX
           setUploadProgress(50);
@@ -585,13 +575,11 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
             resolve(optimizedImages);
           }, 200);
         } catch (error) {
-          console.error('❌ Image optimization error:', error);
           reject(new Error('Failed to optimize image. Please try again.'));
         }
       };
       
       reader.onerror = () => {
-        console.error('❌ FileReader error:', reader.error);
         reject(new Error('Failed to read image file. Please try again.'));
       };
       
@@ -604,11 +592,9 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('🚀 Wardrobe upload: Form submitted');
 
     // Prevent duplicate submissions
     if (isSubmitting) {
-      console.warn('⚠️ Upload already in progress');
       toast({
         title: 'Upload in progress',
         description: 'Please wait for the current upload to complete.',
@@ -617,9 +603,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     }
 
     const user = auth.currentUser;
-    console.log('👤 Current user:', user ? user.uid : 'NOT AUTHENTICATED');
     if (!user) {
-      console.error('❌ User not authenticated');
       toast({
         variant: 'destructive',
         title: 'Authentication Required',
@@ -635,7 +619,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       if (!itemType) missing.push('item type');
       if (!description) missing.push('description');
       
-      console.error('❌ Missing required fields:', missing);
       toast({
         variant: 'destructive',
         title: 'Missing Information',
@@ -643,13 +626,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       });
       return;
     }
-    
-    console.log('✅ Validation passed, starting upload...', {
-      hasImage: !!imageFile,
-      itemType,
-      description: description.substring(0, 30),
-      userId: user.uid
-    });
 
     const submissionId = submissionIdRef.current;
     const MAX_RETRIES = 3;
@@ -667,46 +643,34 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       }
 
       // Step 1: Generate optimized images (thumbnail, medium, full)
-      console.log('🖼️ Generating optimized images (free storage in Firestore)...');
       let uploadAttempt = 0;
       let optimizedImages: OptimizedImages | null = null;
       
       while (uploadAttempt < MAX_RETRIES && !optimizedImages) {
         // Check if submission was cancelled
         if (submissionId !== submissionIdRef.current) {
-          console.log('🚫 Upload cancelled');
           return;
         }
 
         try {
-          console.log(`🖼️ Optimization attempt ${uploadAttempt + 1}/${MAX_RETRIES}...`);
           optimizedImages = await uploadImageToStorage(imageFile, user.uid);
-          console.log('✅ Optimized images generated:', {
-            thumbnail: `${Math.round(optimizedImages.thumbnail.length / 1024)}KB`,
-            medium: `${Math.round(optimizedImages.medium.length / 1024)}KB`,
-            full: `${Math.round(optimizedImages.full.length / 1024)}KB`
-          });
         } catch (uploadError) {
           uploadAttempt++;
           setRetryCount(uploadAttempt);
-          console.error(`❌ Optimization attempt ${uploadAttempt} failed:`, uploadError);
           
           if (uploadAttempt >= MAX_RETRIES) {
             const errorMsg = uploadError instanceof Error 
               ? uploadError.message 
               : `Upload failed after ${MAX_RETRIES} attempts`;
             setUploadError(errorMsg);
-            console.error('❌ All optimization attempts failed:', errorMsg);
             throw new Error(errorMsg);
           }
           
-          console.warn(`⏳ Retrying optimization in ${uploadAttempt}s...`);
           await new Promise(resolve => setTimeout(resolve, 1000 * uploadAttempt)); // Exponential backoff
         }
       }
 
       if (!optimizedImages) {
-        console.error('❌ Optimization failed: No images returned');
         throw new Error('Failed to optimize images');
       }
       
@@ -719,13 +683,10 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       }
 
       // Step 2: Extract colors from description text
-      console.log('🎨 Extracting colors from description...');
       const extractedColors = extractColorsFromDescription(description);
-      console.log('✅ Colors extracted from description:', extractedColors);
 
       // Step 3: Save with extracted colors
       setUploadStatus('processing');
-      console.log('💾 Preparing to save to Firestore...');
       
       const itemData = {
         images: optimizedImages, // Store all three sizes
@@ -744,44 +705,26 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
         isActive: true,
         colorsProcessed: true,
       };
-      
-      console.log('📦 Item data prepared:', {
-        hasOptimizedImages: !!itemData.images,
-        thumbnail: `${Math.round(optimizedImages.thumbnail.length / 1024)}KB`,
-        medium: `${Math.round(optimizedImages.medium.length / 1024)}KB`,
-        full: `${Math.round(optimizedImages.full.length / 1024)}KB`,
-        itemType: itemData.itemType,
-        description: itemData.description.substring(0, 30),
-        hasSeasons: !!itemData.season,
-        hasOccasions: !!itemData.occasions
-      });
 
       // Step 4: Add to Firestore with retry
-      console.log('💾 Saving to Firestore...');
       let saveAttempt = 0;
       let saveResult = null;
       
       while (saveAttempt < MAX_RETRIES && !saveResult?.success) {
         try {
-          console.log(`💾 Save attempt ${saveAttempt + 1}/${MAX_RETRIES}...`);
           saveResult = await addWardrobeItem(user.uid, itemData);
           
           if (!saveResult.success) {
-            console.error('❌ Save failed:', saveResult.message);
             throw new Error(saveResult.message);
           }
           
-          console.log('✅ Item saved successfully, ID:', saveResult.itemId);
         } catch (saveError) {
           saveAttempt++;
-          console.error(`❌ Save attempt ${saveAttempt} failed:`, saveError);
           
           if (saveAttempt >= MAX_RETRIES) {
-            console.error('❌ All save attempts failed');
             throw new Error('Failed to save item after multiple attempts');
           }
           
-          console.warn(`⏳ Retrying save in ${saveAttempt}s...`);
           await new Promise(resolve => setTimeout(resolve, 1000 * saveAttempt));
         }
       }
@@ -806,7 +749,6 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       onItemAdded?.();
       
     } catch (error) {
-      console.error('Error adding wardrobe item:', error);
       
       setUploadStatus('idle');
       const errorMessage = error instanceof Error ? error.message : 'Failed to add item to wardrobe. Please try again.';

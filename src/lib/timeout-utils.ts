@@ -32,7 +32,6 @@ export async function withTimeoutAndRetry<T>(
       return await withTimeout(fn(), timeoutMs, errorMessage);
     } catch (error) {
       lastError = error as Error;
-      console.warn(`⚠️ Attempt ${attempt + 1}/${maxRetries + 1} failed:`, lastError.message);
       
       if (attempt < maxRetries) {
         // Wait before retrying (exponential backoff)

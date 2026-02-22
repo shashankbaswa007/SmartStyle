@@ -13,17 +13,11 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // Helper function to allow anonymous read for graceful degradation
-    function canReadAnonymously() {
-      return isAuthenticated(); // Require authentication for reads
-    }
-    
     // User Preferences - Users can only read/write their own preferences
-    // Allow reads for authenticated users (including server-side with userId)
     match /userPreferences/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow write: if isOwner(userId);
+      allow create: if isOwner(userId);
     }
     
     // User Interactions - NEW: For personalization tracking
@@ -85,32 +79,32 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
-    // Users collection - Users can read/write their own profile
+    // Users collection - Users can only read/write their own profile
     match /users/{userId} {
-      allow read: if canReadAnonymously() || isOwner(userId);
+      allow read: if isOwner(userId);
       allow write: if isOwner(userId);
       
       // User's recommendation history (nested under users)
       match /recommendationHistory/{recommendationId} {
-        allow read: if canReadAnonymously() || isOwner(userId);
+        allow read: if isOwner(userId);
         allow write: if isOwner(userId);
       }
       
       // User's feedback on recommendations (nested under users)
       match /feedback/{recommendationId} {
-        allow read: if canReadAnonymously() || isOwner(userId);
+        allow read: if isOwner(userId);
         allow write: if isOwner(userId);
       }
       
       // User's outfit usage tracking (nested under users)
       match /outfitUsage/{usageId} {
-        allow read: if canReadAnonymously() || isOwner(userId);
+        allow read: if isOwner(userId);
         allow write: if isOwner(userId);
       }
       
       // User's liked outfits (nested under users)
       match /likedOutfits/{outfitId} {
-        allow read: if canReadAnonymously() || isOwner(userId);
+        allow read: if isOwner(userId);
         allow write: if isOwner(userId);
         allow create: if isOwner(userId);
         allow delete: if isOwner(userId);
@@ -164,12 +158,10 @@ service cloud.firestore {
       allow write: if false; // Only Cloud Functions can write
     }
     
-    // API Cache - Require auth to prevent cache poisoning by anonymous users
+    // API Cache - Read-only for clients; writes only via server/admin SDK
     match /apiCache/{cacheKey} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update: if isAuthenticated();
-      allow delete: if false;
+      allow create, update, delete: if false;
     }
     
     // Rate Limits - Scoped to own userId to prevent counter manipulation

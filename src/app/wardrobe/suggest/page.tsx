@@ -200,7 +200,6 @@ function WardrobeSuggestPageContent() {
         description: `${data.outfits.length} outfit combinations created from your wardrobe.`,
       });
     } catch (err) {
-      console.error('Error getting outfit suggestions:', err);
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate suggestions';
       setError(errorMessage);
 

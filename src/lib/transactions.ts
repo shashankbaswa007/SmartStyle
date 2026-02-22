@@ -456,7 +456,6 @@ export async function executeTransaction<T>(
       
       // Check if error is retryable
       if (error instanceof Error && error.message.includes('contention')) {
-        console.warn(`Transaction failed due to contention, retrying (${attempt}/${maxRetries})...`);
         
         // Exponential backoff
         await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 100));
@@ -500,7 +499,6 @@ async function logAuditEvent(event: {
     });
   } catch (error) {
     // Log error but don't throw - audit logging should not break main operations
-    console.error('Failed to log audit event:', error);
   }
 }
 

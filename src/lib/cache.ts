@@ -73,7 +73,6 @@ class ResponseCache<T> {
         this.cache.delete(sortedEntries[i][0]);
       }
       
-      console.warn(`⚠️ Cache size limit reached. Removed ${entriesToRemove} oldest entries.`);
     }
 
     const key = this.generateKey(params);
@@ -101,7 +100,6 @@ class ResponseCache<T> {
       }
     }
     if (removed > 0) {
-      console.log(`🧹 Cache cleanup: Removed ${removed} expired entries`);
     }
   }
 
@@ -111,7 +109,6 @@ class ResponseCache<T> {
   clear(): void {
     const size = this.cache.size;
     this.cache.clear();
-    console.log(`🗑️ Cache cleared: ${size} entries removed`);
   }
 
   /**

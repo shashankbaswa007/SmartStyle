@@ -21,13 +21,10 @@ export interface PollinationsImageOptions {
 export async function generatePollinationsImage(
   options: PollinationsImageOptions
 ): Promise<string> {
-  console.log('⚠️ Pollinations.ai image generation is currently disabled');
-  console.log('📝 Prompt:', options.prompt);
   
   // Return a placeholder image instead
   const placeholderUrl = `https://via.placeholder.com/${options.width || 800}x${options.height || 1000}/6366f1/ffffff?text=Fashion+Outfit`;
   
-  console.log('🖼️ Using placeholder image:', placeholderUrl);
   
   return placeholderUrl;
 }

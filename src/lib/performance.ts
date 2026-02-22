@@ -66,16 +66,13 @@ export async function logPerformanceMetric(metric: PerformanceMetric): Promise<v
 
     // Log to Firestore asynchronously (don't await)
     addDoc(collection(db, 'performanceMetrics'), perfLog).catch(err => {
-      console.warn('Failed to log performance metric:', err);
     });
 
     // Also log to console in development
     if (process.env.NODE_ENV === 'development') {
-      console.log(`📊 [Performance] ${metric.name}: ${Math.round(metric.value)}ms (${metric.rating})`);
     }
   } catch (error) {
     // Fail silently - don't impact user experience
-    console.warn('Performance logging error:', error);
   }
 }
 
@@ -134,14 +131,12 @@ export function measureApiCall<T>(
       }
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(`⏱️ [API] ${apiName}: ${Math.round(duration)}ms`);
       }
 
       return result;
     },
     (error) => {
       const duration = performance.now() - startTime;
-      console.error(`❌ [API] ${apiName} failed after ${Math.round(duration)}ms:`, error);
       throw error;
     }
   );
@@ -162,7 +157,6 @@ export function measureColorExtraction(
       rating: duration > 3000 ? 'poor' : 'needs-improvement',
     });
 
-    console.warn(`⚠️ Slow color extraction: ${Math.round(duration)}ms for ${Math.round(imageSize / 1024)}KB image`);
   }
 }
 
@@ -177,7 +171,6 @@ export function checkPerformanceBudget(
   const exceeded = value > budget;
 
   if (exceeded && process.env.NODE_ENV === 'development') {
-    console.warn(`⚠️ Performance budget exceeded: ${metric} = ${value} (budget: ${budget})`);
   }
 
   return !exceeded;
@@ -209,7 +202,6 @@ export function enablePerformanceObserver(): void {
     const longTaskObserver = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
         if (entry.duration > 50) {
-          console.warn(`⚠️ Long task detected: ${Math.round(entry.duration)}ms`);
           
           logPerformanceMetric({
             name: 'LONG_TASK',

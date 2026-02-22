@@ -67,7 +67,6 @@ export async function saveColorPalette(
   userId: string,
   palette: Omit<SavedColorPalette, 'id' | 'userId' | 'createdAt' | 'usageCount'>
 ): Promise<{ success: boolean; message: string; paletteId?: string }> {
-  console.log('🎨 Saving color palette for user:', userId);
   
   try {
     if (!userId || userId.trim() === '') {
@@ -88,14 +87,12 @@ export async function saveColorPalette(
 
     const docRef = await addDoc(palettesRef, dataToSave);
     
-    console.log('✅ Color palette saved with ID:', docRef.id);
     return {
       success: true,
       message: 'Color palette saved successfully',
       paletteId: docRef.id,
     };
   } catch (error) {
-    console.error('❌ Error saving color palette:', error);
     return {
       success: false,
       message: 'Failed to save color palette. Please try again.',
@@ -115,11 +112,9 @@ export async function getSavedPalettes(
     season?: string;
   }
 ): Promise<SavedColorPalette[]> {
-  console.log('🎨 Fetching color palettes for user:', userId);
   
   try {
     if (!userId || userId.trim() === '') {
-      console.warn('⚠️ Invalid userId');
       return [];
     }
 
@@ -160,10 +155,8 @@ export async function getSavedPalettes(
       );
     }
 
-    console.log(`✅ Found ${palettes.length} color palettes`);
     return palettes;
   } catch (error) {
-    console.error('❌ Error fetching color palettes:', error);
     return [];
   }
 }
@@ -176,7 +169,6 @@ export async function linkPaletteToWardrobeItem(
   paletteId: string,
   wardrobeItemId: string
 ): Promise<{ success: boolean; message: string }> {
-  console.log('🔗 Linking palette to wardrobe item:', { paletteId, wardrobeItemId });
   
   try {
     if (!userId || !paletteId || !wardrobeItemId) {
@@ -215,7 +207,6 @@ export async function linkPaletteToWardrobeItem(
       message: 'Palette linked to wardrobe item',
     };
   } catch (error) {
-    console.error('❌ Error linking palette:', error);
     return {
       success: false,
       message: 'Failed to link palette',
@@ -240,7 +231,6 @@ export async function trackPaletteUsage(
       lastUsedDate: serverTimestamp(),
     });
   } catch (error) {
-    console.error('❌ Error tracking palette usage:', error);
   }
 }
 
@@ -267,7 +257,6 @@ export async function deleteColorPalette(
       message: 'Palette deleted successfully',
     };
   } catch (error) {
-    console.error('❌ Error deleting palette:', error);
     return {
       success: false,
       message: 'Failed to delete palette',
@@ -300,7 +289,6 @@ export async function getPalettesMatchingItem(
       );
     });
   } catch (error) {
-    console.error('❌ Error finding matching palettes:', error);
     return [];
   }
 }

@@ -35,7 +35,6 @@ export { ZoomableImage } from '@/components/ZoomableImage';
 
 // Animations
 export { AnimatedToast, useAnimatedToast } from '@/components/AnimatedToast';
-export { PageTransition, ScrollReveal } from '@/components/PageTransition';
 
 // Performance
 export { VirtualizedList, VirtualizedGrid } from '@/components/VirtualizedList';

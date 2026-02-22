@@ -62,11 +62,6 @@ export async function generateRecommendationsWithGroq(
   input: GroqRecommendationInput
 ): Promise<GroqStyleAnalysis> {
   const hasPersonalization = input.userId && input.userPreferences && input.userBlocklists;
-  
-  console.log('🤖 Using Groq AI for recommendations...', {
-    personalized: hasPersonalization,
-    interactions: input.userPreferences?.totalInteractions || 0,
-  });
 
   const prompt = buildGroqPrompt(input);
 
@@ -124,15 +119,12 @@ NEVER generate similar or repetitive recommendations - make each one UNIQUE and 
       throw new Error('Empty response from Groq');
     }
     
-    console.log('✅ Groq streaming response received');
 
     // Parse JSON response with error handling
     let analysis: GroqStyleAnalysis;
     try {
       analysis = JSON.parse(responseText) as GroqStyleAnalysis;
     } catch (parseError) {
-      console.error('❌ Failed to parse Groq response:', parseError);
-      console.error('Response text:', responseText.substring(0, 500));
       throw new Error('Invalid JSON response from Groq - the AI returned malformed data');
     }
 
@@ -144,24 +136,11 @@ NEVER generate similar or repetitive recommendations - make each one UNIQUE and 
     // Validate diversity - ensure recommendations are actually different
     const diversity = validateDiversity(analysis.outfitRecommendations);
     if (diversity.score < 60) {
-      console.warn('⚠️ Low diversity detected:', diversity.reason, '- Score:', diversity.score);
-      console.warn('📋 Outfit titles:', analysis.outfitRecommendations.map(r => ({
-        title: r.title,
-        style: r.styleType,
-        colors: r.colorPalette
-      })));
-      // Log warning but continue - better to give user something than error out
-      // The high temperature and penalties should prevent this most of the time
-    } else {
-      console.log(`✅ Good diversity score: ${diversity.score}/100`);
+      // Low diversity detected — continue anyway, better than erroring out
     }
-
-    console.log(`✅ Generated ${analysis.outfitRecommendations.length} outfit recommendations via Groq`);
-    console.log(`📊 Final Diversity score: ${diversity.score}/100`);
 
     return analysis;
   } catch (error) {
-    console.error('❌ Groq API error:', error);
     throw new Error(
       error instanceof Error 
         ? `Groq AI failed: ${error.message}` 
@@ -215,12 +194,6 @@ ${skinTone ? `**Skin Tone:** ${skinTone}` : ''}`;
     prompt += '\n\n' + personalizedSections.preferencesSection;
     prompt += '\n' + personalizedSections.strategySection;
     prompt += '\n' + personalizedSections.constraintsSection;
-    
-    console.log('✅ [Groq] Personalization injected:', {
-      favoriteColors: userPreferences.colors.favoriteColors.length,
-      topStyles: userPreferences.styles.topStyles.length,
-      confidence: userPreferences.overallConfidence,
-    });
   }
   
   // Continue with rest of prompt (current colors and format instructions)
@@ -294,9 +267,6 @@ DIVERSITY EXAMPLES for "Business Casual":
  */
 export function isGroqConfigured(): boolean {
   const isConfigured = !!process.env.GROQ_API_KEY;
-  if (!isConfigured) {
-    console.warn('⚠️ GROQ_API_KEY not configured - Groq fallback unavailable');
-  }
   return isConfigured;
 }
 
@@ -380,10 +350,8 @@ export async function testGroqConnection(): Promise<boolean> {
       max_tokens: 10,
     });
     
-    console.log('✅ Groq API connection successful');
     return true;
   } catch (error) {
-    console.error('❌ Groq API connection failed:', error);
     return false;
   }
 }

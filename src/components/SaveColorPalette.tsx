@@ -112,7 +112,6 @@ export function SaveColorPalette({
         setShowToast(true);
       }
     } catch (error) {
-      console.error('Error saving palette:', error);
       setToastMessage('Failed to save palette');
       setToastType('error');
       setShowToast(true);

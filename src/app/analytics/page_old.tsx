@@ -99,30 +99,24 @@ export default function AnalyticsPage() {
       setError(null);
       
       if (!user) {
-        console.log('⚠️ No user found for analytics');
         setLoading(false);
         return;
       }
 
-      console.log('🔍 Loading analytics for user:', user.uid);
 
       // Fetch user preferences
       const prefs = await getUserPreferences(user.uid);
-      console.log('📊 User preferences:', prefs);
       setPreferences(prefs);
 
       // Fetch recommendation history
       const recs = await getRecommendationHistory(user.uid, 50);
-      console.log('📊 Recommendation history:', recs.length, 'items');
       setHistory(recs);
 
       // Calculate insights
       const calculatedInsights = calculateInsights(recs);
-      console.log('📊 Calculated insights:', calculatedInsights);
       setInsights(calculatedInsights);
 
     } catch (error) {
-      console.error('❌ Error loading analytics:', error);
       setError(error instanceof Error ? error.message : 'Failed to load analytics data');
     } finally {
       setLoading(false);

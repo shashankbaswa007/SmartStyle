@@ -74,7 +74,6 @@ export async function checkRateLimit(userId: string): Promise<{
 
     return result;
   } catch (error) {
-    console.error('Rate limit check error:', error);
     // Allow request if rate limiting check fails (graceful degradation)
     return { 
       allowed: true, 

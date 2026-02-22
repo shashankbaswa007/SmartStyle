@@ -80,7 +80,6 @@ export async function compressToSize(
 export async function generateOptimizedImages(
   originalDataUri: string
 ): Promise<OptimizedImages> {
-  console.log('📸 Generating optimized images...');
   
   const startTime = Date.now();
 
@@ -100,9 +99,6 @@ export async function generateOptimizedImages(
   const fullSize = Math.round(full.length / 1024);
   const totalSize = thumbnailSize + mediumSize + fullSize;
 
-  console.log(`✅ Image optimization complete in ${duration}ms`);
-  console.log(`📊 Sizes: Thumbnail ${thumbnailSize}KB | Medium ${mediumSize}KB | Full ${fullSize}KB`);
-  console.log(`💾 Total storage: ${totalSize}KB (Original: ${originalSize}KB)`);
 
   return {
     thumbnail,
@@ -177,13 +173,11 @@ export async function compressToMaxSize(
     const sizeKB = Math.round(compressed.length / 1024);
     
     if (sizeKB <= maxSizeKB) {
-      console.log(`✅ Compressed to ${sizeKB}KB with quality ${quality}`);
       return compressed;
     }
   }
   
   // If still too large, reduce dimensions further
   const finalCompressed = await compressToSize(dataUri, maxWidth * 0.7, 0.45);
-  console.warn(`⚠️ Had to reduce dimensions to meet ${maxSizeKB}KB limit`);
   return finalCompressed;
 }

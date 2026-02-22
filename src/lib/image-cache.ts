@@ -38,7 +38,6 @@ export async function getCachedImage(
     const imageRef = ref(storage, `generated-images/${hash}.jpg`);
     
     const url = await getDownloadURL(imageRef);
-    console.log(`✅ [IMAGE CACHE HIT] Found cached image for prompt hash: ${hash}`);
     return url;
   } catch (error) {
     // Image not in cache or error accessing storage
@@ -78,11 +77,9 @@ export async function cacheImage(
     
     // Get the permanent download URL
     const cachedUrl = await getDownloadURL(imageRef);
-    console.log(`✅ [IMAGE CACHED] Stored image with hash: ${hash}`);
     
     return cachedUrl;
   } catch (error) {
-    console.error('❌ [IMAGE CACHE ERROR] Failed to cache image:', error);
     // Return original URL if caching fails
     return imageUrl;
   }
@@ -111,7 +108,6 @@ export async function getCacheStats(): Promise<{
       totalSizeBytes: totalSize,
     };
   } catch (error) {
-    console.error('❌ [CACHE STATS ERROR]:', error);
     return {
       totalCachedImages: 0,
       totalSizeBytes: 0,

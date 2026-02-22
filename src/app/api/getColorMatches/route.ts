@@ -306,7 +306,6 @@ export async function POST(req: NextRequest) {
     try {
       body = await req.json();
     } catch (parseError) {
-      console.error('❌ Failed to parse request body:', parseError);
       return NextResponse.json(
         { error: 'Invalid JSON in request body' },
         { status: 400 }
@@ -322,7 +321,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log('🎨 Finding color matches for:', color, 'using', harmonyType, 'harmony');
 
     // Validate and parse the input color
     let inputColorObj: chroma.Color;
@@ -352,7 +350,6 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    console.log('🔍 Closest color name:', closestColorName, '(deltaE distance:', minDistance.toFixed(2), ')');
 
     // Helper function to ensure fashionable colors (not too dark or too light)
     const adjustForFashion = (color: chroma.Color): chroma.Color => {
@@ -369,7 +366,6 @@ export async function POST(req: NextRequest) {
       ? getRecommendedHarmony(inputColorObj)
       : harmonyType;
     
-    console.log('🎯 Using harmony type:', actualHarmonyType, harmonyType === 'recommended' ? '(auto-selected)' : '(user-selected)');
 
     // Generate harmonious colors based on color theory with improved reliability
     const harmonyHues = HARMONY_TYPES[actualHarmonyType as keyof typeof HARMONY_TYPES](inputHue);
@@ -511,7 +507,6 @@ export async function POST(req: NextRequest) {
       matches.push(addShadeVariation(inputColorObj, -0.5, 'Dark Tone'));
     }
 
-    console.log('✅ Generated', matches.length, 'high-quality color matches using', actualHarmonyType, 'harmony');
 
     return NextResponse.json({
       inputColor: {
@@ -531,20 +526,9 @@ export async function POST(req: NextRequest) {
       isRecommended: harmonyType === 'recommended',
     });
   } catch (error) {
-    console.error('❌ Color matching error:', error);
-    
-    // Detailed error logging
-    if (error instanceof Error) {
-      console.error('Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      });
-    }
-
     return NextResponse.json(
       { 
-        error: error instanceof Error ? error.message : 'Failed to process color',
+        error: 'Failed to process color matching',
         details: 'An unexpected error occurred while matching colors. Please try again.'
       },
       { status: 500 }

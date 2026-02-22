@@ -68,7 +68,34 @@ export async function POST(req: Request) {
     }
 
     // Use validated data (type-safe!)
-    const { photoDataUri, occasion, genre, gender, weather, skinTone, dressColors, previousRecommendation, userId } = validation.data;
+    const { photoDataUri, occasion, genre, gender, weather, skinTone, dressColors, previousRecommendation, userId: requestedUserId } = validation.data;
+
+    // Verify authentication: if a userId is provided, verify it matches the auth token
+    let userId = requestedUserId;
+    if (userId && userId !== 'anonymous') {
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return NextResponse.json(
+          { error: 'Unauthorized - Authentication required for personalized recommendations' },
+          { status: 401 }
+        );
+      }
+      try {
+        const admin = (await import('@/lib/firebase-admin')).default;
+        const decodedToken = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
+        if (decodedToken.uid !== userId) {
+          return NextResponse.json(
+            { error: 'Unauthorized - User ID mismatch' },
+            { status: 403 }
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          { error: 'Unauthorized - Invalid authentication token' },
+          { status: 401 }
+        );
+      }
+    }
 
     // Additional server-side security validation for image
     const imageValidation = quickValidateImageDataUri(photoDataUri);
@@ -417,18 +444,10 @@ export async function POST(req: Request) {
       // Fire and forget with proper error handling to prevent unhandled rejections
       saveRecommendation(userId, payload)
         .then(id => {
-          try {
-            logger.log(`✅ [ASYNC] Recommendation saved: ${id}`);
-          } catch (logError) {
-            console.error('Logger error:', logError);
-          }
+          logger.log(`✅ [ASYNC] Recommendation saved: ${id}`);
         })
         .catch(err => {
-          try {
-            logger.error('⚠️ [ASYNC] Save failed:', err);
-          } catch (logError) {
-            console.error('Logger error:', logError);
-          }
+          logger.error('⚠️ [ASYNC] Save failed:', err);
         });
     }
 

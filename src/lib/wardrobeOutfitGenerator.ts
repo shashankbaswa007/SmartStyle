@@ -41,7 +41,6 @@ export async function generateWardrobeOutfits(
   occasion: string,
   weather?: { temp: number; condition: string; location?: string }
 ): Promise<OutfitSuggestionResult> {
-  console.log('👔 Generating wardrobe outfits - userId:', userId, '- occasion:', occasion, '- items:', wardrobeItems.length);
 
   try {
     // Filter only active items to exclude deleted/inactive items
@@ -57,7 +56,6 @@ export async function generateWardrobeOutfits(
     }
     
     if (activeItems.length < 5) {
-      console.warn('⚠️ Sparse wardrobe detected:', activeItems.length, 'items - generating best combinations with available items');
     }
 
     // Fetch user preferences
@@ -95,7 +93,6 @@ export async function generateWardrobeOutfits(
     // Build AI prompt
     const prompt = buildOutfitPrompt(itemsByType, occasion, weather, userPreferences);
 
-    console.log('🤖 Calling Groq AI for outfit suggestions...');
 
     // Call Groq AI
     const completion = await groq.chat.completions.create({
@@ -171,7 +168,6 @@ export async function generateWardrobeOutfits(
             });
           }
         } else {
-          console.warn('Could not match AI-suggested item:', itemRef);
         }
       }
 
@@ -185,7 +181,6 @@ export async function generateWardrobeOutfits(
           occasion,
         });
       } else {
-        console.warn('Skipping outfit with insufficient valid items:', outfit.name);
       }
     }
 
@@ -193,7 +188,6 @@ export async function generateWardrobeOutfits(
       throw new Error('Could not generate valid outfit combinations. Try adding more items to your wardrobe.');
     }
 
-    console.log('✅ Generated', validatedOutfits.length, 'valid outfit combinations');
 
     return {
       outfits: validatedOutfits,
@@ -201,7 +195,6 @@ export async function generateWardrobeOutfits(
       missingPieces: aiResponse.missingPieces || [],
     };
   } catch (error) {
-    console.error('❌ Error generating wardrobe outfits:', error);
     throw error;
   }
 }

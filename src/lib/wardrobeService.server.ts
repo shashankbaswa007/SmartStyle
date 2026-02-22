@@ -27,11 +27,9 @@ export async function getWardrobeItemsServer(
   try {
     // Validate userId
     if (!userId || userId.trim() === '' || userId === 'anonymous') {
-      console.error('❌ Invalid userId provided to getWardrobeItemsServer:', userId);
       return [];
     }
 
-    console.log('🔍 Fetching wardrobe items for user:', userId, 'with filters:', filters);
 
     const db = getFirestore();
     const itemsRef = db.collection('users').doc(userId).collection('wardrobeItems');
@@ -48,7 +46,6 @@ export async function getWardrobeItemsServer(
 
     const snapshot = await query.get();
     
-    console.log('📊 Found', snapshot.size, 'wardrobe items in database');
     
     const items: WardrobeItemData[] = [];
     snapshot.forEach((doc) => {
@@ -70,18 +67,14 @@ export async function getWardrobeItemsServer(
             id: doc.id,
           });
         } else {
-          console.warn('⚠️ Incomplete item data found:', doc.id);
         }
       } catch (err) {
-        console.error('❌ Error parsing item document:', doc.id, err);
       }
     });
     
-    console.log('✅ Successfully fetched', items.length, 'valid wardrobe items');
     
     return items;
   } catch (error) {
-    console.error('❌ Error fetching wardrobe items:', error);
     return [];
   }
 }
@@ -96,12 +89,10 @@ export async function addWardrobeItemServer(
   userId: string,
   itemData: Omit<WardrobeItemData, 'id' | 'addedDate' | 'wornCount' | 'isActive'>
 ): Promise<{ success: boolean; message: string; itemId?: string }> {
-  console.log('👔 Adding wardrobe item for user (server-side):', userId);
   
   try {
     // Validate userId
     if (!userId || userId.trim() === '' || userId === 'anonymous') {
-      console.error('❌ Invalid userId:', userId);
       return {
         success: false,
         message: 'Invalid user ID',
@@ -110,18 +101,12 @@ export async function addWardrobeItemServer(
 
     // Validate item data
     if (!itemData.imageUrl || !itemData.itemType || !itemData.description) {
-      console.error('❌ Invalid item data:', {
-        hasImageUrl: !!itemData.imageUrl,
-        hasItemType: !!itemData.itemType,
-        hasDescription: !!itemData.description,
-      });
       return {
         success: false,
         message: 'Image, item type, and description are required',
       };
     }
 
-    console.log('💾 Saving wardrobe item to Firestore...');
     const db = getFirestore();
     const itemsRef = db.collection('users').doc(userId).collection('wardrobeItems');
     
@@ -144,7 +129,6 @@ export async function addWardrobeItemServer(
     };
 
     const docRef = await itemsRef.add(dataToSave);
-    console.log('✅ Wardrobe item saved with ID:', docRef.id);
 
     return {
       success: true,
@@ -152,7 +136,6 @@ export async function addWardrobeItemServer(
       itemId: docRef.id,
     };
   } catch (error) {
-    console.error('❌ Error adding wardrobe item:', error);
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Failed to add item',
@@ -187,7 +170,6 @@ export async function updateWardrobeItemServer(
 
     return { success: true, message: 'Item updated successfully' };
   } catch (error) {
-    console.error('❌ Error updating wardrobe item:', error);
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Failed to update item',
@@ -217,7 +199,6 @@ export async function deleteWardrobeItemServer(
 
     return { success: true, message: 'Item deleted successfully' };
   } catch (error) {
-    console.error('❌ Error deleting wardrobe item:', error);
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Failed to delete item',
@@ -257,7 +238,6 @@ export async function saveWardrobeOutfitServer(
       outfitId: docRef.id,
     };
   } catch (error) {
-    console.error('❌ Error saving wardrobe outfit:', error);
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Failed to save outfit',

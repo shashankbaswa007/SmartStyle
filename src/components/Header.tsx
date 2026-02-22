@@ -56,56 +56,110 @@ export function Header() {
                 <StarBorder
                   as={Link}
                   href="/style-check"
-                  className="cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/50"
+                  // 1. Changed to 'rounded-full' to match your other nav pills
+                  // 2. Removed the heavy drop-shadows to keep the header clean
+                  className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
                   color="#a855f7"
-                  speed="3s"
-                  thickness={10}
+                  speed="4s" // Calmed the animation speed down slightly
+                  thickness={10} // Thinned the border for a more elegant, premium look
                 >
-                  <div className="flex items-center gap-2 group">
-                    <Wand2 className="w-4 h-4 group-hover:rotate-12 transition-transform duration-500 ease-out will-change-transform" style={{ color: '#a855f7' }} />
-                    <span className="font-medium">Style Check</span>
+                  <div className="flex flex-row items-center justify-center gap-2">
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="h-4 w-4 text-purple-400 transition-all duration-500 group-hover:rotate-90 group-hover:scale-110 group-hover:text-purple-300"
+                    >
+                      <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                    </svg>
+                    {/* THE TEXT: Removed the heavy gradient. Uses a clean, slightly muted white that brightens on hover */}
+                    <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
+                      Style Check
+                    </span>
+                    
+                    {/* THE SYMBOL: Kept the sparkle, but removed the complex custom SVG gradient. 
+                        Uses standard Tailwind text colors for a cleaner render. */}
+                    
+
                   </div>
                 </StarBorder>
                 
                 <StarBorder
                   as={Link}
                   href="/color-match"
-                  className="cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-blue-500/50"
-                  color="#3b82f6"
-                  speed="3s"
-                  thickness={10}
+                  // 1. Moved 'group' here. Changed to rounded-full. Removed the heavy shadows/scaling.
+                  className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
+                  color="#3b82f6" // Keeps your blue theme
+                  speed="4s" // Slowed down from 3s to match the elegant vibe
+                  thickness={10} // Reduced from 10 to 2 to match the clean navigation style
                 >
-                  <div className="flex items-center gap-2 group">
-                    <Palette className="w-4 h-4 group-hover:rotate-12 transition-all duration-500 ease-out will-change-transform" style={{ color: '#3b82f6' }} />
-                    <span className="font-medium">Color Match</span>
+                  {/* 2. Inner wrapper enforcing the layout */}
+                  <div className="flex flex-row items-center justify-center gap-2">
+                    
+                    {/* THE SYMBOL: Using your Lucide icon, but styled with Tailwind for hover effects */}
+                    <Palette 
+                      className="h-4 w-4 text-blue-400 transition-all duration-500 ease-out will-change-transform group-hover:rotate-12 group-hover:scale-110 group-hover:text-blue-300" 
+                    />
+                    
+                    {/* THE TEXT: Muted white that turns pure white on hover */}
+                    <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
+                      Color Match
+                    </span>
+                    
                   </div>
                 </StarBorder>
                 
                 <StarBorder
                   as={Link}
                   href="/likes"
-                  className="cursor-pointer transition-all duration-500 ease-out hover:scale-105 hover:shadow-lg hover:shadow-red-500/50 will-change-transform"
-                  color="#ef4444"
-                  speed="3s"
-                  thickness={10}
+                  className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
+                  color="#ef4444" 
+                  speed="4s"
+                  thickness={2} 
                 >
-                  <div className="flex items-center gap-2 group">
-                    <Heart className="w-4 h-4 group-hover:scale-110 transition-all duration-500 ease-out will-change-transform" style={{ color: '#ef4444' }} />
-                    <span className="font-medium">Likes</span>
+                  <div className="flex flex-row items-center justify-center gap-2">
+                    
+                    {/* THE SYMBOL: 
+                        1. Swapped pinkish colors for true 'red-500'.
+                        2. Changed duration to '1000' (1 second) for a slow, satisfying fill.
+                        3. Used 'fill-transparent' to ensure a smooth transition.
+                    */}
+                    <Heart 
+                      className="h-4 w-4 text-red-500 fill-transparent transition-all duration-400 ease-in-out will-change-transform group-hover:scale-110 group-hover:fill-red-500" 
+                    />
+                    
+                    <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
+                      Likes
+                    </span>
+                    
                   </div>
                 </StarBorder>
 
                 <StarBorder
                   as={Link}
                   href="/wardrobe"
-                  className="cursor-pointer transition-all duration-500 ease-out hover:scale-105 hover:shadow-lg hover:shadow-teal-500/50 will-change-transform"
-                  color="#14b8a6"
-                  speed="3s"
+                  className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
+                  color="#14b8a6" // Keeps your teal theme
+                  speed="4s"
                   thickness={10}
                 >
-                  <div className="flex items-center gap-2 group">
-                    <Shirt className="w-4 h-4 group-hover:scale-110 transition-all duration-500 ease-out will-change-transform" style={{ color: '#14b8a6' }} />
-                    <span className="font-medium">Wardrobe</span>
+                  {/* Inner wrapper enforcing the layout */}
+                  <div className="flex flex-row items-center justify-center gap-2">
+                    
+                    {/* THE SYMBOL: Removed inline CSS. Uses Tailwind text colors and adds a subtle fill on hover */}
+                    <Shirt 
+                      className="h-4 w-4 text-teal-400 fill-none transition-all duration-500 ease-out will-change-transform group-hover:scale-110 group-hover:text-teal-300 group-hover:fill-teal-500/30" 
+                    />
+                    
+                    {/* THE TEXT: Muted white that turns pure white on hover */}
+                    <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
+                      Wardrobe
+                    </span>
+                    
                   </div>
                 </StarBorder>
               </nav>

@@ -25,7 +25,6 @@ export async function fetchWeatherForecast(
     const apiKey = process.env.OPENWEATHER_API_KEY;
     
     if (!apiKey) {
-      console.error('OpenWeather API key not configured');
       return null;
     }
 
@@ -44,7 +43,6 @@ export async function fetchWeatherForecast(
       );
 
       if (!response.ok) {
-        console.error('Failed to fetch current weather:', response.statusText);
         return null;
       }
 
@@ -65,7 +63,6 @@ export async function fetchWeatherForecast(
       );
 
       if (!response.ok) {
-        console.error('Failed to fetch weather forecast:', response.statusText);
         return null;
       }
 
@@ -98,7 +95,6 @@ export async function fetchWeatherForecast(
 
     // For dates beyond 5 days, return a generic message
     // (Free OpenWeather API doesn't support long-range forecasts)
-    console.warn(`Weather forecast not available for ${daysFromNow} days ahead`);
     return {
       temp: 25, // Default temperature
       condition: 'Clear',
@@ -107,7 +103,6 @@ export async function fetchWeatherForecast(
     };
 
   } catch (error) {
-    console.error('Error fetching weather forecast:', error);
     return null;
   }
 }

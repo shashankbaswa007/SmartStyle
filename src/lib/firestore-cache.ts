@@ -39,7 +39,6 @@ export class FirestoreCache {
       const docSnap = await getDoc(docRef);
       
       if (!docSnap.exists()) {
-        console.log('❌ Cache MISS - generating new recommendations');
         return null;
       }
       
@@ -48,14 +47,11 @@ export class FirestoreCache {
       
       // Check if expired (1 hour TTL)
       if (expiresAt && expiresAt < new Date()) {
-        console.log('⏰ Cache EXPIRED - generating new recommendations');
         return null;
       }
       
-      console.log('🎯 Cache HIT - returning cached recommendations (saves API calls!)');
       return data.result as T;
     } catch (error) {
-      console.error('Cache get error:', error);
       return null;
     }
   }
@@ -84,9 +80,7 @@ export class FirestoreCache {
         }
       });
       
-      console.log('💾 Cached result for 1 hour');
     } catch (error) {
-      console.error('Cache set error:', error);
       // Non-critical error, continue without caching
     }
   }

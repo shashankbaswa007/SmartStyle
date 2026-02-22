@@ -148,7 +148,6 @@ export default function ColorMatchPage() {
         description: `Found ${data.matches.length} harmonious colors for ${data.inputColor.name || data.inputColor.hex}`,
       });
     } catch (error) {
-      console.error("Error generating color matches:", error);
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "An unexpected error occurred",

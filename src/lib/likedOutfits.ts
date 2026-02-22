@@ -36,24 +36,11 @@ export async function saveLikedOutfit(
   userId: string,
   outfitData: LikedOutfitData
 ): Promise<{ success: boolean; message: string; isDuplicate?: boolean }> {
-  console.log('🔥🔥🔥 ===== SAVE LIKED OUTFIT FUNCTION CALLED =====');
-  console.log('🔥 UserId:', userId);
-  console.log('🔥 OutfitData:', outfitData);
   
   try {
-    console.log('🔍 saveLikedOutfit called with:', {
-      userId,
-      hasTitle: !!outfitData.title,
-      hasImageUrl: !!outfitData.imageUrl,
-      title: outfitData.title,
-      imageUrlPreview: outfitData.imageUrl?.substring(0, 50) + '...',
-      itemsCount: outfitData.items?.length || 0,
-      colorsCount: outfitData.colorPalette?.length || 0,
-    });
 
     // Validate userId
     if (!userId || userId.trim() === '' || userId === 'anonymous') {
-      console.error('❌ Invalid userId:', userId);
       return {
         success: false,
         message: 'Please sign in to save outfits to your favorites',
@@ -63,10 +50,6 @@ export async function saveLikedOutfit(
 
     // Validate outfit data
     if (!outfitData.title || !outfitData.imageUrl) {
-      console.error('❌ Invalid outfit data:', {
-        hasTitle: !!outfitData.title,
-        hasImageUrl: !!outfitData.imageUrl,
-      });
       return {
         success: false,
         message: 'Outfit title and image are required',
@@ -76,7 +59,6 @@ export async function saveLikedOutfit(
 
     // Validate imageUrl format
     if (!outfitData.imageUrl.startsWith('http') && !outfitData.imageUrl.startsWith('data:')) {
-      console.error('❌ Invalid imageUrl format:', outfitData.imageUrl.substring(0, 50));
       return {
         success: false,
         message: 'Invalid image URL format',
@@ -84,13 +66,9 @@ export async function saveLikedOutfit(
       };
     }
 
-    console.log('📁 Creating Firestore reference: users/' + userId + '/likedOutfits');
-    console.log('🔍 Firebase db object:', db);
-    console.log('🔍 Current auth user:', auth.currentUser?.uid);
     
     // Verify auth state
     if (!auth.currentUser || auth.currentUser.uid !== userId) {
-      console.error('❌ Auth mismatch - current user:', auth.currentUser?.uid, 'expected:', userId);
       return {
         success: false,
         message: 'Authentication mismatch. Please sign in again.',
@@ -105,7 +83,6 @@ export async function saveLikedOutfit(
       where('title', '==', outfitData.title)
     );
     
-    console.log('🔍 Checking for duplicates...');
     const duplicateSnapshot = await getDocs(duplicateQuery);
     
     // Check if any of the matching titles have the same imageUrl
@@ -119,7 +96,6 @@ export async function saveLikedOutfit(
     });
     
     if (isDuplicate) {
-      console.log('⚠️ Duplicate found, outfit already liked');
       return {
         success: true,
         message: 'This outfit is already in your likes',
@@ -127,15 +103,6 @@ export async function saveLikedOutfit(
       };
     }
 
-    console.log('💾 Saving outfit to Firestore directly...');
-    console.log('📦 Data to save:', {
-      ...outfitData,
-      imageUrl: outfitData.imageUrl.substring(0, 100) + '...',
-      hasItems: !!outfitData.items,
-      itemsLength: outfitData.items?.length,
-      hasColorPalette: !!outfitData.colorPalette,
-      colorPaletteLength: outfitData.colorPalette?.length,
-    });
     
     // Save directly to Firestore without complex validation
     // This is simpler and avoids validation schema mismatches
@@ -157,20 +124,13 @@ export async function saveLikedOutfit(
       recommendationId: outfitData.recommendationId || '',
     };
     
-    console.log('💾 Attempting to save to Firestore at path: users/' + userId + '/likedOutfits');
-    console.log('💾 Data keys being saved:', Object.keys(dataToSave));
-    console.log('💾 Firestore collection reference created');
     
     try {
       const docRef = await addDoc(likesRef, dataToSave);
-      console.log('✅ Outfit saved successfully with ID:', docRef.id);
-      console.log('🔗 Document path: users/' + userId + '/likedOutfits/' + docRef.id);
       
       // Verify the save by reading it back
-      console.log('🔍 Verifying save by reading back...');
       const verifyQuery = query(likesRef, where('title', '==', outfitData.title));
       const verifySnapshot = await getDocs(verifyQuery);
-      console.log('✅ Verification: Found', verifySnapshot.size, 'documents with this title');
       
       return {
         success: true,
@@ -178,25 +138,9 @@ export async function saveLikedOutfit(
         isDuplicate: false,
       };
     } catch (firestoreError) {
-      console.error('❌ Firestore save failed:', firestoreError);
-      if (firestoreError && typeof firestoreError === 'object') {
-        if ('code' in firestoreError) {
-          console.error('❌ Error code:', firestoreError.code);
-        }
-        if ('message' in firestoreError) {
-          console.error('❌ Error message:', firestoreError.message);
-        }
-      }
       throw firestoreError; // Re-throw to be caught by outer catch
     }
   } catch (error) {
-    console.error('❌ Error saving liked outfit:', error);
-    console.error('Error details:', {
-      name: error instanceof Error ? error.name : 'Unknown',
-      message: error instanceof Error ? error.message : String(error),
-      stack: error instanceof Error ? error.stack : undefined,
-      code: error && typeof error === 'object' && 'code' in error ? error.code : undefined,
-    });
     
     // Provide user-friendly error messages
     let userMessage = 'Failed to save outfit';
@@ -206,8 +150,6 @@ export async function saveLikedOutfit(
       } else if (error.code === 'unavailable') {
         userMessage = 'Database temporarily unavailable. Please try again.';
       }
-    } else if (error instanceof Error) {
-      userMessage = error.message;
     }
     
     return {
@@ -227,11 +169,9 @@ export async function getLikedOutfits(userId: string): Promise<LikedOutfitData[]
   try {
     // Validate userId
     if (!userId || userId.trim() === '' || userId === 'anonymous') {
-      console.error('❌ Invalid userId provided to getLikedOutfits:', userId);
       return [];
     }
 
-    console.log('🔍 Fetching liked outfits for user:', userId);
 
     const likesRef = collection(db, 'users', userId, 'likedOutfits');
     
@@ -239,7 +179,6 @@ export async function getLikedOutfits(userId: string): Promise<LikedOutfitData[]
     const q = query(likesRef, orderBy('likedAt', 'desc'));
     const snapshot = await getDocs(q);
     
-    console.log('📊 Found', snapshot.size, 'liked outfits in database');
     
     const outfits: LikedOutfitData[] = [];
     snapshot.forEach((doc) => {
@@ -251,27 +190,15 @@ export async function getLikedOutfits(userId: string): Promise<LikedOutfitData[]
             ...data,
             id: doc.id, // Include the document ID
           });
-        } else {
-          console.warn('⚠️ Incomplete outfit data found:', doc.id, {
-            hasTitle: !!data?.title,
-            hasImageUrl: !!data?.imageUrl,
-          });
         }
-      } catch (err) {
-        console.error('❌ Error parsing outfit document:', doc.id, err);
+      } catch {
+        // Skip malformed documents
       }
     });
     
-    console.log('✅ Successfully fetched', outfits.length, 'valid liked outfits');
     
     return outfits;
   } catch (error) {
-    console.error('❌ Error fetching liked outfits:', error);
-    console.error('Error details:', {
-      name: error instanceof Error ? error.name : 'Unknown',
-      message: error instanceof Error ? error.message : String(error),
-      code: error && typeof error === 'object' && 'code' in error ? error.code : undefined,
-    });
     
     // Return empty array instead of throwing
     return [];
@@ -289,11 +216,9 @@ export async function removeLikedOutfit(
   outfitId: string
 ): Promise<{ success: boolean; message: string }> {
   try {
-    console.log('🗑️ Removing liked outfit:', { userId, outfitId });
 
     // Validate inputs
     if (!userId || userId.trim() === '' || userId === 'anonymous') {
-      console.error('❌ Invalid userId:', userId);
       return {
         success: false,
         message: 'Invalid user ID',
@@ -301,7 +226,6 @@ export async function removeLikedOutfit(
     }
 
     if (!outfitId || outfitId.trim() === '') {
-      console.error('❌ Invalid outfitId:', outfitId);
       return {
         success: false,
         message: 'Invalid outfit ID',
@@ -312,19 +236,12 @@ export async function removeLikedOutfit(
     const outfitRef = doc(db, 'users', userId, 'likedOutfits', outfitId);
     await deleteDoc(outfitRef);
     
-    console.log('✅ Outfit removed successfully:', outfitId);
     
     return {
       success: true,
       message: 'Outfit removed from likes',
     };
   } catch (error) {
-    console.error('❌ Error removing liked outfit:', error);
-    console.error('Error details:', {
-      name: error instanceof Error ? error.name : 'Unknown',
-      message: error instanceof Error ? error.message : String(error),
-      code: error && typeof error === 'object' && 'code' in error ? error.code : undefined,
-    });
     
     // Provide user-friendly error messages
     let userMessage = 'Failed to remove outfit';
@@ -336,8 +253,6 @@ export async function removeLikedOutfit(
       } else if (error.code === 'unavailable') {
         userMessage = 'Database temporarily unavailable. Please try again.';
       }
-    } else if (error instanceof Error) {
-      userMessage = error.message;
     }
     
     return {

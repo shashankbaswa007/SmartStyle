@@ -38,25 +38,17 @@ export async function generateOutfitImage(
   imagePrompt: string,
   colorHexCodes: string[]
 ): Promise<string> {
-  console.log('🎨 Image generation requested');
-  console.log('📝 Prompt:', imagePrompt.substring(0, 100) + '...');
-  console.log('🎨 Colors:', colorHexCodes);
 
   try {
     const imageUrl = await generateOutfitImageWithFallback(imagePrompt, colorHexCodes);
     if (!imageUrl) {
-      console.log('⚠️ Image generation returned null — using placeholder');
       return 'https://via.placeholder.com/800x1000/6366f1/ffffff?text=Fashion+Outfit';
     }
-    console.log('✅ Image generated successfully');
-    console.log('🔗 Image URL:', imageUrl.substring(0, 100) + '...');
     return imageUrl;
   } catch (error) {
-    console.error('❌ All image generation methods failed:', error);
     
     // Final fallback to placeholder
     const fallbackUrl = 'https://via.placeholder.com/800x1000/6366f1/ffffff?text=Fashion+Outfit';
-    console.log('⚠️ Using final fallback placeholder:', fallbackUrl);
     
     return fallbackUrl;
   }
@@ -83,16 +75,11 @@ export async function generateOutfitImageEnhanced(
   gender: string
 ): Promise<EnhancedOutfitResult> {
   const startTime = Date.now();
-  console.log('🎨 [ENHANCED] Starting outfit generation with structured shopping...');
-  console.log('📝 Title:', outfitTitle);
-  console.log('👔 Items:', outfitItems.join(', '));
-  console.log('👤 Gender:', gender);
 
   try {
     // Step 1: Generate the outfit image
     const imageUrl = await generateOutfitImageWithFallback(imagePrompt, colorHexCodes);
     if (!imageUrl) {
-      console.log('⚠️ [ENHANCED] Image generation returned null — using placeholder');
       const fallbackUrl = 'https://via.placeholder.com/800x1000/6366f1/ffffff?text=Fashion+Outfit';
       return {
         imageUrl: fallbackUrl,
@@ -107,7 +94,6 @@ export async function generateOutfitImageEnhanced(
         },
       };
     }
-    console.log('✅ Image generated:', imageUrl.substring(0, 80) + '...');
 
     // Step 2: Analyze the generated image for colors and basic data
     const analysisStartTime = Date.now();
@@ -119,7 +105,6 @@ export async function generateOutfitImageEnhanced(
       gender
     );
     const analysisTime = Date.now() - analysisStartTime;
-    console.log(`✅ Basic analysis complete: ${analysisTime}ms`);
 
     // Step 3: Attempt structured analysis for shopping optimization
     let structuredAnalysis: StructuredAnalysis | undefined;
@@ -130,24 +115,19 @@ export async function generateOutfitImageEnhanced(
     if (basicAnalysis.structuredItems) {
       structuredAnalysis = basicAnalysis.structuredItems;
       primaryModel = 'gemini-2.0-flash-exp';
-      console.log(`✅ Structured analysis available: ${structuredAnalysis.items.length} items detected`);
 
       // Step 4: Search optimized shopping links
       try {
         const searchStartTime = Date.now();
         shoppingLinks = await searchShoppingLinksStructured(structuredAnalysis);
         searchTime = Date.now() - searchStartTime;
-        console.log(`✅ Shopping search complete: ${searchTime}ms, ${shoppingLinks.metadata.totalLinksFound} links found`);
       } catch (searchError) {
-        console.error('⚠️ Shopping search failed, will use fallback links:', (searchError as Error).message);
         shoppingLinks = undefined;
       }
     } else {
-      console.log('⚠️ Structured analysis not available, shopping links will use fallback');
     }
 
     const totalTime = Date.now() - startTime;
-    console.log(`✅ [ENHANCED] Complete: ${totalTime}ms total (${analysisTime}ms analysis, ${searchTime}ms search)`);
 
     return {
       imageUrl,
@@ -165,7 +145,6 @@ export async function generateOutfitImageEnhanced(
     };
 
   } catch (error) {
-    console.error('❌ Enhanced outfit generation failed:', error);
     
     // Fallback result with placeholder
     const fallbackUrl = 'https://via.placeholder.com/800x1000/6366f1/ffffff?text=Fashion+Outfit';

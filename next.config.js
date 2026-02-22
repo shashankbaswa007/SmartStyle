@@ -23,9 +23,9 @@ function loadEnvFile(filePath) {
   }
 }
 
-// Load .env files in order of priority
-loadEnvFile(path.join(__dirname, '.env'));
+// Load .env files in order of priority (.env.local overrides .env)
 loadEnvFile(path.join(__dirname, '.env.local'));
+loadEnvFile(path.join(__dirname, '.env'));
 
 const nextConfig = {
   env: {
@@ -43,6 +43,20 @@ const nextConfig = {
       // Next expects a numeric byte limit; set to 20 * 1024 * 1024
       bodySizeLimit: 20 * 1024 * 1024,
     },
+    // OPTIMIZED: Tree-shake heavy packages for faster page loads
+    optimizePackageImports: [
+      'lucide-react',
+      'framer-motion',
+      'firebase/auth',
+      'firebase/firestore',
+      'firebase/storage',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-alert-dialog',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-select',
+      '@radix-ui/react-tooltip',
+    ],
   },
   /* config options here */
   images: {
@@ -163,6 +177,7 @@ const nextConfig = {
   swcMinify: true,
   compress: true,
   poweredByHeader: false,
+  
   
   // PWA Configuration
   async headers() {

@@ -363,7 +363,6 @@ export default function AnalyticsPage() {
       setLikedOutfits(liked);
       setWardrobeItems(wardrobe);
     } catch (err) {
-      console.error('Error loading analytics:', err);
       setError(err instanceof Error ? err.message : 'Failed to load analytics data');
     } finally {
       setLoading(false);

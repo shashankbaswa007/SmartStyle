@@ -229,7 +229,6 @@ export function StyleAdvisor() {
   React.useEffect(() => {
     isMountedRef.current = true;
     // Request browser location for weather
-    console.log('🌤️ Requesting browser location for weather...');
     
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -237,15 +236,11 @@ export function StyleAdvisor() {
           const lat = position.coords.latitude;
           const lon = position.coords.longitude;
           
-          console.log(`✅ Location granted: [${lat.toFixed(4)}, ${lon.toFixed(4)}]`);
-          console.log(`🔄 Fetching weather for your location...`);
           
           const weatherData = await getWeatherData({ lat, lon });
           
-          console.log(`✅ Weather received: ${weatherData}`);
           setWeather(weatherData);
         } catch (error) {
-          console.error('❌ Weather API error:', error);
           setWeather("Clear skies, around 25°C");
           toast({
             variant: "default",
@@ -259,9 +254,6 @@ export function StyleAdvisor() {
         }
       },
       (geoError) => {
-        console.warn('⚠️ Location access denied or unavailable');
-        console.log('Error code:', geoError.code, '(1=DENIED, 2=UNAVAILABLE, 3=TIMEOUT)');
-        console.log('Error message:', geoError.message);
         
         setWeather("Clear skies, around 25°C");
         toast({
@@ -305,7 +297,6 @@ export function StyleAdvisor() {
         setShowCamera(true);
       }
     } catch (err) {
-      console.error("Camera access error:", err);
       toast({
         variant: "destructive",
         title: "Camera Access Error",
@@ -373,7 +364,6 @@ export function StyleAdvisor() {
               form.setValue('image', dataTransfer.files);
             });
         } catch (error) {
-          console.error("Validation error:", error);
           // On error, allow to proceed
           setPreviewImage(imageDataUrl);
           
@@ -465,7 +455,6 @@ export function StyleAdvisor() {
         };
         img.src = imgSrc;
       } catch (error) {
-        console.error("Validation error:", error);
         // Allow to proceed on validation error
         toast({
           variant: "default",
@@ -763,12 +752,6 @@ export function StyleAdvisor() {
     const dressColorsStr = uniqueColors.join(', ');
     
     console.timeEnd('colorExtraction');
-    console.log('✅ Detected dress colors:', dressColorsStr);
-    console.log('✅ Extracted color palette (hex):', extractedPalette);
-    console.log('✅ Total diverse colors:', diverseColors.length);
-    console.log('✅ Person center:', { x: Math.round(personCenterX), y: Math.round(personCenterY) });
-    console.log('✅ Skin pixels found:', skinPixels.length);
-    console.log('✅ Color candidates:', colorMap.size, '→ Diverse:', diverseColors.length);
 
     return { 
       skinTone, 
@@ -835,14 +818,23 @@ export function StyleAdvisor() {
       // 2. Image generation with Pollinations (sequential with delays)
       // 3. Gemini image analysis for accurate colors
       // 4. Optimized Tavily search with proper queries
-      console.log('📡 Calling /api/recommend with full processing pipeline...');
-      console.log('⏳ This will take 30-40 seconds to generate all 3 outfit images properly...');
       
+      // Build auth headers if user is authenticated
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (auth.currentUser) {
+        try {
+          const idToken = await auth.currentUser.getIdToken();
+          headers['Authorization'] = `Bearer ${idToken}`;
+        } catch {
+          // Continue without auth - will work as anonymous
+        }
+      }
+
       const response = await fetch('/api/recommend', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify(request),
         signal: controller.signal,
       });
@@ -854,7 +846,6 @@ export function StyleAdvisor() {
         try {
           errorData = await response.json();
         } catch (jsonError) {
-          console.error('❌ Failed to parse error response:', jsonError);
           // Use status text as fallback
           errorData = { error: response.statusText || 'API request failed' };
         }
@@ -864,14 +855,8 @@ export function StyleAdvisor() {
       const data = await response.json();
       if (isStale()) return;
 
-      console.log('✅ API response received:', {
-        success: data.success,
-        hasPayload: !!data.payload,
-        outfitsCount: data.payload?.analysis?.outfitRecommendations?.length,
-      });
       
       setLoadingMessage("API complete! Now loading all images for best experience...");
-      console.log('💻 Backend processing complete, starting client-side image loading...');
 
       if (!data.success || !data.payload) {
         throw new Error('Invalid API response structure');
@@ -881,7 +866,6 @@ export function StyleAdvisor() {
       const enrichedOutfits = result.outfitRecommendations;
       
       // ✅ VALIDATION: Ensure all outfits have complete data
-      console.log('🔍 Validating outfit data completeness...');
       const hasCompleteData = enrichedOutfits.every((outfit: any) => {
         const hasImage = !!outfit.imageUrl;
         const hasColors = outfit.colorPalette && outfit.colorPalette.length > 0;
@@ -891,19 +875,12 @@ export function StyleAdvisor() {
           outfit.shoppingLinks.nykaa
         );
         
-        console.log(`  Outfit "${outfit.title}":`, {
-          hasImage,
-          colorCount: outfit.colorPalette?.length || 0,
-          hasLinks,
-        });
         
         return hasImage && hasColors && hasLinks;
       });
 
       if (!hasCompleteData) {
-        console.warn('⚠️ Some outfits have incomplete data, but proceeding...');
       } else {
-        console.log('✅ All outfits have complete data (image + colors + links)');
       }
       
       updateStep('analyze', 'complete');
@@ -937,7 +914,6 @@ export function StyleAdvisor() {
 
       // Show results immediately — image loading is handled per-card in the results component
       updateStep('finalize', 'processing');
-      console.log('✨ Displaying results immediately — images will load progressively per-card');
       if (isStale()) return;
 
       setAnalysisResult(result);
@@ -946,7 +922,6 @@ export function StyleAdvisor() {
       updateStep('finalize', 'complete');
       setLoadingMessage('');
 
-      console.log('🎉 Recommendation flow complete! Results visible, images loading in-place.');
       
       // Show success toast
       toast({
@@ -966,7 +941,6 @@ export function StyleAdvisor() {
         return;
       }
 
-      console.error('❌ Analysis error:', e);
       const errorMessage = e instanceof Error ? e.message : 'An unexpected error occurred';
       
       // Mark current step as error
@@ -1139,7 +1113,7 @@ export function StyleAdvisor() {
                   name="image"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-base font-semibold">1. Upload Your Outfit or Take a Photo</FormLabel>
+                      <span className="text-base font-semibold text-foreground">1. Upload Your Outfit or Take a Photo</span>
                       
                       {/* Validation Error Alert */}
                       {imageValidationError && (
@@ -1314,8 +1288,8 @@ export function StyleAdvisor() {
                     name="gender"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className="text-base font-semibold">4. Select Your Gender</FormLabel>
-                        <div className="flex flex-wrap gap-3 pt-2">
+                        <span className="text-base font-semibold text-foreground">4. Select Your Gender</span>
+                        <div className="flex flex-wrap gap-3 pt-2" role="radiogroup" aria-label="Select your gender">
                           {genders.map((gender) => (
                             <Button
                               key={gender.value}

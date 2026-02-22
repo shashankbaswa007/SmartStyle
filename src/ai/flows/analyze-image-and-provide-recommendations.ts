@@ -48,7 +48,6 @@ function getCachedAIResponse(key: string): AnalyzeImageAndProvideRecommendations
     return null;
   }
   
-  console.log('⚡ [CACHE HIT] Using cached AI analysis - instant response!');
   return cached.data;
 }
 
@@ -511,16 +510,13 @@ async function callModelWithRetry(
         model: modelName,
         config: GEMINI_MODEL_CONFIG,
       });
-      console.log(`✅ Successfully received response from ${modelName} on attempt ${attempt}`);
       
       // Validate diversity of recommendations
       if (output && output.outfitRecommendations) {
         const diversity = validateGeminiDiversity(output.outfitRecommendations);
         if (!diversity.isValid) {
-          console.warn(`⚠️ Low diversity detected (score: ${diversity.score}/100): ${diversity.reason}`);
           // Log but don't fail - user gets something rather than error
         } else {
-          console.log(`📊 Diversity validated: ${diversity.score}/100`);
         }
       }
       
@@ -538,7 +534,6 @@ async function callModelWithRetry(
       const schemaFeedback = extractSchemaFeedback(error);
       if (schemaFeedback && schemaRetries < MAX_SCHEMA_RETRIES) {
         schemaRetries++;
-        console.warn(`🧭 Schema validation failed (attempt ${schemaRetries}/${MAX_SCHEMA_RETRIES}). Retrying with feedback...`);
         enhancedInput.validationFeedback = schemaFeedback;
         await sleep(500);
         continue;
@@ -551,17 +546,12 @@ async function callModelWithRetry(
         const jitter = Math.random() * 1000; // Add 0-1s random jitter
         const backoffMs = baseDelay + jitter;
         
-        console.warn(
-          `⚠️ Gemini API ${modelName} overloaded/rate-limited (attempt ${attempt}/${maxAttempts}). ` +
-          `Error: "${errorMessage}". Retrying in ${Math.round(backoffMs / 1000)}s...`
-        );
         await sleep(backoffMs);
         continue;
       }
 
       // Non-retryable error or max attempts reached
       if (attempt >= maxAttempts) {
-        console.error(`❌ All ${maxAttempts} attempts failed for ${modelName}. Last error: ${errorMessage}`);
       }
       throw error;
     }
@@ -648,7 +638,6 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
           }
         }
       } catch (error) {
-        console.warn('Failed to fetch personalization data, proceeding without:', error);
         // Continue without personalization if it fails
       }
     }
@@ -656,7 +645,6 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
     // Try Groq FIRST (14,400/day FREE) - Primary recommendation engine
     if (isGroqConfigured()) {
       try {
-        console.log('🚀 Using Groq AI as primary recommendation engine (14,400/day FREE)...');
         
         // Prepare Groq input from enhanced input
         // ✨ NEW: Fetch comprehensive preferences for personalization
@@ -669,12 +657,7 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
               getComprehensivePreferences(input.userId),
               getBlocklists(input.userId),
             ]);
-            console.log('✅ [AI Flow] Preferences loaded for Groq:', {
-              interactions: userPreferences.totalInteractions,
-              confidence: userPreferences.overallConfidence,
-            });
           } catch (prefError) {
-            console.warn('⚠️ [AI Flow] Failed to load preferences for Groq:', prefError);
           }
         }
         
@@ -693,7 +676,6 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
         };
         
         const groqResult = await generateRecommendationsWithGroq(groqInput);
-        console.log('✅ Groq response received - recommendations generated successfully!');
         
         // Extract colors from outfit recommendations for color palette
         const allColors = new Set<string>();
@@ -751,20 +733,16 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
         
         return convertedResult;
       } catch (groqError) {
-        console.warn('⚠️ Groq failed, falling back to Gemini...', groqError);
         // Continue to Gemini fallback below
       }
     } else {
-      console.log('⚠️ Groq not configured, using Gemini...');
     }
 
     // Groq failed or not configured - try Gemini as backup
-    console.log('🎨 Calling Gemini API as backup...');
 
     let lastGeminiError: unknown = null;
     for (const candidate of GEMINI_MODEL_SEQUENCE) {
       try {
-        console.log(`🔁 Trying Gemini model ${candidate.name} (up to ${candidate.retries} attempt(s))`);
         return await callModelWithRetry(enhancedInput, candidate.name, candidate.retries);
       } catch (error) {
         lastGeminiError = error;
@@ -772,18 +750,15 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
         // Check if it's a schema error - if so, try next model
         const schemaFeedback = extractSchemaFeedback(error);
         if (schemaFeedback) {
-          console.warn(`⚠️ Gemini model ${candidate.name} failed schema validation after retries. Trying next model...`);
           continue;
         }
 
         // Check if it's a retryable error (overload, etc) - if so, try next model
         if (isRetryableError(error)) {
-          console.warn(`⚠️ Gemini model ${candidate.name} is overloaded. Moving to fallback model...`);
           continue;
         }
 
         // Non-retryable error - throw immediately
-        console.error(`❌ Gemini model ${candidate.name} failed with non-retryable error.`, error);
         throw error;
       }
     }

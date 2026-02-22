@@ -79,7 +79,6 @@ async function callGeminiWithRetry(modelName: string, payload: any, maxRetries =
   const minBackoff = 2000; // 2s
   const computedBackoff = Math.min(minBackoff * 2 ** Math.max(0, attempt - 1), 60000);
   const backoffMs = typeof retryDelaySec === 'number' && retryDelaySec > 0 ? Number(retryDelaySec) * 1000 : computedBackoff;
-      console.warn(`⚠️ Gemini ${modelName} rate-limited, retrying attempt ${attempt}/${maxRetries} in ${backoffMs}ms`);
       await sleep(backoffMs);
       continue;
     }
@@ -141,7 +140,6 @@ export async function analyzeGeneratedImageStructured(
   gender: string,
   imageBuffer?: Buffer
 ): Promise<StructuredAnalysis> {
-  console.log('🔍 [STRUCTURED] Analyzing generated image for detailed clothing item data...');
 
   const STRUCTURED_PROMPT = `You are a professional fashion e-commerce product analyst with expertise in identifying clothing items for online shopping.
 
@@ -198,7 +196,6 @@ Analyze the image now and return ONLY the JSON object.`;
   
   for (const modelName of [primaryModel, fallbackModel]) {
     try {
-      console.log(`📡 Calling ${modelName} for structured analysis...`);
       
       const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GENAI_API_KEY!);
       const model = genAI.getGenerativeModel({ 
@@ -229,7 +226,6 @@ Analyze the image now and return ONLY the JSON object.`;
       ]);
 
       const responseText = result.response.text();
-      console.log(`✅ ${modelName} response received, length: ${responseText.length}`);
 
       // Parse JSON response
       let structuredData: StructuredAnalysis;
@@ -246,22 +242,17 @@ Analyze the image now and return ONLY the JSON object.`;
           throw new Error('Invalid response: items array missing or empty');
         }
         
-        console.log(`✅ Parsed ${structuredData.items.length} clothing items from ${modelName}`);
         return structuredData;
         
       } catch (parseErr) {
-        console.error(`❌ Failed to parse JSON from ${modelName}:`, parseErr);
-        console.error('Raw response:', responseText.substring(0, 500));
         throw new Error(`JSON parse failed: ${(parseErr as Error).message}`);
       }
       
     } catch (err) {
-      console.error(`❌ ${modelName} failed:`, (err as Error).message);
       lastError = err as Error;
       
       // If primary failed, try fallback
       if (modelName === primaryModel) {
-        console.log('⚠️ Primary model failed, trying fallback...');
         continue;
       }
     }
@@ -283,7 +274,6 @@ export async function analyzeGeneratedImage(
   gender: string,
   imageBuffer?: Buffer
 ): Promise<GeneratedImageAnalysis> {
-  console.log('🔍 Analyzing generated image for accurate colors and shopping query...');
 
   // NOTE: we no longer ask Gemini to produce color palettes. Gemini is used only to
   // generate an optimized shopping query and a detailed description. Color extraction
@@ -313,12 +303,10 @@ RESPONSE FORMAT (JSON only):
 
   let tryModels: string[] = [];
   try {
-    console.log('🔎 Discovering available models via REST ListModels endpoint...');
     const apiKey = process.env.GOOGLE_GENAI_API_KEY;
     // Use cached models when recent
     if (_modelDiscoveryCache && _modelDiscoveryCache.expiresAt > Date.now()) {
       tryModels = _modelDiscoveryCache.models;
-      console.log('ℹ️ Using cached Gemini model list', tryModels);
     } else if (apiKey) {
       const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`, { timeoutMs: 4000 });
       if (res.ok) {
@@ -339,16 +327,12 @@ RESPONSE FORMAT (JSON only):
           tryModels = geminiModels;
           // cache for 10 minutes
           _modelDiscoveryCache = { models: tryModels, expiresAt: Date.now() + 1000 * 60 * 10 };
-          console.log('✅ Discovered Gemini models via REST:', tryModels);
         }
       } else {
-        console.warn('⚠️ ListModels REST request failed with status', res.status);
       }
     } else {
-      console.warn('⚠️ GOOGLE_GENAI_API_KEY missing; cannot call ListModels REST endpoint');
     }
   } catch (discErr) {
-    console.warn('⚠️ Model discovery via REST failed, will fall back to default list', (discErr as any)?.message || discErr);
   }
 
   if (!tryModels || tryModels.length === 0) {
@@ -362,22 +346,18 @@ RESPONSE FORMAT (JSON only):
   // First: attempt local Vibrant extraction (fast, no network to Gemini)
   let dominantColors: Array<{ name: string; hex: string; percentage: number }> = [];
   try {
-    console.log('🛠️ Attempting local color extraction fallback using Vibrant (dynamic import if available)...');
 
     // Dynamically import node-vibrant only when needed so builds without the package succeed
     let Vibrant: any = null;
     try {
-      // Use eval('require') to avoid bundlers attempting to statically resolve this optional dependency
-      // @ts-ignore
-      const req: any = eval('require');
-      const mod = req('node-vibrant');
+      // Use dynamic import to load optional dependency without bundler static resolution
+      const mod = await import(/* webpackIgnore: true */ 'node-vibrant');
       Vibrant = mod?.default || mod;
-    } catch (impErr) {
-      console.warn('⚠️ node-vibrant not available (optional dependency missing) - skipping local color extraction', (impErr as any)?.message || impErr);
+    } catch {
+      // node-vibrant not available — skip local color extraction
     }
 
     if (Vibrant) {
-      // Use provided imageBuffer if available (route persists image and passes buffer). Otherwise fetch image bytes for local extraction (with timeout)
       let buf: Buffer | undefined = imageBuffer;
       if (!buf) {
         const imageResp = await fetchWithTimeout(imageUrl, { timeoutMs: 5000 });
@@ -416,10 +396,8 @@ RESPONSE FORMAT (JSON only):
         })
         .slice(0, 5);
 
-      console.log('✅ Local color extraction complete, colors:', dominantColors.map((c) => c.hex).join(', '));
     }
   } catch (vibrantErr) {
-    console.warn('⚠️ Local color extraction failed or not available:', (vibrantErr as any)?.message || vibrantErr);
   }
 
   // Fast heuristic generator for shoppingQuery and detailedDescription (no Gemini). This is low-latency.
@@ -439,7 +417,6 @@ RESPONSE FORMAT (JSON only):
   // NEW: Always attempt structured analysis for shopping optimization
   let structuredItems: StructuredAnalysis | undefined;
   try {
-    console.log('🔄 Attempting structured clothing analysis for shopping optimization...');
     structuredItems = await analyzeGeneratedImageStructured(
       imageUrl,
       outfitTitle,
@@ -448,9 +425,7 @@ RESPONSE FORMAT (JSON only):
       gender,
       imageBuffer
     );
-    console.log(`✅ Structured analysis complete: ${structuredItems.items.length} items detected`);
   } catch (structuredErr) {
-    console.error('⚠️ Structured analysis failed, shopping links will use fallback:', (structuredErr as Error).message);
     structuredItems = undefined;
   }
 
@@ -459,7 +434,6 @@ RESPONSE FORMAT (JSON only):
 
   if (!useGemini) {
     const local = generateLocalQuery();
-    console.log('✅ Returning local analysis with', dominantColors.length, 'colors');
     return {
       dominantColors: dominantColors.length > 0 ? dominantColors : [],
       shoppingQuery: local.shoppingQuery,
@@ -472,7 +446,6 @@ RESPONSE FORMAT (JSON only):
 
   // At this point Gemini didn't provide usable colors. Try local Vibrant fallback if available.
     try {
-      console.log('🛠️ Attempting local color extraction fallback using Vibrant (dynamic import if available)...');
 
       // Dynamically import node-vibrant only when needed so builds without the package succeed
       let Vibrant: any = null;
@@ -483,7 +456,6 @@ RESPONSE FORMAT (JSON only):
         const mod = req('node-vibrant');
         Vibrant = mod?.default || mod;
       } catch (impErr) {
-        console.warn('⚠️ node-vibrant not available (optional dependency missing) - skipping local color extraction', (impErr as any)?.message || impErr);
       }
 
       if (!Vibrant) {
@@ -531,7 +503,6 @@ RESPONSE FORMAT (JSON only):
 
     const fallbackQuery = `${gender} ${outfitItems.join(' ')} ${outfitTitle} buy online India fashion`;
 
-    console.log('✅ Local color extraction complete, colors:', dominantColors.map((c) => c.hex).join(', '));
 
     return {
       dominantColors,
@@ -540,7 +511,6 @@ RESPONSE FORMAT (JSON only):
       structuredItems, // Include structured data if available
     };
   } catch (vibrantErr) {
-    console.error('⚠️ Local color extraction failed or not available:', (vibrantErr as any)?.message || vibrantErr);
     const fallbackQuery = `${gender} ${outfitItems.join(' ')} ${outfitTitle} buy online India fashion`;
     return {
       dominantColors: [],

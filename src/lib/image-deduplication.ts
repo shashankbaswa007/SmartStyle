@@ -24,7 +24,6 @@ export async function checkDuplicateImage(userId: string, imageHash: string) {
     
     if (!snapshot.empty) {
       const existingResult = snapshot.docs[0].data();
-      console.log('🔄 Found duplicate image from last 24h - returning cached recommendations');
       return {
         ...existingResult,
         fromCache: true,
@@ -34,7 +33,6 @@ export async function checkDuplicateImage(userId: string, imageHash: string) {
     
     return null;
   } catch (error) {
-    console.error('Deduplication check error:', error);
     return null; // Continue with normal processing if check fails
   }
 }

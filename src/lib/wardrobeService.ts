@@ -50,12 +50,10 @@ export async function addWardrobeItem(
   userId: string,
   itemData: Omit<WardrobeItemData, 'id' | 'addedDate' | 'wornCount' | 'isActive'>
 ): Promise<{ success: boolean; message: string; itemId?: string }> {
-  console.log('👔 Adding wardrobe item for user:', userId);
   
   try {
     // Validate userId
     if (!userId || userId.trim() === '' || userId === 'anonymous') {
-      console.error('❌ Invalid userId:', userId);
       return {
         success: false,
         message: 'Please sign in to add items to your wardrobe',
@@ -64,11 +62,6 @@ export async function addWardrobeItem(
 
     // Validate item data
     if (!itemData.imageUrl || !itemData.itemType || !itemData.description) {
-      console.error('❌ Invalid item data:', {
-        hasImageUrl: !!itemData.imageUrl,
-        hasItemType: !!itemData.itemType,
-        hasDescription: !!itemData.description,
-      });
       return {
         success: false,
         message: 'Image, item type, and description are required',
@@ -77,14 +70,12 @@ export async function addWardrobeItem(
 
     // Verify auth state
     if (!auth.currentUser || auth.currentUser.uid !== userId) {
-      console.error('❌ Auth mismatch');
       return {
         success: false,
         message: 'Authentication mismatch. Please sign in again.',
       };
     }
 
-    console.log('💾 Saving wardrobe item to Firestore...');
     const itemsRef = collection(db, 'users', userId, 'wardrobeItems');
     
     const dataToSave = {
@@ -107,7 +98,6 @@ export async function addWardrobeItem(
     };
 
     const docRef = await addDoc(itemsRef, dataToSave);
-    console.log('✅ Wardrobe item saved with ID:', docRef.id);
 
     // Invalidate recommendations cache since wardrobe changed
     invalidateUserCache(userId);
@@ -118,7 +108,6 @@ export async function addWardrobeItem(
       itemId: docRef.id,
     };
   } catch (error) {
-    console.error('❌ Error adding wardrobe item:', error);
     return {
       success: false,
       message: error instanceof Error ? error.message : 'Failed to add item',
@@ -144,11 +133,9 @@ export async function getWardrobeItems(
   try {
     // Validate userId
     if (!userId || userId.trim() === '' || userId === 'anonymous') {
-      console.error('❌ Invalid userId provided to getWardrobeItems:', userId);
       return [];
     }
 
-    console.log('🔍 Fetching wardrobe items for user:', userId, 'with filters:', filters);
 
     const itemsRef = collection(db, 'users', userId, 'wardrobeItems');
     
@@ -161,7 +148,6 @@ export async function getWardrobeItems(
 
     const snapshot = await getDocs(q);
     
-    console.log('📊 Found', snapshot.size, 'wardrobe items in database');
     
     const items: WardrobeItemData[] = [];
     snapshot.forEach((doc) => {
@@ -183,18 +169,14 @@ export async function getWardrobeItems(
             id: doc.id,
           });
         } else {
-          console.warn('⚠️ Incomplete item data found:', doc.id);
         }
       } catch (err) {
-        console.error('❌ Error parsing item document:', doc.id, err);
       }
     });
     
-    console.log('✅ Successfully fetched', items.length, 'valid wardrobe items');
     
     return items;
   } catch (error) {
-    console.error('❌ Error fetching wardrobe items:', error);
     return [];
   }
 }
@@ -219,7 +201,6 @@ export function subscribeToWardrobeItems(
   onError?: (error: Error) => void
 ): () => void {
   if (!userId || userId.trim() === '' || userId === 'anonymous') {
-    console.error('❌ Invalid userId provided to subscribeToWardrobeItems:', userId);
     onItems([]);
     return () => undefined;
   }
@@ -254,17 +235,14 @@ export function subscribeToWardrobeItems(
               id: docSnap.id,
             });
           } else {
-            console.warn('⚠️ Incomplete item data found:', docSnap.id);
           }
         } catch (err) {
-          console.error('❌ Error parsing item document:', docSnap.id, err);
         }
       });
 
       onItems(items);
     },
     (error) => {
-      console.error('❌ Error subscribing to wardrobe items:', error);
       onError?.(error as Error);
     }
   );
@@ -294,10 +272,8 @@ export async function markItemAsWorn(
       lastWornDate: Date.now(),
     });
 
-    console.log('✅ Item marked as worn:', itemId);
     return { success: true, message: 'Item marked as worn' };
   } catch (error) {
-    console.error('❌ Error marking item as worn:', error);
     
     let errorMessage = 'Failed to update item';
     if (error && typeof error === 'object' && 'code' in error) {
@@ -343,17 +319,14 @@ export async function deleteWardrobeItem(
         timestamp: new Date().toISOString(),
       });
     } catch (logError) {
-      console.warn('⚠️ Failed to log deletion (non-critical):', logError);
       // Continue - deletion succeeded even if logging failed
     }
 
     // Invalidate recommendations cache since wardrobe changed
     invalidateUserCache(userId);
 
-    console.log('✅ Wardrobe item deleted:', itemId);
     return { success: true, message: 'Item removed from wardrobe' };
   } catch (error) {
-    console.error('❌ Error deleting wardrobe item:', error);
     
     let errorMessage = 'Failed to delete item';
     if (error && typeof error === 'object' && 'code' in error) {
@@ -405,7 +378,6 @@ export async function getWardrobeStats(userId: string): Promise<{
       leastWornItems,
     };
   } catch (error) {
-    console.error('❌ Error fetching wardrobe stats:', error);
     return {
       totalItems: 0,
       itemsByType: {},
@@ -439,7 +411,6 @@ export async function saveWardrobeOutfit(
     };
 
     const docRef = await addDoc(outfitsRef, dataToSave);
-    console.log('✅ Wardrobe outfit saved with ID:', docRef.id);
 
     return {
       success: true,
@@ -447,7 +418,6 @@ export async function saveWardrobeOutfit(
       outfitId: docRef.id,
     };
   } catch (error) {
-    console.error('❌ Error saving wardrobe outfit:', error);
     return { success: false, message: 'Failed to save outfit' };
   }
 }
@@ -478,7 +448,6 @@ export async function getWardrobeOutfits(userId: string): Promise<WardrobeOutfit
     
     return outfits;
   } catch (error) {
-    console.error('❌ Error fetching wardrobe outfits:', error);
     return [];
   }
 }

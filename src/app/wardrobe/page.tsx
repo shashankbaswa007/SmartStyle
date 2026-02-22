@@ -153,13 +153,11 @@ function WardrobePageContent() {
       setIsOnline(true);
       // Auto-refresh when coming back online
       if (userId) {
-        console.log('📶 Connection restored, refreshing wardrobe...');
         fetchWardrobeItems(userId);
       }
     };
     const handleOffline = () => {
       setIsOnline(false);
-      console.log('📴 Connection lost');
     };
     
     window.addEventListener('online', handleOnline);
@@ -317,30 +315,18 @@ function WardrobePageContent() {
       if (!silent) setLoading(true);
       setIsSyncing(true);
       setError(null);
-      console.log('🔍 Fetching wardrobe items for user:', uid);
-      
       const items = await getWardrobeItems(uid);
       
-      console.log('✅ Fetched wardrobe items:', items.length);
       setWardrobeItems(items);
       setLastUpdated(Date.now());
-      
-      // Scale warning for large wardrobes
-      if (items.length >= LARGE_WARDROBE_THRESHOLD && items.length % 50 === 0) {
-        console.log(`⚠️ Large wardrobe detected: ${items.length} items. Consider using filters for better performance.`);
-      }
-      
-      if (items.length === 0) {
-        console.log('ℹ️ No wardrobe items found - user may need to add items first');
-      }
     } catch (error) {
-      console.error('❌ Error fetching wardrobe items:', error);
-      
       let errorMessage = 'Failed to load your wardrobe';
-      if (error && typeof error === 'object' && 'code' in error && error.code === 'permission-denied') {
-        errorMessage = 'Permission denied. Please sign in again.';
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
+      if (error && typeof error === 'object' && 'code' in error) {
+        if (error.code === 'permission-denied') {
+          errorMessage = 'Permission denied. Please sign in again.';
+        } else if (error.code === 'unavailable') {
+          errorMessage = 'Service temporarily unavailable. Please try again.';
+        }
       }
       
       setError(errorMessage);
@@ -361,7 +347,6 @@ function WardrobePageContent() {
         });
         return;
       }
-      console.log('🔄 Manual refresh triggered');
       setError(null);
       setLoading(true);
       fetchWardrobeItems(userId);
@@ -435,7 +420,6 @@ function WardrobePageContent() {
         });
       }
     } catch (error) {
-      console.error('Error removing item:', error);
       
       // Rollback on error
       setWardrobeItems(previousItems);
@@ -525,7 +509,6 @@ function WardrobePageContent() {
         description: `"${itemToRestore.description}" has been restored to your wardrobe.`,
       });
     } catch (error) {
-      console.error('Error restoring item:', error);
       toast({
         variant: 'destructive',
         title: 'Restore Failed',
@@ -594,7 +577,6 @@ function WardrobePageContent() {
         });
       }
     } catch (error) {
-      console.error('Error marking as worn:', error);
       
       // Rollback on error
       setWardrobeItems(previousItems);
