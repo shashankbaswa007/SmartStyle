@@ -212,7 +212,7 @@ export default function AccountSettingsPage() {
           transition={{ duration: 0.5 }}
           className="mb-8"
         >
-          <h1 className="text-4xl font-headline font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-headline font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
             Account Settings
           </h1>
           <p className="text-muted-foreground mt-2">
@@ -239,8 +239,8 @@ export default function AccountSettingsPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Avatar Section */}
-                <div className="flex items-center gap-6">
-                  <Avatar className="h-24 w-24 border-4 border-accent/20">
+                <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
+                  <Avatar className="h-20 w-20 sm:h-24 sm:w-24 border-4 border-accent/20">
                     <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'} />
                     <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground text-2xl font-semibold">
                       {userInitials}
@@ -375,7 +375,7 @@ export default function AccountSettingsPage() {
               </CardHeader>
               <CardContent>
                 <div className="p-4 rounded-lg bg-destructive/5 border border-destructive/20">
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-3 sm:gap-4">
                     <div>
                       <h3 className="font-semibold text-destructive">Delete Account</h3>
                       <p className="text-sm text-muted-foreground mt-1">

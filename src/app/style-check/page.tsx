@@ -41,10 +41,10 @@ export default function StyleCheckPage() {
         )}
       </div>
       <div className="relative z-10 max-w-4xl mx-auto animate-fade-in">
-        <header className="text-center mb-16">
-          <div style={{ position: 'relative', height: '300px' }}>
+        <header className="text-center mb-8 sm:mb-12 md:mb-16">
+          <div className="relative h-[180px] sm:h-[240px] md:h-[300px]">
             {isMounted && (
-              <Suspense fallback={<h1 className="text-6xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent pt-24">Style-Check</h1>}>
+              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">Style-Check</h1>}>
                 <TextPressure
                   text="Style-Check"
                   stroke={true}

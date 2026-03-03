@@ -861,7 +861,7 @@ export function StyleAdvisorResults({
         {isAnonymous && authChecked && (
           <Alert className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
             <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <div className="flex items-center justify-between flex-1">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between flex-1 gap-3">
               <div>
                 <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">Sign in to save outfits</h4>
                 <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Create an account to save your favorite outfits and get personalized recommendations!</p>
@@ -869,7 +869,7 @@ export function StyleAdvisorResults({
               <Button 
                 variant="default" 
                 size="sm"
-                className="ml-4 whitespace-nowrap"
+                className="whitespace-nowrap"
                 onClick={() => {
                   window.location.href = '/auth';
                 }}
@@ -1124,7 +1124,7 @@ export function StyleAdvisorResults({
                           action: <Button variant="outline" size="sm" onClick={() => window.location.href = '/auth'}>Sign In</Button>,
                         });
                       }}
-                      className="flex-1 min-w-[180px] px-5 py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-accent to-accent/80 text-white shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
+                      className="flex-1 min-w-[140px] sm:min-w-[180px] px-5 py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-accent to-accent/80 text-white shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
                     >
                       <Heart className="w-4 h-4" /> Like This Outfit
                     </button>
@@ -1133,7 +1133,7 @@ export function StyleAdvisorResults({
                       <button
                         onClick={() => handleUseOutfit(index, outfit.title)}
                         disabled={isSelected || isLoading}
-                        className={`flex-1 min-w-[140px] px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
+                        className={`flex-1 min-w-[120px] sm:min-w-[140px] px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
                           isSelected
                             ? 'bg-green-500/15 text-green-600 dark:text-green-400 border-2 border-green-500/40 cursor-default'
                             : isLoading

@@ -259,7 +259,7 @@ export function EnhancedColorPalette({
               {/* Color swatch */}
               <motion.button
                 onClick={() => handleCopyHex(color.hex, idx)}
-                className="relative w-16 h-16 rounded-2xl border-2 border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden"
+                className="relative w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-2xl border-2 border-white/20 shadow-lg hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden"
                 style={{ backgroundColor: color.hex }}
                 whileHover={{ scale: 1.1, rotate: 5 }}
                 whileTap={{ scale: 0.95 }}
@@ -355,7 +355,7 @@ export function EnhancedColorPalette({
           >
             <div className="pt-4 border-t border-border/20 space-y-3">
               {/* Color breakdown */}
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                 {colors.map((color, idx) => {
                   const colorName = color.name || getColorName(color.hex);
                   return (

@@ -145,7 +145,7 @@ export function MatchingWardrobeItems({
           <div className="w-8 h-8 bg-muted rounded-full animate-pulse" />
           <div className="h-6 bg-muted rounded w-48 animate-pulse" />
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map((i) => (
             <div key={i} className="aspect-square bg-muted rounded-lg animate-pulse" />
           ))}
@@ -218,7 +218,7 @@ export function MatchingWardrobeItems({
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {displayItems.map((item) => (
           <button
             key={item.id}

@@ -970,7 +970,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
           </div>
 
           {/* Category & Brand */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="category">Category</Label>

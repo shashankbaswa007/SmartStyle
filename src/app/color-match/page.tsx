@@ -185,10 +185,10 @@ export default function ColorMatchPage() {
 
       <div className="relative z-10 container mx-auto px-4 py-12">
         {/* Header */}
-        <header className="text-center mb-16">
-          <div style={{ position: 'relative', height: '300px' }}>
+        <header className="text-center mb-8 sm:mb-12 md:mb-16">
+          <div className="relative h-[180px] sm:h-[240px] md:h-[300px]">
             {isMounted && (
-              <Suspense fallback={<h1 className="text-6xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent pt-24">Color-Match</h1>}>
+              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">Color-Match</h1>}>
                 <TextPressure
                   text="Color-Match"
                   stroke={true}
@@ -502,9 +502,9 @@ export default function ColorMatchPage() {
                   />
                 </div>
 
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-4 sm:gap-6">
                   <div
-                    className="w-24 h-24 rounded-full shadow-xl border-4 border-white/20"
+                    className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full shadow-xl border-4 border-white/20"
                     style={{ backgroundColor: colorData.inputColor.hex }}
                   />
                   <div className="space-y-1">
@@ -585,7 +585,7 @@ export default function ColorMatchPage() {
             )}
 
             {/* Color Matches Grid - Show top 5 or all */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
               {colorData.matches.slice(0, showAllColors ? undefined : 5).map((match, index) => {
                 // Determine if this is a key color (primary/secondary)
                 const isKeyColor = match.fashionContext?.usage === 'primary' || match.fashionContext?.usage === 'secondary';
@@ -614,7 +614,7 @@ export default function ColorMatchPage() {
                       {/* Color Swatch */}
                       <div className="relative group">
                         <div
-                          className={`w-24 h-24 rounded-full shadow-xl mb-3 ${
+                          className={`w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full shadow-xl mb-3 ${
                             isKeyColor ? 'border-4 border-accent/30' : 'border-4 border-white/20'
                           }`}
                           style={{ backgroundColor: match.hex }}

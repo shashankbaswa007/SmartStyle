@@ -323,16 +323,8 @@ function WardrobeSuggestPageContent() {
 
         <div className="relative z-10 max-w-6xl mx-auto">
           {/* Header */}
-          <header className="text-center mb-12">
-            <div style={{
-              position: 'relative',
-              height: '300px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              paddingTop: '60px',
-              paddingBottom: '60px',
-            }}>
+          <header className="text-center mb-6 sm:mb-8 md:mb-12">
+            <div className="relative h-[180px] sm:h-[240px] md:h-[300px] flex items-center justify-center pt-8 pb-8 sm:pt-12 sm:pb-12 md:pt-[60px] md:pb-[60px]">
               {isMounted && (
                 <TextPressure
                   text="Outfit Suggestions"

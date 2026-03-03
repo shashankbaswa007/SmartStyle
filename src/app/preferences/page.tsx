@@ -221,14 +221,14 @@ export default function PreferencesPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container max-w-6xl mx-auto p-6 space-y-8">
+      <div className="container max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-6 sm:space-y-8">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           className="space-y-2"
         >
-          <h1 className="text-4xl font-bold text-foreground">Your Style Profile</h1>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-foreground">Your Style Profile</h1>
           <p className="text-muted-foreground">
             SmartStyle learns from your preferences to provide personalized recommendations
           </p>
@@ -292,7 +292,7 @@ export default function PreferencesPage() {
         </div>
 
         <Tabs defaultValue="colors" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
             <TabsTrigger value="colors">Colors</TabsTrigger>
             <TabsTrigger value="styles">Styles</TabsTrigger>
             <TabsTrigger value="occasions">Occasions</TabsTrigger>

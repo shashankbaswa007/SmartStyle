@@ -7,7 +7,6 @@ import GradientText from '@/components/GradientText';
 import TextType from '@/components/TextType';
 import TrueFocus from '@/components/TrueFocus';
 import FooterText from '@/components/FooterText';
-import Magnet from '@/components/Magnet';
 import BlurText from '@/components/BlurText';
 import { InspirationCarouselTilt } from '@/components/InspirationCarouselTilt';
 import { HomePageWrapper } from '@/components/HomePageWrapper';
@@ -18,7 +17,7 @@ export default function Home() {
     <div className="flex flex-col min-h-screen">
       <main className="flex-grow">
         {/* 1. Hero Section */}
-        <section className="relative h-[80vh] min-h-[600px] flex items-center justify-center text-center">
+        <section className="relative h-[80vh] min-h-[400px] sm:min-h-[500px] md:min-h-[600px] flex items-center justify-center text-center">
           <Image
             src="https://images.pexels.com/photos/934069/pexels-photo-934069.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
             alt="Fashion flat lay background"
@@ -33,7 +32,7 @@ export default function Home() {
 
           {/* Content */}
           <div className="relative z-10 p-4 animate-fade-in-up">
-            <h1 className="text-5xl md:text-7xl font-headline font-extrabold tracking-tight text-foreground">
+            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-headline font-extrabold tracking-tight text-foreground">
               Elevate Your Style with{" "}
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
                 AI
@@ -44,16 +43,14 @@ export default function Home() {
               instant, intelligent feedback and visual recommendations.
             </p>
             <div className="mt-12">
-              <Magnet padding={50} magnetStrength={2}>
-                <Link href="/style-check">
-                  <Button
-                    size="lg"
-                    className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30"
-                  >
-                    Upload Your Outfit <ArrowRight className="ml-2" />
-                  </Button>
-                </Link>
-              </Magnet>
+              <Link href="/style-check">
+                <Button
+                  size="lg"
+                  className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30"
+                >
+                  Upload Your Outfit <ArrowRight className="ml-2" />
+                </Button>
+              </Link>
             </div>
           </div>
         </section>
@@ -93,7 +90,7 @@ export default function Home() {
                 <Image src="https://images.pexels.com/photos/8306370/pexels-photo-8306370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" alt="Fashion model silhouette" fill sizes="(max-width: 768px) 100vw, 50vw" style={{ objectFit: 'cover' }} data-ai-hint="fashion model" />
               </div>
               <div>
-                <h2 className="text-4xl font-headline font-bold mb-6">From Upload to Upgrade</h2>
+                <h2 className="text-2xl sm:text-3xl md:text-4xl font-headline font-bold mb-6">From Upload to Upgrade</h2>
                 <ul className="space-y-6 text-lg">
                   <li className="flex items-start gap-4">
                     <div className="p-3 bg-amber-700/20 text-amber-700 rounded-full transition-all duration-300 hover:bg-amber-700/30 hover:shadow-lg hover:shadow-amber-700/20"><Camera /></div>
@@ -178,19 +175,17 @@ export default function Home() {
               colors={["#A78BFA", "#F472B6", "#A78BFA"]}
               animationSpeed={4}
               showBorder={false}
-              className="text-4xl md:text-5xl font-headline font-bold"
+              className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-headline font-bold"
             >
               Ready to upgrade your style?
             </GradientText>
             <FooterText />
             <div className="mt-8">
-              <Magnet padding={50} magnetStrength={2}>
-                <Link href="/style-check">
-                  <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30">
-                    Try SmartStyle Now ✨
-                  </Button>
-                </Link>
-              </Magnet>
+              <Link href="/style-check">
+                <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30">
+                  Try SmartStyle Now ✨
+                </Button>
+              </Link>
             </div>
           </div>
         </section>

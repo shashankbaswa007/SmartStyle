@@ -18,7 +18,7 @@ export function InspirationCarouselTilt() {
   return (
     <section className="py-20">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <h2 className="text-4xl font-headline font-bold text-center mb-12">Find Your Inspiration</h2>
+        <h2 className="text-2xl sm:text-3xl md:text-4xl font-headline font-bold text-center mb-8 sm:mb-10 md:mb-12">Find Your Inspiration</h2>
         <Carousel opts={{ loop: true }} className="w-full max-w-5xl mx-auto">
           <CarouselContent>
             {galleryItems.map((item, index) => (
@@ -55,8 +55,8 @@ export function InspirationCarouselTilt() {
               </CarouselItem>
             ))}
           </CarouselContent>
-          <CarouselPrevious className="ml-12" />
-          <CarouselNext className="mr-12" />
+          <CarouselPrevious className="ml-2 sm:ml-6 md:ml-12" />
+          <CarouselNext className="mr-2 sm:mr-6 md:mr-12" />
         </Carousel>
       </div>
     </section>

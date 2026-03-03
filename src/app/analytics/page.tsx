@@ -579,11 +579,11 @@ export default function AnalyticsPage() {
 
         <div className="relative z-10 container mx-auto px-4 py-12">
           {/* Header */}
-          <header className="text-center mb-16">
-            <div style={{ position: 'relative', height: '300px' }}>
+          <header className="text-center mb-8 sm:mb-12 md:mb-16">
+            <div className="relative h-[180px] sm:h-[240px] md:h-[300px]">
               {isMounted && (
                 <Suspense fallback={
-                  <h1 className="text-6xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent pt-24">
+                  <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">
                     Style Analytics
                   </h1>
                 }>
@@ -684,7 +684,7 @@ export default function AnalyticsPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <EngagementRing score={insights.engagementScore} />
-                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border/20">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-border/20">
                       <div className="text-center">
                         <p className="text-lg font-bold tabular-nums">{insights.totalRecommendations}</p>
                         <p className="text-[10px] text-muted-foreground">Explored</p>
@@ -896,7 +896,7 @@ export default function AnalyticsPage() {
               transition={{ duration: 0.4 }}
               className="text-center max-w-2xl mx-auto"
             >
-              <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-16">
+              <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-6 sm:p-10 md:p-16">
                 <BarChart3 className="w-20 h-20 text-muted-foreground/40 mx-auto mb-6" />
                 <h3 className="text-2xl font-bold mb-3">No Analytics Data Yet</h3>
                 <p className="text-muted-foreground mb-8 text-lg">

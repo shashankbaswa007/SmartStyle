@@ -1084,7 +1084,7 @@ export function StyleAdvisor() {
       {!analysisResult && !isLoading && (
         <Card className="w-full shadow-2xl shadow-accent/20 border-border/20 animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
           <CardHeader>
-            <CardTitle className="text-3xl font-headline">Create Your Style Profile</CardTitle>
+            <CardTitle className="text-xl sm:text-2xl md:text-3xl font-headline">Create Your Style Profile</CardTitle>
             <CardDescription>
               Tell us a bit about your look, and our AI will provide personalized feedback.
             </CardDescription>
@@ -1349,7 +1349,7 @@ export function StyleAdvisor() {
         <div className="space-y-8">
           {/* Enhanced Progress Indicator */}
           <Card className="w-full shadow-lg animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
-            <CardContent className="p-8">
+            <CardContent className="p-4 sm:p-6 md:p-8">
               <RecommendationProgress currentStage={progressStage} />
             </CardContent>
           </Card>
