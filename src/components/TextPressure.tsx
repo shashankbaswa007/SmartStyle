@@ -97,12 +97,14 @@ const TextPressure: React.FC<TextPressureProps> = ({
       return;
     }
 
-    // Calculate font size based on width
-    let newFontSize = containerW / (chars.length / 2);
+    // Calculate font size based on container width
+    // Use a more conservative divisor to account for variable font width expansion
+    // The variable font can expand chars up to 200% width, so we need more room
+    const charCount = chars.length;
+    let newFontSize = containerW / (charCount * 0.65);
     newFontSize = Math.max(newFontSize, minFontSize);
 
     // Also constrain by container height so text doesn't overflow vertically
-    // The text height is roughly 1.2x the font size
     const maxFontByHeight = containerH / 1.4;
     newFontSize = Math.min(newFontSize, maxFontByHeight);
     newFontSize = Math.max(newFontSize, minFontSize);
@@ -111,9 +113,17 @@ const TextPressure: React.FC<TextPressureProps> = ({
     setScaleY(1);
     setLineHeight(1);
 
+    // After setting font size, verify the text actually fits and shrink if needed
     requestAnimationFrame(() => {
-      if (!titleRef.current) return;
+      if (!titleRef.current || !containerRef.current) return;
       const textRect = titleRef.current.getBoundingClientRect();
+      const containerRect = containerRef.current.getBoundingClientRect();
+
+      // If text is wider than container, scale down
+      if (textRect.width > containerRect.width * 0.95) {
+        const ratio = (containerRect.width * 0.95) / textRect.width;
+        setFontSize(prev => Math.max(prev * ratio, minFontSize));
+      }
 
       if (scale && textRect.height > 0) {
         const yRatio = containerH / textRect.height;
@@ -212,9 +222,9 @@ const TextPressure: React.FC<TextPressureProps> = ({
           transform: `scale(1, ${scaleY})`,
           transformOrigin: 'center center',
           margin: 0,
-          padding: 0,
+          padding: '0 2%',
           fontWeight: 100,
-          letterSpacing: '0.05em',
+          letterSpacing: '0.02em',
           color: stroke ? undefined : textColor,
           wordSpacing: '0.1em',
           visibility: 'visible',
