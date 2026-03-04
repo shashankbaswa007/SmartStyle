@@ -31,6 +31,22 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Auto-reload on ChunkLoadError (stale deployment)
+    if (
+      error.name === 'ChunkLoadError' ||
+      error.message?.includes('Loading chunk') ||
+      error.message?.includes('Failed to fetch dynamically imported module')
+    ) {
+      // Only auto-reload once to prevent loops
+      const lastReload = sessionStorage.getItem('chunk-error-reload');
+      const now = Date.now();
+      if (!lastReload || now - parseInt(lastReload) > 10000) {
+        sessionStorage.setItem('chunk-error-reload', now.toString());
+        window.location.reload();
+        return;
+      }
+    }
+
     // Log error in development only
     if (process.env.NODE_ENV === 'development') {
     }

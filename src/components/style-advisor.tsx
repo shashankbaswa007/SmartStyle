@@ -5,7 +5,7 @@ import Image from "next/image";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Loader2, Sparkles, UploadCloud, RefreshCw, User, Camera, X, AlertCircle, CheckCircle2, Clock } from "lucide-react";
+import { Loader2, UploadCloud, RefreshCw, User, Camera, X, AlertCircle } from "lucide-react";
 import chroma from "chroma-js";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -16,8 +16,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { getWeatherData } from "@/app/actions";
@@ -27,7 +25,6 @@ import { auth } from "@/lib/firebase";
 import { validateImageForStyleAnalysis, validateImageProperties } from "@/lib/image-validation";
 import { RecommendationProgress } from './RecommendationProgress';
 import { OutfitSkeletonGrid } from './OutfitCardSkeleton';
-import { Confetti } from './Confetti';
 
 // Processing step interface
 interface ProcessingStep {
@@ -54,15 +51,6 @@ const formSchema = z.object({
 });
 
 type AnalysisRequest = Omit<AnalyzeImageAndProvideRecommendationsInput, 'previousRecommendation'>;
-
-// Helper function to calculate color distance (Euclidean distance in RGB space)
-function colorDistance(color1: number[], color2: number[]): number {
-  return Math.sqrt(
-    Math.pow(color1[0] - color2[0], 2) +
-    Math.pow(color1[1] - color2[1], 2) +
-    Math.pow(color1[2] - color2[2], 2)
-  );
-}
 
 // Convert RGB to HSV for better color analysis
 function rgbToHsv(r: number, g: number, b: number): { h: number; s: number; v: number } {
@@ -183,7 +171,6 @@ export function StyleAdvisor() {
   const [isValidatingImage, setIsValidatingImage] = React.useState(false);
   const [imageValidationError, setImageValidationError] = React.useState<string | null>(null);
   const [progressStage, setProgressStage] = React.useState(0);
-  const [showConfetti, setShowConfetti] = React.useState(false);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
