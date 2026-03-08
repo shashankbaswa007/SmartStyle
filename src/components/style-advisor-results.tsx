@@ -1114,7 +1114,7 @@ export function StyleAdvisorResults({
                 })()}
 
                 {/* ── Action Bar ── */}
-                <div className="pt-4 border-t border-border/15 flex flex-wrap items-center gap-3">
+                <div className="pt-4 border-t border-border/15 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3">
                   {(!userId || !recommendationId || isAnonymous) ? (
                     <button
                       onClick={() => {
@@ -1124,7 +1124,7 @@ export function StyleAdvisorResults({
                           action: <Button variant="outline" size="sm" onClick={() => window.location.href = '/auth'}>Sign In</Button>,
                         });
                       }}
-                      className="flex-1 min-w-[140px] sm:min-w-[180px] px-5 py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-accent to-accent/80 text-white shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
+                      className="flex-1 min-w-0 sm:min-w-[140px] px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-accent to-accent/80 text-white shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
                     >
                       <Heart className="w-4 h-4" /> Like This Outfit
                     </button>
@@ -1133,7 +1133,7 @@ export function StyleAdvisorResults({
                       <button
                         onClick={() => handleUseOutfit(index, outfit.title)}
                         disabled={isSelected || isLoading}
-                        className={`flex-1 min-w-[120px] sm:min-w-[140px] px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
+                        className={`flex-1 min-w-0 sm:min-w-[120px] px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
                           isSelected
                             ? 'bg-green-500/15 text-green-600 dark:text-green-400 border-2 border-green-500/40 cursor-default'
                             : isLoading

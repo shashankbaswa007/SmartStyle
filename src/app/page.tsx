@@ -42,7 +42,7 @@ export default function Home() {
 
           {/* Content */}
           <div className="relative z-10 p-4 animate-fade-in-up">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-headline font-extrabold tracking-tight text-foreground">
+            <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-headline font-extrabold tracking-tight text-foreground">
               Elevate Your Style with{" "}
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-primary to-accent">
                 AI
@@ -66,9 +66,9 @@ export default function Home() {
         </section>
 
         {/* 2. About SmartStyle Section */}
-        <section className="content-auto py-20 bg-gradient-to-br from-primary/20 via-background to-accent/20">
+        <section className="content-auto py-10 sm:py-14 md:py-20 bg-gradient-to-br from-primary/20 via-background to-accent/20">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <Card className="max-w-4xl mx-auto bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg p-8">
+            <Card className="max-w-4xl mx-auto bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg p-4 sm:p-6 md:p-8">
               <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">
               <TrueFocus 
                 sentence="What is SmartStyle?"
@@ -93,10 +93,10 @@ export default function Home() {
         </section>
 
         {/* 4. AI Style in Action Section */}
-        <section className="content-auto py-20 bg-gradient-to-br from-amber-200/20 via-background to-amber-900/20">
+        <section className="content-auto py-10 sm:py-14 md:py-20 bg-gradient-to-br from-amber-200/20 via-background to-amber-900/20">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
-              <div className="relative w-full h-96 rounded-lg overflow-hidden shadow-2xl">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 md:gap-12 items-center">
+              <div className="relative w-full h-48 sm:h-64 md:h-96 rounded-lg overflow-hidden shadow-2xl">
                 <Image src="https://images.pexels.com/photos/8306370/pexels-photo-8306370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2" alt="Fashion model silhouette" fill sizes="(max-width: 768px) 100vw, 50vw" style={{ objectFit: 'cover' }} data-ai-hint="fashion model" />
               </div>
               <div>
@@ -169,7 +169,7 @@ export default function Home() {
         <InspirationCarouselTilt />
 
         {/* 6. Call-to-Action Footer Section */}
-        <section className="content-auto relative py-20 text-center text-white">
+        <section className="content-auto relative py-10 sm:py-14 md:py-20 text-center text-white">
           <Image
             src="https://images.pexels.com/photos/322207/pexels-photo-322207.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
             alt="Stylish accessories flat lay"

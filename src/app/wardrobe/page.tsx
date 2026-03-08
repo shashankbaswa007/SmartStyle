@@ -981,14 +981,14 @@ function WardrobePageContent() {
         <div className="relative z-10 max-w-6xl mx-auto" id="main-content">
           {/* Header */}
           <header className="text-center mb-8 sm:mb-12 md:mb-16 relative" role="banner">
-            <div className="relative h-[180px] sm:h-[240px] md:h-[300px]" aria-label="Page title">
+            <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto" aria-label="Page title">
               {isMounted && (
                 <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-teal-900">My Wardrobe</h1>}>
                   <TextPressure
                     text="My Wardrobe"
                     stroke={true}
                     width={true}
-                  weight={true}
+                  weight={false}
                   textColor="#5eead4"
                   strokeColor="#0d9488"
                   minFontSize={32}

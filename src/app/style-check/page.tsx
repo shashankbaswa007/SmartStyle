@@ -49,7 +49,7 @@ export default function StyleCheckPage() {
                   text="Style-Check"
                   stroke={true}
                   width={true}
-                  weight={true}
+                  weight={false}
                   textColor="#c4b5fd"
                   strokeColor="#7c3aed"
                   minFontSize={32}

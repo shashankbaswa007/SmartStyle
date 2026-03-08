@@ -1181,7 +1181,7 @@ export function StyleAdvisor() {
                           )}
 
                           {!showCamera && (
-                            <div className="relative flex justify-center items-center w-full h-80 rounded-lg p-4 text-center cursor-pointer bg-primary/20 group animate-fade-in-up transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl hover:shadow-accent/20"
+                            <div className="relative flex justify-center items-center w-full h-52 sm:h-64 md:h-80 rounded-lg p-3 sm:p-4 text-center cursor-pointer bg-primary/20 group animate-fade-in-up transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl hover:shadow-accent/20"
                                 style={{
                                   border: "2px dashed hsl(var(--border))",
                                   boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05), inset 0 0 10px 5px rgba(255,255,255,0.05)"

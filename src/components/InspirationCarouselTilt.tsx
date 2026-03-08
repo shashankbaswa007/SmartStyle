@@ -16,13 +16,13 @@ const galleryItems = [
 
 export function InspirationCarouselTilt() {
   return (
-    <section className="py-20">
+    <section className="py-10 sm:py-14 md:py-20">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="text-2xl sm:text-3xl md:text-4xl font-headline font-bold text-center mb-8 sm:mb-10 md:mb-12">Find Your Inspiration</h2>
         <Carousel opts={{ loop: true }} className="w-full max-w-5xl mx-auto">
           <CarouselContent>
             {galleryItems.map((item, index) => (
-              <CarouselItem key={index} className="md:basis-1/2 lg:basis-1/3">
+              <CarouselItem key={index} className="basis-[85%] sm:basis-1/2 lg:basis-1/3">
                 <div className="p-1">
                   <Tilt
                     tiltMaxAngleX={20}

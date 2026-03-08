@@ -580,7 +580,7 @@ export default function AnalyticsPage() {
         <div className="relative z-10 container mx-auto px-4 py-12">
           {/* Header */}
           <header className="text-center mb-8 sm:mb-12 md:mb-16">
-            <div className="relative h-[180px] sm:h-[240px] md:h-[300px]">
+            <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto">
               {isMounted && (
                 <Suspense fallback={
                   <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">
@@ -591,7 +591,7 @@ export default function AnalyticsPage() {
                     text="Style-Analytics"
                     stroke={true}
                     width={true}
-                    weight={true}
+                    weight={false}
                     textColor="#c4b5fd"
                     strokeColor="#7c3aed"
                     minFontSize={32}

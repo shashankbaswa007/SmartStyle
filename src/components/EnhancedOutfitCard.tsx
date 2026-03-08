@@ -91,7 +91,7 @@ export const OutfitCardGrid: React.FC<OutfitCardGridProps> = ({ children, classN
   return (
     <motion.div
       className={cn(
-        'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6',
+        'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6',
         className
       )}
       initial="hidden"

@@ -104,8 +104,8 @@ export default function SavedPalettesPage() {
 
           {/* Filters */}
           {palettes.length > 0 && (
-            <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-6 mb-8">
-              <div className="grid md:grid-cols-2 gap-6">
+            <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-4 sm:p-5 md:p-6 mb-8">
+              <div className="grid md:grid-cols-2 gap-4 md:gap-6">
                 {/* Occasion Filter */}
                 <div>
                   <label className="block text-sm font-medium mb-2">Filter by Occasion</label>

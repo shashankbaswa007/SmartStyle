@@ -128,7 +128,7 @@ export default function AuthPage() {
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="w-full max-w-xs h-full rounded-3xl border-[2.5px] border-transparent bg-border-gradient animate-gradient-move-soft" />
           </div>
-          <div className="relative rounded-3xl bg-black p-5 min-w-[260px] max-w-xs mx-auto flex flex-col items-center shadow-lg shadow-blue-900/40">
+          <div className="relative rounded-3xl bg-black p-4 sm:p-5 min-w-[240px] max-w-xs mx-auto flex flex-col items-center shadow-lg shadow-blue-900/40">
             <CardHeader className="relative z-10 space-y-2 text-center p-0 mb-2">
               <motion.div
                 initial={{ scale: 0 }}

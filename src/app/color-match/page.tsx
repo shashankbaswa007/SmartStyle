@@ -186,14 +186,14 @@ export default function ColorMatchPage() {
       <div className="relative z-10 container mx-auto px-4 py-12">
         {/* Header */}
         <header className="text-center mb-8 sm:mb-12 md:mb-16">
-          <div className="relative h-[180px] sm:h-[240px] md:h-[300px]">
+          <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto">
             {isMounted && (
               <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">Color-Match</h1>}>
                 <TextPressure
                   text="Color-Match"
                   stroke={true}
                   width={true}
-                  weight={true}
+                  weight={false}
                   textColor="#93c5fd"
                   strokeColor="#1d4ed8"
                   minFontSize={32}
@@ -221,7 +221,7 @@ export default function ColorMatchPage() {
               <Sparkles className="w-4 h-4 text-accent" />
               <h3 className="text-sm font-medium text-muted-foreground">Popular Colors</h3>
             </div>
-            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
               {[
                 { name: 'Navy', hex: '#001F3F' },
                 { name: 'Rose', hex: '#FF6B9D' },

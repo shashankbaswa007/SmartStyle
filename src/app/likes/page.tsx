@@ -198,27 +198,29 @@ export default function LikesPage() {
       <div className="relative z-10 max-w-6xl mx-auto">
         {/* Header */}
         <header className="text-center mb-8 sm:mb-12 md:mb-16 relative">
-          <div className="relative h-[180px] sm:h-[240px] md:h-[300px]">
+          <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto">
             {isMounted && (
               <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">Your Likes</h1>}>
                 <TextPressure
                   text="Your Likes"
                   stroke={true}
                   width={true}
-                  weight={true}
+                  weight={false}
                   textColor="#fca5a5"
                   strokeColor="#dc2626"
                   minFontSize={32}
                 />
               </Suspense>
             )}
-            {/* Refresh button - only show when there are liked outfits */}
-            {likedOutfits.length > 0 && (
+          </div>
+          {/* Refresh button - only show when there are liked outfits */}
+          {likedOutfits.length > 0 && (
+            <div className="flex justify-center mt-4">
               <Button 
                 onClick={handleRefresh}
                 variant="outline"
                 size="sm"
-                className="absolute top-4 right-4 gap-2"
+                className="gap-2"
               >
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
@@ -238,8 +240,8 @@ export default function LikesPage() {
                 </svg>
                 Refresh
               </Button>
-            )}
-          </div>
+            </div>
+          )}
           <Suspense fallback={<p className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto">Your curated collection of favorite outfit recommendations</p>}>
             <ShinyText
               className="mt-4 text-lg text-muted-foreground max-w-2xl mx-auto"
