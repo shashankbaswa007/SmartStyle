@@ -102,6 +102,33 @@ export default function RootLayout({
           </AuthProvider>
         </ErrorBoundary>
         
+        {/* Recover from stale-deployment chunk 404s before React hydrates */}
+        <Script
+          id="chunk-error-handler"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function(){
+                var reloaded = sessionStorage.getItem('chunk-reload');
+                window.addEventListener('error', function(e){
+                  if(
+                    e.message && (
+                      e.message.indexOf('Loading chunk') !== -1 ||
+                      e.message.indexOf('ChunkLoadError') !== -1 ||
+                      e.message.indexOf('Failed to fetch dynamically imported module') !== -1
+                    )
+                  ){
+                    if(!reloaded || Date.now() - Number(reloaded) > 15000){
+                      sessionStorage.setItem('chunk-reload', Date.now().toString());
+                      window.location.reload();
+                    }
+                  }
+                });
+              })();
+            `,
+          }}
+        />
+
         {/* Web Vitals Tracking */}
         <Script
           id="web-vitals"

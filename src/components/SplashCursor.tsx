@@ -852,6 +852,7 @@ export default function SplashCursor({
 
     let lastUpdateTime = Date.now();
     let colorUpdateTimer = 0.0;
+    let animationFrameId: number;
 
     function updateFrame() {
       const dt = calcDeltaTime();
@@ -860,7 +861,7 @@ export default function SplashCursor({
       applyInputs();
       step(dt);
       render(null);
-      requestAnimationFrame(updateFrame);
+      animationFrameId = requestAnimationFrame(updateFrame);
     }
 
     function calcDeltaTime() {
@@ -1263,6 +1264,10 @@ export default function SplashCursor({
         updatePointerUpData(pointer);
       }
     });
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+    };
   }, [
     SIM_RESOLUTION,
     DYE_RESOLUTION,

@@ -15,6 +15,9 @@ export function InstallPWA() {
   const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
+    // SSR guard
+    if (typeof window === 'undefined') return;
+
     // Check if already installed
     if (window.matchMedia('(display-mode: standalone)').matches) {
       setIsInstalled(true);

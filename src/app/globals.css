@@ -507,3 +507,15 @@
 .animate-glow {
   animation: glow 2s ease-in-out infinite;
 }
+
+/* Content visibility for off-screen sections — skip rendering until scrolled into view */
+.content-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 500px;
+}
+
+/* GPU-composited layer for heavy animations (particles, splash cursor) */
+.gpu-layer {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+}

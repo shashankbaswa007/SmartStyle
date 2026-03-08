@@ -83,6 +83,7 @@ function WardrobePageContent() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
   
   useEffect(() => {
+    if (typeof window === 'undefined') return;
     const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
     setPrefersReducedMotion(mediaQuery.matches);
     
@@ -104,22 +105,26 @@ function WardrobePageContent() {
   // Context mode for smart filtering
   const CONTEXT_MODES = ['all', 'work', 'casual', 'travel', 'weather', 'occasion'] as const;
   type ContextMode = typeof CONTEXT_MODES[number];
-  const [contextMode, setContextMode] = useState<ContextMode>(() => {
-    // Initialize from URL param or sessionStorage
+  const [contextMode, setContextMode] = useState<ContextMode>('all');
+
+  // Hydrate context mode from URL/sessionStorage after mount
+  useEffect(() => {
     const urlContext = searchParams.get('context') as ContextMode | null;
-    if (urlContext && CONTEXT_MODES.includes(urlContext)) return urlContext;
-    if (typeof window !== 'undefined') {
-      const stored = sessionStorage.getItem('wardrobeContext') as ContextMode | null;
-      if (stored && CONTEXT_MODES.includes(stored)) return stored;
+    if (urlContext && CONTEXT_MODES.includes(urlContext)) {
+      setContextMode(urlContext);
+      return;
     }
-    return 'all';
-  });
+    const stored = sessionStorage.getItem('wardrobeContext') as ContextMode | null;
+    if (stored && CONTEXT_MODES.includes(stored)) {
+      setContextMode(stored);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Persist context mode to sessionStorage and URL
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('wardrobeContext', contextMode);
-    }
+    if (typeof window === 'undefined') return;
+    sessionStorage.setItem('wardrobeContext', contextMode);
     // Update URL without full navigation
     const params = new URLSearchParams(searchParams.toString());
     if (contextMode !== 'all') {
@@ -1768,9 +1773,9 @@ function WardrobePageContent() {
               ) : (
                 // Standard grid view
                 <motion.div
-                  variants={containerVariants}
-                  initial="hidden"
-                  animate="visible"
+                  variants={isLargeWardrobe ? undefined : containerVariants}
+                  initial={isLargeWardrobe ? undefined : "hidden"}
+                  animate={isLargeWardrobe ? undefined : "visible"}
                   className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8"
                 >
                   {filteredItems.map((item) => {
@@ -1778,9 +1783,10 @@ function WardrobePageContent() {
                     return (
                       <motion.div 
                         key={item.id} 
-                        variants={itemVariants}
-                        whileHover={nudge ? { scale: 1.02 } : {}}
-                        transition={{ duration: 0.2 }}
+                        variants={isLargeWardrobe ? undefined : itemVariants}
+                        whileHover={nudge && !isLargeWardrobe ? { scale: 1.02 } : {}}
+                        transition={isLargeWardrobe ? undefined : { duration: 0.2 }}
+                        className={isLargeWardrobe ? "animate-fade-in-up" : ""}
                       >
                         <Card className={`group overflow-hidden border-teal-200 hover:border-teal-400 hover:shadow-xl transition-all duration-500 ease-out will-change-transform ${
                           nudge ? 'ring-1 ring-offset-2 ring-' + (nudge.color.includes('amber') ? 'amber' : nudge.color.includes('rose') ? 'rose' : nudge.color.includes('purple') ? 'purple' : 'teal') + '-200' : ''

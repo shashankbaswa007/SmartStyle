@@ -1,15 +1,25 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { ArrowRight, Bot, Camera, Palette } from 'lucide-react';
 import Image from 'next/image';
-import GradientText from '@/components/GradientText';
-import TextType from '@/components/TextType';
-import TrueFocus from '@/components/TrueFocus';
-import FooterText from '@/components/FooterText';
-import BlurText from '@/components/BlurText';
-import { InspirationCarouselTilt } from '@/components/InspirationCarouselTilt';
+import dynamic from 'next/dynamic';
 import { HomePageWrapper } from '@/components/HomePageWrapper';
+
+// Lazy load heavy client-side animation components to reduce initial bundle
+const GradientText = dynamic(() => import('@/components/GradientText'), { ssr: false });
+const TextType = dynamic(() => import('@/components/TextType'), { ssr: false });
+const TrueFocus = dynamic(() => import('@/components/TrueFocus'), { ssr: false,
+  loading: () => <span className="text-3xl md:text-4xl font-headline font-bold">What is SmartStyle?</span>
+});
+const FooterText = dynamic(() => import('@/components/FooterText'), { ssr: false });
+const BlurText = dynamic(() => import('@/components/BlurText'), { ssr: false,
+  loading: () => null
+});
+const InspirationCarouselTilt = dynamic(
+  () => import('@/components/InspirationCarouselTilt').then(mod => ({ default: mod.InspirationCarouselTilt })),
+  { ssr: false }
+);
 
 export default function Home() {
   return (
@@ -56,7 +66,7 @@ export default function Home() {
         </section>
 
         {/* 2. About SmartStyle Section */}
-        <section className="py-20 bg-gradient-to-br from-primary/20 via-background to-accent/20">
+        <section className="content-auto py-20 bg-gradient-to-br from-primary/20 via-background to-accent/20">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
             <Card className="max-w-4xl mx-auto bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg p-8">
               <h2 className="text-3xl md:text-4xl font-headline font-bold mb-4">
@@ -83,7 +93,7 @@ export default function Home() {
         </section>
 
         {/* 4. AI Style in Action Section */}
-        <section className="py-20 bg-gradient-to-br from-amber-200/20 via-background to-amber-900/20">
+        <section className="content-auto py-20 bg-gradient-to-br from-amber-200/20 via-background to-amber-900/20">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
               <div className="relative w-full h-96 rounded-lg overflow-hidden shadow-2xl">
@@ -159,7 +169,7 @@ export default function Home() {
         <InspirationCarouselTilt />
 
         {/* 6. Call-to-Action Footer Section */}
-        <section className="relative py-20 text-center text-white">
+        <section className="content-auto relative py-20 text-center text-white">
           <Image
             src="https://images.pexels.com/photos/322207/pexels-photo-322207.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
             alt="Stylish accessories flat lay"
