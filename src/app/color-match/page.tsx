@@ -192,7 +192,7 @@ export default function ColorMatchPage() {
                 <TextPressure
                   text="Color-Match"
                   stroke={true}
-                  width={false}
+                  width={true}
                   weight={true}
                   textColor="#93c5fd"
                   strokeColor="#1d4ed8"

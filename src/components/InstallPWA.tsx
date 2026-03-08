@@ -24,29 +24,55 @@ export function InstallPWA() {
       return;
     }
 
-    // Check if user has dismissed the prompt before
-    const dismissed = localStorage.getItem('pwa-install-dismissed');
-    if (dismissed) {
-      const dismissedDate = new Date(dismissed);
-      const daysSinceDismissal = (Date.now() - dismissedDate.getTime()) / (1000 * 60 * 60 * 24);
-      
-      // Show again after 7 days
-      if (daysSinceDismissal < 7) return;
+    // ── Daily frequency cap: max 2 prompts per day ──
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const storedData = localStorage.getItem('pwa-install-prompts');
+    let promptData: { date: string; count: number } = { date: today, count: 0 };
+
+    if (storedData) {
+      try {
+        const parsed = JSON.parse(storedData);
+        if (parsed.date === today) {
+          promptData = parsed;
+        }
+      } catch {
+        // corrupted data, reset
+      }
     }
+
+    // Already shown twice today — don't show again
+    if (promptData.count >= 2) return;
+
+    // Already dismissed in this session
+    if (sessionStorage.getItem('pwa-install-session-dismissed')) return;
 
     const handler = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
-      
+
       // Show prompt after 30 seconds of usage
       setTimeout(() => {
+        // Re-check count in case it changed while waiting
+        const current = localStorage.getItem('pwa-install-prompts');
+        let currentData: { date: string; count: number } = { date: today, count: 0 };
+        if (current) {
+          try {
+            const p = JSON.parse(current);
+            if (p.date === today) currentData = p;
+          } catch { /* reset */ }
+        }
+        if (currentData.count >= 2) return;
+        if (sessionStorage.getItem('pwa-install-session-dismissed')) return;
+
+        // Increment count and show
+        currentData.count += 1;
+        localStorage.setItem('pwa-install-prompts', JSON.stringify(currentData));
         setShowInstallPrompt(true);
       }, 30000);
     };
 
     window.addEventListener('beforeinstallprompt', handler);
 
-    // Check if installed
     window.addEventListener('appinstalled', () => {
       setIsInstalled(true);
       setShowInstallPrompt(false);
@@ -66,7 +92,8 @@ export function InstallPWA() {
 
     if (outcome === 'accepted') {
     } else {
-      localStorage.setItem('pwa-install-dismissed', new Date().toISOString());
+      // Dismissed via native prompt — mark session so it doesn't pop up again
+      sessionStorage.setItem('pwa-install-session-dismissed', '1');
     }
 
     setDeferredPrompt(null);
@@ -75,7 +102,8 @@ export function InstallPWA() {
 
   const handleDismiss = () => {
     setShowInstallPrompt(false);
-    localStorage.setItem('pwa-install-dismissed', new Date().toISOString());
+    // Mark dismissed for this session so it won't reappear
+    sessionStorage.setItem('pwa-install-session-dismissed', '1');
   };
 
   if (isInstalled || !showInstallPrompt) return null;

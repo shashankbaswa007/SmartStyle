@@ -987,7 +987,7 @@ function WardrobePageContent() {
                   <TextPressure
                     text="My Wardrobe"
                     stroke={true}
-                    width={false}
+                    width={true}
                   weight={true}
                   textColor="#5eead4"
                   strokeColor="#0d9488"

@@ -48,7 +48,7 @@ export default function StyleCheckPage() {
                 <TextPressure
                   text="Style-Check"
                   stroke={true}
-                  width={false}
+                  width={true}
                   weight={true}
                   textColor="#c4b5fd"
                   strokeColor="#7c3aed"

@@ -198,13 +198,13 @@ export default function LikesPage() {
       <div className="relative z-10 max-w-6xl mx-auto">
         {/* Header */}
         <header className="text-center mb-8 sm:mb-12 md:mb-16 relative">
-          <div className="relative h-[180px] sm:h-[240px] md:h-[300px] flex items-center justify-center pt-12 pb-12 sm:pt-16 sm:pb-16 md:pt-[90px] md:pb-[90px] px-4 sm:px-6 md:px-10">
+          <div className="relative h-[180px] sm:h-[240px] md:h-[300px]">
             {isMounted && (
               <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">Your Likes</h1>}>
                 <TextPressure
                   text="Your Likes"
                   stroke={true}
-                  width={false}
+                  width={true}
                   weight={true}
                   textColor="#fca5a5"
                   strokeColor="#dc2626"

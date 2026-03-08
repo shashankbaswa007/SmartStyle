@@ -33,7 +33,7 @@ export function middleware(request: NextRequest) {
     "default-src 'self'",
     "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://apis.google.com https://www.googletagmanager.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' https://fonts.gstatic.com",
+    "font-src 'self' https://fonts.gstatic.com https://res.cloudinary.com",
     "img-src 'self' data: blob: https: http:",
     "connect-src 'self' https://*.googleapis.com https://*.google.com https://*.firebaseio.com https://*.cloudfunctions.net https://firestore.googleapis.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.openweathermap.org https://api.tavily.com https://api.groq.com https://generativelanguage.googleapis.com https://replicate.com https://api.replicate.com https://image.pollinations.ai https://api.together.xyz wss://*.firebaseio.com",
     "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com",

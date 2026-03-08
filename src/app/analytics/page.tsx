@@ -590,7 +590,7 @@ export default function AnalyticsPage() {
                   <TextPressure
                     text="Style-Analytics"
                     stroke={true}
-                    width={false}
+                    width={true}
                     weight={true}
                     textColor="#c4b5fd"
                     strokeColor="#7c3aed"
