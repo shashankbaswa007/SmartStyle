@@ -1,71 +1,98 @@
-# 👔 SmartStyle - AI-Powered Fashion Recommendation Platform
+# 👔 SmartStyle — AI-Powered Fashion Recommendation Platform
 
-> An intelligent fashion advisor that analyzes your outfits and provides personalized style recommendations with AI-generated visuals and shopping links.
+> Upload an outfit photo, get personalized AI recommendations with generated visuals and one-click shopping links.
 
-[![Next.js](https://img.shields.io/badge/Next.js-14-black)](https://nextjs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue)](https://www.typescriptlang.org/)
-[![Firebase](https://img.shields.io/badge/Firebase-10.0-orange)](https://firebase.google.com/)
+[![Live Demo](https://img.shields.io/badge/demo-smart--style.vercel.app-black)](https://smart-style.vercel.app)
+[![Next.js](https://img.shields.io/badge/Next.js-14.2-black)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
+[![Firebase](https://img.shields.io/badge/Firebase-12-orange)](https://firebase.google.com/)
+[![Tests](https://img.shields.io/badge/tests-Jest%20%2B%20Playwright-green)](jest.config.ts)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---
 
 ## 🌟 Features
 
-### Core Functionality
-- **📸 Photo Analysis** - Upload outfit photos with AI-powered validation
-- **🎨 Smart Color Extraction** - Heuristic algorithm extracts outfit colors (ignoring skin tones)
-- **🤖 AI Recommendations** - Get 3 personalized outfit suggestions with detailed descriptions
-- **🖼️ Visual Generation** - AI-generated outfit images with color-accurate visuals
-- **🛍️ Shopping Integration** - Direct links to Amazon India, Myntra, and Tata CLiQ
-- **❤️ Personalization** - Learn from your likes and preferences over time
-- **📊 Analytics Dashboard** - Track your style evolution and preference patterns
-
-### Advanced Features
-- **70-20-10 Diversification** - Balanced recommendations (safe bets + exploration)
-- **Anti-Repetition** - Never see the same outfit combinations within 30 days
-- **Pattern Lock Detection** - Prevents style echo chambers
-- **Weather Integration** - Location-based weather data for appropriate suggestions
-- **Color Matching** - Harmonious color palette generator
-- **Responsive PWA** - Works on mobile, tablet, and desktop
+| Category | Highlights |
+|----------|-----------|
+| **Photo Analysis** | Upload/camera capture with client-side person detection (skin-tone filtering, edge analysis) |
+| **AI Recommendations** | 3 personalized outfits via Groq Llama 3.3 70B (Gemini 2.0 Flash fallback) |
+| **Image Generation** | Hybrid multi-provider: Replicate FLUX (position 1) + Pollinations.ai (free, positions 2-3) with Firebase Storage caching (60-70% hit rate) |
+| **Color Matching** | Client-side color-theory engine (complementary, analogous, triadic, split-complementary, tetradic, monochromatic) powered by chroma-js |
+| **Shopping Links** | Amazon India, Myntra, Tata CLiQ via Tavily search API |
+| **Personalization** | Weighted preference tracking, 70-20-10 diversification, anti-repetition cache, pattern lock detection |
+| **Analytics** | Style evolution charts, color usage heatmaps, engagement metrics (Recharts) |
+| **Wardrobe** | Virtual closet with wear tracking, category management, outfit planning |
+| **Weather-Aware** | Open-Meteo integration for weather-appropriate suggestions |
+| **PWA** | Installable, offline-capable, responsive across mobile/tablet/desktop |
 
 ---
 
 ## 🏗️ Architecture
 
-### Technology Stack
+```mermaid
+graph TB
+    subgraph Client["Client (Next.js 14 App Router)"]
+        UI[React 18 + Tailwind + shadcn/ui]
+        CE[Color Extraction<br/>Vibrant.js]
+        IV[Image Validation<br/>Client-side CV]
+        CM[Color Matching<br/>chroma-js]
+        PWA[Service Worker + PWA]
+    end
 
-```
-Frontend:
-├── Next.js 14 (App Router)
-├── React 18 + TypeScript
-├── Tailwind CSS + shadcn/ui
-└── Recharts (Analytics)
+    subgraph API["API Routes (Next.js)"]
+        REC[/api/recommend]
+        COL[/api/getColorMatches]
+        SHOP[/api/tavily]
+        LIKE[/api/likes]
+        PREF[/api/preferences]
+        RL[Rate Limiter]
+        VAL[Zod Validation]
+    end
 
-Backend:
-├── Next.js API Routes
-├── Firebase Firestore
-├── Firebase Auth
-└── Firebase Storage
+    subgraph AI["AI Services"]
+        GROQ[Groq<br/>Llama 3.3 70B<br/>14,400 req/day]
+        GEMINI[Google Gemini<br/>2.0 Flash<br/>100 req/day]
+        FLUX[Replicate FLUX<br/>$0.003/img]
+        POLL[Pollinations.ai<br/>Free]
+    end
 
-AI Services:
-├── Groq (Llama 3.3 70B) - Primary
-├── Google Gemini 2.0 Flash - Backup
-├── Pollinations.ai - Free Image Generation
-└── Replicate (FLUX) - Premium Image Generation (Position 1)
+    subgraph Firebase["Firebase"]
+        AUTH[Auth<br/>Google OAuth + Email]
+        FS[Firestore<br/>Users, Preferences,<br/>Likes, Analytics]
+        STG[Storage<br/>Image Cache]
+    end
 
-External APIs:
-├── Open-Meteo (Weather)
-├── Tavily (Shopping Search)
-└── Vibrant.js (Color Extraction)
+    subgraph External["External APIs"]
+        WEATHER[Open-Meteo<br/>Weather]
+        TAVILY[Tavily<br/>Shopping Search]
+    end
+
+    UI --> CE --> REC
+    UI --> IV --> REC
+    UI --> CM
+    REC --> RL --> VAL
+    REC --> GROQ
+    REC -.->|fallback| GEMINI
+    REC --> FLUX
+    REC --> POLL
+    REC --> STG
+    SHOP --> TAVILY
+    LIKE --> FS
+    PREF --> FS
+    UI --> AUTH
+    UI --> WEATHER
+    PWA --> UI
 ```
 
 ### System Flow
 
 ```
-User Upload Photo → Color Extraction → AI Analysis → 
-Generate Recommendations → Create Visual Outfits → 
-Add Shopping Links → Display Results → 
-Track User Feedback → Update Preferences
+Upload Photo → Client-side Validation → Color Extraction →
+AI Analysis (Groq/Gemini) → Generate 3 Recommendations →
+Create Visual Outfits (FLUX/Pollinations) → Cache in Storage →
+Add Shopping Links (Tavily) → Display Results →
+Track Feedback → Update Preferences → Improve Future Picks
 ```
 
 ---
@@ -521,8 +548,8 @@ Redirect to App
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/yourusername/smartstyle.git
-cd smartstyle
+git clone https://github.com/shashidas95/SmartStyle.git
+cd SmartStyle
 ```
 
 2. **Install dependencies:**
@@ -584,12 +611,67 @@ Visit `http://localhost:3000`
 ### Available Scripts
 
 ```bash
-npm run dev          # Start development server
+# Development
+npm run dev          # Start development server (cleans .next cache)
 npm run build        # Build for production
 npm run start        # Start production server
 npm run lint         # Run ESLint
-npm run type-check   # Run TypeScript checks
+npm run typecheck    # Run TypeScript type checking
+
+# Testing
+npm test             # Run all Jest tests
+npm run test:watch   # Run tests in watch mode
+npm run test:coverage # Run tests with coverage report
+npm run test:unit    # Run unit tests only (src/)
+npm run test:e2e     # Run Playwright E2E tests
+npm run test:all     # Run unit + integration + API + E2E tests
+npm run test:ci      # CI pipeline (coverage + E2E)
 ```
+
+---
+
+## 🧪 Testing
+
+### Test Architecture
+
+| Layer | Framework | Location | What's Tested |
+|-------|-----------|----------|--------------|
+| **Unit** | Jest + ts-jest | `src/lib/__tests__/` | Color matching, caching, rate limiting, validation, timeout utilities |
+| **Component** | Jest + React Testing Library | `src/components/__tests__/` | UI rendering, props, conditional display |
+| **E2E** | Playwright | `tests/e2e/` | Page loads, navigation, responsive layout, 404 handling |
+
+### Running Tests
+
+```bash
+# Unit tests with coverage
+npm run test:coverage
+
+# Watch mode during development
+npm run test:watch
+
+# E2E smoke tests (requires built app)
+npm run build && npm run test:e2e
+
+# Full test suite (CI)
+npm run test:ci
+```
+
+### Test Coverage Targets
+
+- **Branches:** 60%+
+- **Functions:** 60%+
+- **Lines:** 60%+
+- **Statements:** 60%+
+
+### Key Test Suites
+
+- **`colorMatching.test.ts`** — 15+ tests: color harmony generation, FASHION_COLORS database integrity, palette explanations, fashion context, deterministic output
+- **`validation.test.ts`** — Zod schema validation for all API endpoints (recommend, likes, shopping clicks), error formatting
+- **`cache.test.ts`** — TTL expiration, max-size eviction, consistent key generation, cleanup
+- **`rate-limiter.test.ts`** — Request counting, limit enforcement, window expiry, independent tracking
+- **`timeout-utils.test.ts`** — Promise timeout, retry with exponential backoff, error propagation
+- **`utils.test.ts`** — Tailwind class merging, conditional classes, edge cases
+- **`match-score-badge.test.tsx`** — Component rendering, category mapping, score display toggle
 
 ### Code Structure Guidelines
 
@@ -667,86 +749,52 @@ const score =
 ---
 
 ## 📊 Performance
-Caching:** Firebase Storage caches all generated images (60-70% hit rate)
-- **Hybrid Image Generation:** Premium quality for position 1, free for positions 2-3
-- **Smart Fallback:** Multiple providers prevent downtime
-- **Image Optimization:** Next.js Image component with lazy loading
-- **Code Splitting:** Dynamic imports for heavy components
-- **Caching:** Browser cache for static assets
-- **Database:** Indexed queries, batch operations
-- **AI Fallback:** Multiple providers prevent downtime
-- **Color Extraction:** Client-side processing (no server load)
 
-### Cost Optimization
+### Optimizations
+- **Image Caching:** Firebase Storage caches all generated images (60-70% hit rate)
+- **Hybrid Image Generation:** Replicate FLUX for position 1 ($0.003), Pollinations.ai (free) for positions 2-3
+- **Smart Fallback:** Groq → Gemini → graceful degradation across all AI services
+- **Next.js Image:** Lazy loading, WebP auto-format, responsive srcsets
+- **Code Splitting:** Dynamic imports for heavy components (Three.js, Recharts)
+- **Client-side Processing:** Color extraction and image validation run in the browser (zero server load)
+- **Firestore Indexes:** Composite indexes for all frequent queries
 
-**Image Generation Strategy:**
-- Position 1 (most important): Replicate FLUX (~$0.003/image)
-- Positions 2-3: Pollinations.ai (free)
-- Cache hit rate: 60-70% (saves regeneration)
-- Firebase Storage: ~$0.05/month for 2GB
+### Core Web Vitals
+- First Contentful Paint: < 1.5s
+- Time to Interactive: < 3s
 
-**Expected Costs (50 users/day):**
-- Image generation: ~$1.35/month (450 premium images)
-- Firebase Storage: ~$0.05/month
-- Total: ~$1.40/month
+### Cost at Scale
 
-**At Scale (500 users/day):**
-- Image generation: ~$13.50/month (4,500 premium images)
-- Firebase Storage: ~$0.20/month
-- Cache hits save: ~$8-10/month
-- Total: ~$14/month
-- **Database:** Indexed queries, batch operations
-- **AI Fallback:** Multiple providers prevent downtime
-- **Color Extraction:** Client-side processing (no server load)
+| Scale | Image Gen | Storage | Total |
+|-------|-----------|---------|-------|
+| 50 users/day | ~$1.35/mo | ~$0.05/mo | **~$1.40/mo** |
+| 500 users/day | ~$13.50/mo | ~$0.20/mo | **~$14/mo** |
 
-### Metrics
-
-- First Contentful Paint: <1.5s
-- Time to Interactive: <3s
-- Check if Replicate API token is set (optional, for premium images)
-- Pollinations.ai fallback should work without token
-- Check network tab for generation errors
-- Cache may serve previous images even if generation fails
-
-**Issue: High image generation costs**
-- Verify cache is working (check Firebase Storage console)
-- Expected cache hit rate: 60-70% after first week
-- Only position 1 uses paid Replicate (~$0.003/image)
-- Positions 2-3 use free Pollinations.ai
 ---
 
 ## 🐛 Troubleshooting
 
-### Common Issues
-
-**Issue: AI requests failing**
-- Check API keys in `.env.local`
-- Verify quota limits (Groq: 14,400/day, Gemini: 100/day)
-- Check console for specific error messages
-
-**Issue: Colors not extracting**
-- Ensure photo has good lighting
-- Check if photo contains actual clothing
-- Try different image format (JPG/PNG)
-
-**Issue: Match scores not showing**
-- User needs 5+ interactions to build profile
-- Verify user is signed in
-- Check Firestore `userPreferences` collection
-
-**Issue: Images not generating**
-- Gemini may have hit quota (100/day)
-- Fallback to Pollinations.ai should be automatic
-- Check network tab for generation errors
-
-**Issue: Shopping links not working**
-- Tavily API key may be missing/invalid
-- Fallback search URLs still work
-- Some platforms may block direct linking
+| Issue | Fix |
+|-------|-----|
+| AI requests failing | Check API keys in `.env.local`; verify Groq (14,400/day) and Gemini (100/day) quotas |
+| Colors not extracting | Ensure good lighting; check photo contains clothing; try JPG/PNG |
+| Match scores missing | Requires 5+ interactions to build profile; verify user is signed in |
+| Images not generating | Check Replicate token; Pollinations fallback should auto-activate |
+| Shopping links broken | Tavily API key may be missing; fallback search URLs still work |
 
 ---
 
 ## 📈 Roadmap
+
+### Completed
+
+- [x] Wardrobe management with wear tracking
+- [x] Offline mode (PWA with service worker)
+- [x] Weather-aware recommendations
+- [x] Color palette generator with 6 harmony types
+- [x] Analytics dashboard with style evolution charts
+- [x] Responsive design (mobile, tablet, desktop)
+- [x] Unit, component, and E2E testing infrastructure
 
 ### Upcoming Features
 
@@ -754,23 +802,17 @@ Caching:** Firebase Storage caches all generated images (60-70% hit rate)
 - [ ] Budget-aware recommendations
 - [ ] Social sharing of outfits
 - [ ] Collaborative filtering (similar users)
-- [ ] Seasonal trend integration
 - [ ] Virtual try-on (AR)
 - [ ] Style evolution timeline
-- [ ] Outfit combination suggestions
-- [ ] Wardrobe management
 - [ ] Brand preferences
 
 ### Technical Improvements
 
 - [ ] Redis caching layer
 - [ ] GraphQL API
-- [ ] Mobile native app
-- [ ] Offline mode (PWA)
-- [ ] WebP image format
-- [ ] Server-side rendering for SEO
+- [ ] Mobile native app (React Native)
 - [ ] A/B testing framework
-- [ ] Machine learning models
+- [ ] ML-based outfit scoring
 
 ---
 
