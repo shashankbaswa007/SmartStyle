@@ -8,7 +8,7 @@
  * - Automatic user document creation in Firestore
  * - Stores user profile data (name, email, photo)
  * - Redirects to home page after successful authentication
- * - Animated UnicornStudio background
+ * - Interactive DotGrid background with glassmorphic card
  */
 
 import { useEffect, useState } from 'react';
@@ -17,11 +17,11 @@ import { motion } from 'framer-motion';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { signInWithGoogle } from '@/lib/auth';
 import { createUserDocument } from '@/lib/userService';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { Loader2, Sparkles, Chrome } from 'lucide-react';
-import UnicornStudioBackground from '@/components/UnicornStudioBackground';
+import DotGrid from '@/components/DotGrid';
 
 export default function AuthPage() {
   const { user, loading: authLoading } = useAuth();
@@ -101,108 +101,142 @@ export default function AuthPage() {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* UnicornStudio Animated Background - Full Brightness */}
-      <div className="absolute inset-0 -z-10">
-        <UnicornStudioBackground
-          projectId="eZYI0DQyjgFOe6169086"
-          width="100%"
-          height="100%"
-          className="opacity-100 brightness-110 saturate-110"
+    <div className="relative min-h-screen overflow-hidden bg-[#0a0612]">
+      {/* DotGrid Animated Background — sits at z-0 so card floats over it */}
+      <div className="absolute inset-0 z-0">
+        <DotGrid
+          dotSize={5}
+          gap={15}
+          baseColor="#271E37"
+          activeColor="#5227FF"
+          proximity={120}
+          shockRadius={250}
+          shockStrength={5}
+          resistance={750}
+          returnDuration={1.5}
         />
-        {/* Subtle dark overlay for better contrast */}
-        <div className="absolute inset-0 bg-black/20" />
       </div>
 
-      {/* Auth Card */}
-      <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="relative z-10 w-full max-w-md"
-      >
-        {/* Animated Glowing Gradient Border Container */}
-        <div className="relative rounded-3xl shadow-xl flex justify-center">
-          {/* Uniform border: use a thin wrapper for the border effect */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-full max-w-xs h-full rounded-3xl border-[2.5px] border-transparent bg-border-gradient animate-gradient-move-soft" />
-          </div>
-          <div className="relative rounded-3xl bg-black p-4 sm:p-5 min-w-[240px] max-w-xs mx-auto flex flex-col items-center shadow-lg shadow-blue-900/40">
-            <CardHeader className="relative z-10 space-y-2 text-center p-0 mb-2">
+      {/* Auth Card — pointer-events-none on wrapper lets clicks pass to DotGrid, auto on card itself */}
+      <div className="absolute inset-0 z-10 flex items-center justify-center p-4 pointer-events-none">
+        <motion.div
+          initial={{ opacity: 0, y: 30, scale: 0.96 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+          className="pointer-events-auto w-full max-w-[340px]"
+        >
+          {/* Glassmorphic card with animated glow ring */}
+          <div className="relative rounded-3xl">
+            {/* Animated glow ring behind the card */}
+            <div className="absolute -inset-[1px] rounded-3xl auth-glow-ring" />
+
+            {/* Card body — translucent glass */}
+            <div className="relative rounded-3xl backdrop-blur-xl bg-[#110d1d]/70 border border-white/[0.06] px-7 py-8 flex flex-col items-center gap-5 shadow-[0_8px_60px_-12px_rgba(82,39,255,0.35)]">
+
+              {/* Logo mark */}
               <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-                className="mx-auto w-11 h-11 bg-gradient-to-br from-purple-600 via-blue-500 to-blue-400 rounded-xl flex items-center justify-center shadow-md shadow-blue-500/40"
+                initial={{ scale: 0, rotate: -30 }}
+                animate={{ scale: 1, rotate: 0 }}
+                transition={{ delay: 0.25, type: 'spring', stiffness: 200, damping: 14 }}
+                className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#5227FF] via-[#7B68EE] to-[#5227FF] flex items-center justify-center shadow-lg shadow-[#5227FF]/40 ring-1 ring-white/10"
               >
-                <Sparkles className="w-6 h-6 text-white drop-shadow" />
+                <Sparkles className="w-7 h-7 text-white" />
               </motion.div>
-              <CardTitle className="text-lg font-bold bg-gradient-to-r from-purple-200 via-blue-200 to-blue-400 bg-clip-text text-transparent drop-shadow">
-                Sign in to SmartStyle
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="relative z-10 space-y-3 p-0 w-full">
+
+              {/* Title */}
+              <div className="text-center space-y-1">
+                <motion.h1
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35 }}
+                  className="text-xl font-bold tracking-tight text-white"
+                >
+                  SmartStyle
+                </motion.h1>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.45 }}
+                  className="text-sm text-[#9b8ec4]"
+                >
+                  AI-powered fashion, just for you
+                </motion.p>
+              </div>
+
+              {/* Divider */}
+              <div className="w-full h-px bg-gradient-to-r from-transparent via-[#5227FF]/30 to-transparent" />
+
+              {/* Google Sign-In button */}
               <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+                className="w-full"
               >
                 <Button
                   onClick={handleGoogleSignIn}
                   disabled={googleLoading}
-                  className="w-full h-10 text-sm font-semibold bg-gradient-to-r from-purple-500 via-blue-400 to-blue-500 hover:from-purple-400 hover:via-blue-300 hover:to-blue-400 transition-all shadow-md shadow-blue-500/30 hover:shadow-lg hover:shadow-purple-500/30 text-white"
+                  className="w-full h-12 text-sm font-semibold rounded-xl bg-[#5227FF] hover:bg-[#6840ff] active:scale-[0.98] transition-all duration-200 text-white shadow-lg shadow-[#5227FF]/30 hover:shadow-xl hover:shadow-[#5227FF]/40 border border-white/[0.08]"
                   size="lg"
                 >
                   {googleLoading ? (
                     <>
-                      <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                      Signing you in...
+                      <Loader2 className="h-5 w-5 mr-2.5 animate-spin" />
+                      Signing you in…
                     </>
                   ) : (
                     <>
-                      <Chrome className="h-5 w-5 mr-2" />
+                      <Chrome className="h-5 w-5 mr-2.5" />
                       Continue with Google
                     </>
                   )}
                 </Button>
               </motion.div>
+
+              {/* Footer text */}
               <motion.p
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.5 }}
-                className="text-xs text-center text-gray-400"
+                transition={{ delay: 0.65 }}
+                className="text-[11px] leading-relaxed text-center text-[#6b5f8a]"
               >
-                By signing in, you agree to our Terms of Service and Privacy Policy.<br />Your data is encrypted and secure.
+                By signing in you agree to our Terms&nbsp;of&nbsp;Service
+                <br />and Privacy&nbsp;Policy. Your data is encrypted.
               </motion.p>
-            </CardContent>
+            </div>
           </div>
-          <style jsx global>{`
-            .bg-border-gradient {
-              background: linear-gradient(90deg, #7B68EE 0%, #6EC3F4 50%, #7B68EE 100%);
-              background-size: 250% 250%;
-              filter: blur(0.2px) brightness(1.1) drop-shadow(0 0 8px #7B68EE) drop-shadow(0 0 12px #6EC3F4);
-              animation: gradient-move-soft 3s linear infinite;
-            }
-            @keyframes gradient-move-soft {
-              0% { background-position: 0% 50%; }
-              100% { background-position: 100% 50%; }
-            }
-          `}</style>
-        </div>
 
-        {/* Trust Indicators */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.6 }}
-          className="mt-8 text-center space-y-4"
-        >
-          <p className="text-sm text-gray-300 font-medium drop-shadow-md">Trusted by fashion enthusiasts worldwide</p>
-          <div className="flex items-center justify-center space-x-6"></div>
+          {/* Trust line beneath card */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.75 }}
+            className="mt-6 text-center text-xs text-[#4a3f6b] tracking-wide"
+          >
+            Trusted by fashion enthusiasts worldwide
+          </motion.p>
         </motion.div>
-      </motion.div>
       </div>
+
+      {/* Scoped styles for the glow ring */}
+      <style jsx global>{`
+        .auth-glow-ring {
+          background: conic-gradient(
+            from 0deg,
+            #5227FF 0%,
+            #271E37 25%,
+            #5227FF 50%,
+            #271E37 75%,
+            #5227FF 100%
+          );
+          animation: auth-ring-spin 6s linear infinite;
+          opacity: 0.55;
+          filter: blur(1.5px);
+        }
+        @keyframes auth-ring-spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
