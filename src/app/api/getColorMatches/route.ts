@@ -367,6 +367,14 @@ export async function POST(req: NextRequest) {
       : harmonyType;
     
 
+    // Validate harmony type before using it
+    if (!(actualHarmonyType in HARMONY_TYPES)) {
+      return NextResponse.json(
+        { error: `Invalid harmony type: ${actualHarmonyType}. Valid types: ${Object.keys(HARMONY_TYPES).join(', ')}` },
+        { status: 400 }
+      );
+    }
+
     // Generate harmonious colors based on color theory with improved reliability
     const harmonyHues = HARMONY_TYPES[actualHarmonyType as keyof typeof HARMONY_TYPES](inputHue);
     

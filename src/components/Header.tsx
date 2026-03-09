@@ -42,14 +42,14 @@ export function Header() {
           {/* Logo */}
           <Link 
             href="/" 
-            className="flex items-center gap-2 text-2xl font-bold font-headline text-foreground transition-colors hover:text-accent z-10"
+            className="flex items-center gap-1.5 sm:gap-2 text-lg sm:text-2xl font-bold font-headline text-foreground transition-colors hover:text-accent z-10 shrink-0"
           >
-            <Wand2 className="w-6 h-6 text-accent" />
+            <Wand2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent" />
             SmartStyle
           </Link>
 
           {/* Right side: Navigation + Profile */}
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2 sm:gap-6">
             {/* Desktop Navigation - Only show if authenticated */}
             {user ? (
               <nav className="hidden md:flex items-center gap-3">
@@ -177,15 +177,15 @@ export function Header() {
 
             {/* Mobile Navigation - Icon Only - Only show if authenticated */}
             {user ? (
-              <div className="flex md:hidden items-center gap-3">
+              <div className="flex md:hidden items-center gap-1">
                 <Button
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="hover:bg-accent/10 transition-colors"
+                  className="h-8 w-8 hover:bg-accent/10 transition-colors"
                 >
                   <Link href="/style-check" title="Style Check">
-                    <Wand2 className="w-5 h-5 text-accent" />
+                    <Wand2 className="w-4 h-4 text-accent" />
                   </Link>
                 </Button>
                 
@@ -193,10 +193,10 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="hover:bg-purple-500/10 transition-colors"
+                  className="h-8 w-8 hover:bg-purple-500/10 transition-colors"
                 >
                   <Link href="/color-match" title="Color Match">
-                    <Palette className="w-5 h-5 text-purple-500" />
+                    <Palette className="w-4 h-4 text-purple-500" />
                   </Link>
                 </Button>
                 
@@ -204,10 +204,10 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="hover:bg-red-500/10 transition-colors"
+                  className="h-8 w-8 hover:bg-red-500/10 transition-colors"
                 >
                   <Link href="/likes" title="Your Likes">
-                    <Heart className="w-5 h-5 text-red-500" />
+                    <Heart className="w-4 h-4 text-red-500" />
                   </Link>
                 </Button>
 
@@ -215,10 +215,10 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="hover:bg-teal-500/10 transition-colors"
+                  className="h-8 w-8 hover:bg-teal-500/10 transition-colors"
                 >
                   <Link href="/wardrobe" title="Your Wardrobe">
-                    <Shirt className="w-5 h-5 text-teal-500" />
+                    <Shirt className="w-4 h-4 text-teal-500" />
                   </Link>
                 </Button>
               </div>

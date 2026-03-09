@@ -147,6 +147,7 @@ function WardrobePageContent() {
   const [isOnline, setIsOnline] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const isSyncingRef = useRef(false);
   
   // Scale awareness for large wardrobes
   const LARGE_WARDROBE_THRESHOLD = 100;
@@ -201,9 +202,11 @@ function WardrobePageContent() {
     // Initial fetch
     fetchWardrobeItems(userId);
 
-    // Set up polling every 45 seconds
+    // Set up polling every 45 seconds (skip if a fetch is already in progress)
     const pollInterval = setInterval(() => {
-      fetchWardrobeItems(userId);
+      if (!isSyncingRef.current) {
+        fetchWardrobeItems(userId);
+      }
     }, 45000); // 45 seconds
 
     return () => clearInterval(pollInterval);
@@ -319,6 +322,7 @@ function WardrobePageContent() {
     try {
       if (!silent) setLoading(true);
       setIsSyncing(true);
+      isSyncingRef.current = true;
       setError(null);
       const items = await getWardrobeItems(uid);
       
@@ -339,6 +343,7 @@ function WardrobePageContent() {
     } finally {
       setLoading(false);
       setIsSyncing(false);
+      isSyncingRef.current = false;
     }
   };
 

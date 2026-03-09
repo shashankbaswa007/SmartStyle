@@ -3,176 +3,263 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if user is authenticated
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    
+    // Check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    // Helper function to check if user owns the resource
+    // Check if user owns the resource (path-based ownership)
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
     
-    // User Preferences - Users can only read/write their own preferences
-    match /userPreferences/{userId} {
-      allow read: if isOwner(userId);
-      allow write: if isOwner(userId);
-      allow create: if isOwner(userId);
+    // Validate that a string field is present and non-empty
+    function isNonEmptyString(field) {
+      return field is string && field.size() > 0;
     }
     
-    // User Interactions - NEW: For personalization tracking
-    // Users can only read/write their own interaction sessions
+    // Validate document size limit (1MB Firestore limit, enforce 500KB for safety)
+    function isReasonableSize() {
+      return request.resource.size() < 512 * 1024;
+    }
+    
+    // Validate that the incoming document has a userId matching the authenticated user
+    function hasValidUserId() {
+      return request.resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // USER PREFERENCES (top-level, keyed by userId)
+    // ============================================
+    match /userPreferences/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isReasonableSize();
+      allow update: if isOwner(userId) && isReasonableSize();
+      // Allow delete for GDPR/account cleanup
+      allow delete: if isOwner(userId);
+    }
+    
+    // ============================================
+    // USER INTERACTIONS (top-level, keyed by userId)
+    // ============================================
     match /userInteractions/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isReasonableSize();
+      allow update: if isOwner(userId) && isReasonableSize();
+      allow delete: if false; // Interaction data is append-only
       
       // Interaction sessions (nested under userInteractions)
       match /sessions/{sessionId} {
-        allow read: if isAuthenticated() && request.auth.uid == userId;
-        allow write: if isAuthenticated() && request.auth.uid == userId;
-        allow create: if isAuthenticated() && request.auth.uid == userId;
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isReasonableSize();
+        allow update: if isOwner(userId) && isReasonableSize();
+        allow delete: if false; // Sessions are immutable once created
       }
     }
 
-    // Anti-Repetition Cache - NEW: Prevent showing same outfits
+    // ============================================
+    // ANTI-REPETITION CACHE (top-level, keyed by userId)
+    // ============================================
     match /antiRepetitionCache/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isReasonableSize();
+      allow update: if isOwner(userId) && isReasonableSize();
+      allow delete: if false; // Cache managed by system
     }
 
-    // Exploration Metrics - NEW: Track adaptive exploration success
+    // ============================================
+    // EXPLORATION METRICS (top-level, keyed by userId)
+    // ============================================
     match /explorationMetrics/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isReasonableSize();
+      allow update: if isOwner(userId) && isReasonableSize();
+      allow delete: if false; // Metrics are append-only
     }
     
-    // Comprehensive Preferences - NEW: For preference engine (nested collections)
+    // ============================================
+    // USER SUB-COLLECTIONS (outside /users/{userId} match for clarity)
+    // ============================================
+    
+    // Comprehensive Preferences (preference engine nested collections)
     match /users/{userId}/preferences/{subcollection}/{docId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow delete: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isReasonableSize();
+      allow update: if isOwner(userId) && isReasonableSize();
+      allow delete: if isOwner(userId);
     }
     
     // User interactions tracking (colors, styles, shopping)
     match /users/{userId}/interactions/{interactionType} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isReasonableSize();
+      allow update: if isOwner(userId) && isReasonableSize();
+      allow delete: if false; // Interaction records are immutable
     }
     
     // Blocklists (hard, soft, temporary)
     match /users/{userId}/blocklists/{blocklistType} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow write: if isAuthenticated() && request.auth.uid == userId;
-      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isReasonableSize();
+      allow update: if isOwner(userId) && isReasonableSize();
+      allow delete: if isOwner(userId); // Users can clear blocklists
     }
     
-    // Recommendation History - Users can only read/write their own recommendations
+    // ============================================
+    // RECOMMENDATION HISTORY (top-level, owns userId field)
+    // ============================================
     match /recommendationHistory/{recommendationId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && hasValidUserId() && isReasonableSize();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == request.auth.uid; // Cannot reassign userId
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
-    // Users collection - Users can only read/write their own profile
+    // ============================================
+    // USERS COLLECTION & NESTED SUB-COLLECTIONS
+    // ============================================
     match /users/{userId} {
       allow read: if isOwner(userId);
-      allow write: if isOwner(userId);
+      allow create: if isOwner(userId) && isReasonableSize();
+      allow update: if isOwner(userId) && isReasonableSize();
+      // Allow delete for GDPR/account cleanup
+      allow delete: if isOwner(userId);
       
-      // User's recommendation history (nested under users)
+      // Recommendation history (nested)
       match /recommendationHistory/{recommendationId} {
         allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
+        allow create: if isOwner(userId) && isReasonableSize();
+        allow update: if isOwner(userId) && isReasonableSize();
+        allow delete: if isOwner(userId);
       }
       
-      // User's feedback on recommendations (nested under users)
+      // Feedback on recommendations (nested)
       match /feedback/{recommendationId} {
         allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
+        allow create: if isOwner(userId) && isReasonableSize();
+        allow update: if isOwner(userId) && isReasonableSize();
+        allow delete: if false; // Feedback is immutable for data integrity
       }
       
-      // User's outfit usage tracking (nested under users)
+      // Outfit usage tracking (nested)
       match /outfitUsage/{usageId} {
         allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
+        allow create: if isOwner(userId) && isReasonableSize();
+        allow update: if isOwner(userId) && isReasonableSize();
+        allow delete: if false; // Usage history is immutable
       }
       
-      // User's liked outfits (nested under users)
+      // Liked outfits (nested) — with data validation
       match /likedOutfits/{outfitId} {
         allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
-        allow create: if isOwner(userId);
+        allow create: if isOwner(userId) 
+                      && isReasonableSize()
+                      && isNonEmptyString(request.resource.data.title)
+                      && isNonEmptyString(request.resource.data.imageUrl);
+        allow update: if isOwner(userId) && isReasonableSize();
         allow delete: if isOwner(userId);
       }
       
-      // User's wardrobe items (nested under users)
+      // Wardrobe items (nested) — with data validation
       match /wardrobeItems/{itemId} {
         allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
-        allow create: if isOwner(userId);
+        allow create: if isOwner(userId) 
+                      && isReasonableSize()
+                      && isNonEmptyString(request.resource.data.imageUrl)
+                      && isNonEmptyString(request.resource.data.itemType)
+                      && request.resource.data.itemType in ['top', 'bottom', 'dress', 'shoes', 'accessory', 'outerwear'];
+        allow update: if isOwner(userId) && isReasonableSize();
         allow delete: if isOwner(userId);
       }
       
-      // User's saved wardrobe outfit combinations (nested under users)
+      // Saved wardrobe outfit combinations (nested)
       match /wardrobeOutfits/{outfitId} {
         allow read: if isOwner(userId);
-        allow write: if isOwner(userId);
-        allow create: if isOwner(userId);
+        allow create: if isOwner(userId) && isReasonableSize();
+        allow update: if isOwner(userId) && isReasonableSize();
+        allow delete: if isOwner(userId);
+      }
+      
+      // Saved color palettes (nested)
+      match /colorPalettes/{paletteId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) 
+                      && isReasonableSize()
+                      && isNonEmptyString(request.resource.data.harmonyType);
+        allow update: if isOwner(userId) && isReasonableSize();
         allow delete: if isOwner(userId);
       }
     }
     
-    // System Logs - Require auth to prevent anonymous flooding
+    // ============================================
+    // SYSTEM & AUDIT COLLECTIONS
+    // ============================================
+    
+    // System Logs — authenticated create only, no read/update/delete
     match /systemLogs/{logId} {
-      allow create: if isAuthenticated();
-      allow read: if false;
-      allow update, delete: if false;
+      allow create: if isAuthenticated() && isReasonableSize();
+      allow read, update, delete: if false;
     }
     
-    // Audit Logs - Users can read their own logs, only Cloud Functions can write
+    // Audit Logs — immutable records, users can read their own
     match /auditLogs/{logId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow write: if false; // Only Cloud Functions can write
+      allow create: if isAuthenticated() 
+                    && hasValidUserId() 
+                    && isReasonableSize();
+      allow update, delete: if false; // Audit logs are immutable
     }
     
-    // User Preferences History - Users can read their own history
+    // User Preferences History — immutable change records
     match /userPreferencesHistory/{historyId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow write: if false; // Only created by transactions
+      allow create: if isAuthenticated() 
+                    && hasValidUserId() 
+                    && isReasonableSize();
+      allow update, delete: if false; // History is immutable
     }
     
-    // Deleted Items - Users can read their own deleted items (for recovery)
+    // Deleted Items — for data recovery, immutable once created
     match /deletedItems/{deletionId} {
       allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow write: if false; // Only created by audit log system
+      allow create: if isAuthenticated() 
+                    && hasValidUserId() 
+                    && isReasonableSize();
+      // Allow limited update for recovery marking (canRecover, recoveredAt)
+      allow update: if isAuthenticated() 
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == request.auth.uid; // Cannot reassign userId
+      allow delete: if false; // Deletion records are permanent
     }
     
-    // Cleanup Jobs - Read-only for authenticated users, write-only for Cloud Functions
+    // Cleanup Jobs — read-only for clients, write-only for Cloud Functions
     match /cleanupJobs/{jobId} {
       allow read: if isAuthenticated();
-      allow write: if false; // Only Cloud Functions can write
+      allow create, update, delete: if false;
     }
     
-    // API Cache - Read-only for clients; writes only via server/admin SDK
+    // API Cache — read-only for clients; writes only via server/admin SDK
     match /apiCache/{cacheKey} {
       allow read: if isAuthenticated();
       allow create, update, delete: if false;
     }
     
-    // Rate Limits - Scoped to own userId to prevent counter manipulation
+    // Rate Limits — scoped to own userId, no delete to prevent counter manipulation
     match /rateLimits/{userId} {
-      allow read: if isAuthenticated() && request.auth.uid == userId;
-      allow create: if isAuthenticated() && request.auth.uid == userId;
-      allow update: if isAuthenticated() && request.auth.uid == userId;
-      allow delete: if false;
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isReasonableSize();
+      allow update: if isOwner(userId) && isReasonableSize();
+      allow delete: if false; // Prevent counter manipulation
     }
     
-    // Archive Collections - No direct access (admin only via Cloud Functions)
+    // ============================================
+    // ARCHIVE COLLECTIONS — admin/Cloud Functions only
+    // ============================================
     match /auditLogsArchive/{logId} {
       allow read, write: if false;
     }
@@ -185,7 +272,9 @@ service cloud.firestore {
       allow read, write: if false;
     }
     
-    // Default deny all access for security
+    // ============================================
+    // DEFAULT DENY — catch-all for any unmatched paths
+    // ============================================
     match /{document=**} {
       allow read, write: if false;
     }
