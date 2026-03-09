@@ -150,13 +150,13 @@ export default function SavedPalettesPage() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="bg-card/60 backdrop-blur-xl border border-border/20 rounded-2xl p-6">
-                  <div className="h-6 bg-gray-200 rounded w-3/4 mb-4 animate-pulse" />
+                  <div className="h-6 bg-muted rounded w-3/4 mb-4 animate-pulse" />
                   <div className="flex gap-2 mb-4">
                     {[1, 2, 3, 4, 5].map((j) => (
-                      <div key={j} className="w-12 h-12 bg-gray-200 rounded-full animate-pulse" />
+                      <div key={j} className="w-12 h-12 bg-muted rounded-full animate-pulse" />
                     ))}
                   </div>
-                  <div className="h-4 bg-gray-200 rounded w-1/2 animate-pulse" />
+                  <div className="h-4 bg-muted rounded w-1/2 animate-pulse" />
                 </div>
               ))}
             </div>
@@ -245,7 +245,7 @@ export default function SavedPalettesPage() {
                         {palette.seasons.map((season) => (
                           <span
                             key={season}
-                            className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs rounded-full capitalize"
+                            className="px-2 py-0.5 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-xs rounded-full capitalize"
                           >
                             {season}
                           </span>

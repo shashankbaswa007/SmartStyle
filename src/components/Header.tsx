@@ -17,7 +17,8 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { Wand2, Heart, Palette, Shirt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
-import StarBorder from '@/components/StarBorder';
+import dynamic from 'next/dynamic';
+const StarBorder = dynamic(() => import('@/components/StarBorder'), { ssr: false });
 
 export function Header() {
   const { user } = useAuth();
@@ -93,16 +94,16 @@ export function Header() {
                   href="/color-match"
                   // 1. Moved 'group' here. Changed to rounded-full. Removed the heavy shadows/scaling.
                   className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
-                  color="#3b82f6" // Keeps your blue theme
-                  speed="4s" // Slowed down from 3s to match the elegant vibe
-                  thickness={10} // Reduced from 10 to 2 to match the clean navigation style
+                  color="#7c3aed"
+                  speed="4s"
+                  thickness={10}
                 >
                   {/* 2. Inner wrapper enforcing the layout */}
                   <div className="flex flex-row items-center justify-center gap-2">
                     
                     {/* THE SYMBOL: Using your Lucide icon, but styled with Tailwind for hover effects */}
                     <Palette 
-                      className="h-4 w-4 text-blue-400 transition-all duration-500 ease-out will-change-transform group-hover:rotate-12 group-hover:scale-110 group-hover:text-blue-300" 
+                      className="h-4 w-4 text-violet-400 transition-all duration-500 ease-out will-change-transform group-hover:rotate-12 group-hover:scale-110 group-hover:text-violet-300" 
                     />
                     
                     {/* THE TEXT: Muted white that turns pure white on hover */}
@@ -117,7 +118,7 @@ export function Header() {
                   as={Link}
                   href="/likes"
                   className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
-                  color="#ef4444" 
+                  color="#8B5CF6"
                   speed="4s"
                   thickness={2} 
                 >
@@ -129,7 +130,7 @@ export function Header() {
                         3. Used 'fill-transparent' to ensure a smooth transition.
                     */}
                     <Heart 
-                      className="h-4 w-4 text-red-500 fill-transparent transition-all duration-400 ease-in-out will-change-transform group-hover:scale-110 group-hover:fill-red-500" 
+                      className="h-4 w-4 text-violet-400 fill-transparent transition-all duration-400 ease-in-out will-change-transform group-hover:scale-110 group-hover:fill-violet-400" 
                     />
                     
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
@@ -143,7 +144,7 @@ export function Header() {
                   as={Link}
                   href="/wardrobe"
                   className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
-                  color="#14b8a6" // Keeps your teal theme
+                  color="#6D28D9"
                   speed="4s"
                   thickness={10}
                 >
@@ -152,7 +153,7 @@ export function Header() {
                     
                     {/* THE SYMBOL: Removed inline CSS. Uses Tailwind text colors and adds a subtle fill on hover */}
                     <Shirt 
-                      className="h-4 w-4 text-teal-400 fill-none transition-all duration-500 ease-out will-change-transform group-hover:scale-110 group-hover:text-teal-300 group-hover:fill-teal-500/30" 
+                      className="h-4 w-4 text-purple-400 fill-none transition-all duration-500 ease-out will-change-transform group-hover:scale-110 group-hover:text-purple-300 group-hover:fill-purple-500/30" 
                     />
                     
                     {/* THE TEXT: Muted white that turns pure white on hover */}
@@ -204,10 +205,10 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 hover:bg-red-500/10 transition-colors"
+                  className="h-8 w-8 hover:bg-violet-500/10 transition-colors"
                 >
                   <Link href="/likes" title="Your Likes">
-                    <Heart className="w-4 h-4 text-red-500" />
+                    <Heart className="w-4 h-4 text-violet-500" />
                   </Link>
                 </Button>
 
@@ -215,10 +216,10 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 hover:bg-teal-500/10 transition-colors"
+                  className="h-8 w-8 hover:bg-purple-500/10 transition-colors"
                 >
                   <Link href="/wardrobe" title="Your Wardrobe">
-                    <Shirt className="w-4 h-4 text-teal-500" />
+                    <Shirt className="w-4 h-4 text-purple-500" />
                   </Link>
                 </Button>
               </div>

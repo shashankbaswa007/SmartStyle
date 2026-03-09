@@ -251,8 +251,8 @@ export default function PreferencesPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-pink-500/10">
-                  <Heart className="w-6 h-6 text-pink-600" />
+                <div className="p-3 rounded-full bg-violet-500/10">
+                  <Heart className="w-6 h-6 text-violet-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{preferences?.totalLikes || 0}</p>
@@ -265,8 +265,8 @@ export default function PreferencesPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-green-500/10">
-                  <Eye className="w-6 h-6 text-green-600" />
+                <div className="p-3 rounded-full bg-purple-500/10">
+                  <Eye className="w-6 h-6 text-purple-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{preferences?.totalWears || 0}</p>
@@ -279,8 +279,8 @@ export default function PreferencesPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
-                <div className="p-3 rounded-full bg-blue-500/10">
-                  <ShoppingBag className="w-6 h-6 text-blue-600" />
+                <div className="p-3 rounded-full bg-indigo-500/10">
+                  <ShoppingBag className="w-6 h-6 text-indigo-600" />
                 </div>
                 <div>
                   <p className="text-2xl font-bold">{preferences?.totalShoppingClicks || 0}</p>
@@ -492,7 +492,7 @@ export default function PreferencesPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Ban className="w-5 h-5 text-orange-600" />
+                  <Ban className="w-5 h-5 text-violet-400" />
                   Soft Blocklist (Show Rarely)
                 </CardTitle>
               </CardHeader>
@@ -503,7 +503,7 @@ export default function PreferencesPage() {
                       <h4 className="font-medium mb-2">Colors</h4>
                       <div className="flex flex-wrap gap-2">
                         {blocklists.softBlocklist.colors.map((color, idx) => (
-                          <Badge key={idx} variant="outline" className="border-orange-500">{color}</Badge>
+                          <Badge key={idx} variant="outline" className="border-violet-500">{color}</Badge>
                         ))}
                       </div>
                     </div>

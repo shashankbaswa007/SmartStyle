@@ -93,7 +93,7 @@ export default function Home() {
         </section>
 
         {/* 4. AI Style in Action Section */}
-        <section className="content-auto py-10 sm:py-14 md:py-20 bg-gradient-to-br from-amber-200/20 via-background to-amber-900/20">
+        <section className="content-auto py-10 sm:py-14 md:py-20 bg-gradient-to-br from-violet-200/20 via-background to-purple-900/20">
           <div className="container mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8 md:gap-12 items-center">
               <div className="relative w-full h-48 sm:h-64 md:h-96 rounded-lg overflow-hidden shadow-2xl">
@@ -103,7 +103,7 @@ export default function Home() {
                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-headline font-bold mb-6">From Upload to Upgrade</h2>
                 <ul className="space-y-6 text-lg">
                   <li className="flex items-start gap-4">
-                    <div className="p-3 bg-amber-700/20 text-amber-700 rounded-full transition-all duration-300 hover:bg-amber-700/30 hover:shadow-lg hover:shadow-amber-700/20"><Camera /></div>
+                    <div className="p-3 bg-violet-700/20 text-violet-400 rounded-full transition-all duration-300 hover:bg-violet-700/30 hover:shadow-lg hover:shadow-violet-700/20"><Camera /></div>
                     <div>
                       <BlurText
                         text="1. Snap & Upload"
@@ -122,7 +122,7 @@ export default function Home() {
                     </div>
                   </li>
                   <li className="flex items-start gap-4">
-                    <div className="p-3 bg-amber-700/20 text-amber-700 rounded-full transition-all duration-300 hover:bg-amber-700/30 hover:shadow-lg hover:shadow-amber-700/20"><Bot /></div>
+                    <div className="p-3 bg-violet-700/20 text-violet-400 rounded-full transition-all duration-300 hover:bg-violet-700/30 hover:shadow-lg hover:shadow-violet-700/20"><Bot /></div>
                     <div>
                       <BlurText
                         text="2. AI Analysis"
@@ -141,7 +141,7 @@ export default function Home() {
                     </div>
                   </li>
                   <li className="flex items-start gap-4">
-                    <div className="p-3 bg-amber-700/20 text-amber-700 rounded-full transition-all duration-300 hover:bg-amber-700/30 hover:shadow-lg hover:shadow-amber-700/20"><Palette /></div>
+                    <div className="p-3 bg-violet-700/20 text-violet-400 rounded-full transition-all duration-300 hover:bg-violet-700/30 hover:shadow-lg hover:shadow-violet-700/20"><Palette /></div>
                     <div>
                       <BlurText
                         text="3. Get Style Advice"
@@ -182,7 +182,7 @@ export default function Home() {
           <div className="absolute inset-0 bg-black/60" />
           <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8">
             <GradientText
-              colors={["#A78BFA", "#F472B6", "#A78BFA"]}
+              colors={["#A78BFA", "#7B68EE", "#A78BFA"]}
               animationSpeed={4}
               showBorder={false}
               className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-headline font-bold"

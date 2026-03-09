@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { lazy, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 const Particles = dynamic(() => import('@/components/Particles'), { ssr: false });
+const DotGrid = dynamic(() => import('@/components/DotGrid'), { ssr: false });
 const ShinyText = lazy(() => import('@/components/ShinyText'));
 const TextPressure = lazy(() => import('@/components/TextPressure'));
 import { useMounted } from '@/hooks/useMounted';
@@ -183,7 +184,7 @@ export default function LikesPage() {
         {isMounted && (
           <Particles
             className="absolute inset-0"
-            particleColors={['#ef4444', '#b91c1c ']}
+            particleColors={['#7c3aed', '#5b21b6']}
             particleCount={200}
             particleSpread={10}
             speed={0.5}
@@ -200,14 +201,14 @@ export default function LikesPage() {
         <header className="text-center mb-8 sm:mb-12 md:mb-16 relative">
           <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto">
             {isMounted && (
-              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-red-400 to-red-600 bg-clip-text text-transparent">Your Likes</h1>}>
+              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-violet-400 to-purple-600 bg-clip-text text-transparent">Your Likes</h1>}>
                 <TextPressure
                   text="Your Likes"
                   stroke={true}
                   width={true}
                   weight={false}
-                  textColor="#fca5a5"
-                  strokeColor="#dc2626"
+                  textColor="#c4b5fd"
+                  strokeColor="#6d28d9"
                   minFontSize={32}
                 />
               </Suspense>
@@ -349,7 +350,7 @@ export default function LikesPage() {
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
-                      <div className="bg-red-500 rounded-full p-2 shadow-lg">
+                      <div className="bg-violet-600 rounded-full p-2 shadow-lg">
                         <Heart className="w-5 h-5 text-white fill-white" />
                       </div>
                     </div>
@@ -430,7 +431,7 @@ export default function LikesPage() {
                                         href={itemLinks.amazon}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-orange-500/30 bg-orange-500/10 text-orange-600 dark:text-orange-400 hover:bg-orange-500/20 transition-colors"
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors"
                                         title={`Shop ${item} on Amazon`}
                                       >
                                         <ShoppingCart className="w-2.5 h-2.5" />
@@ -442,7 +443,7 @@ export default function LikesPage() {
                                         href={itemLinks.tatacliq}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors"
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition-colors"
                                         title={`Shop ${item} on TATA CLiQ`}
                                       >
                                         <ShoppingCart className="w-2.5 h-2.5" />
@@ -454,7 +455,7 @@ export default function LikesPage() {
                                         href={itemLinks.myntra}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-pink-500/30 bg-pink-500/10 text-pink-600 dark:text-pink-400 hover:bg-pink-500/20 transition-colors"
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 hover:bg-fuchsia-500/20 transition-colors"
                                         title={`Shop ${item} on Myntra`}
                                       >
                                         <ShoppingCart className="w-2.5 h-2.5" />

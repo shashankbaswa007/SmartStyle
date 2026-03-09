@@ -99,8 +99,8 @@ const ITEM_TYPE_LABELS: Record<string, string> = {
 };
 
 const ITEM_TYPE_COLORS: Record<string, string> = {
-  top: '#8B5CF6', bottom: '#3B82F6', dress: '#EC4899', shoes: '#F97316',
-  accessory: '#10B981', outerwear: '#6366F1',
+  top: '#8B5CF6', bottom: '#6366F1', dress: '#D946EF', shoes: '#818CF8',
+  accessory: '#C084FC', outerwear: '#E879F9',
 };
 
 // ─── Chart: Horizontal Bar ─────────────────────────────────────
@@ -264,7 +264,7 @@ function ActivitySparkline({ data }: { data: { label: string; count: number }[] 
 
 // ─── Stat Card ──────────────────────────────────────────────────
 const STAT_ACCENT: Record<string, string> = {
-  violet: '#8B5CF6', pink: '#EC4899', blue: '#3B82F6', emerald: '#10B981',
+  violet: '#8B5CF6', pink: '#D946EF', blue: '#6366F1', emerald: '#C084FC',
 };
 
 function StatCard({ title, value, subtitle, icon: Icon, color }: {
@@ -295,7 +295,7 @@ function EngagementRing({ score }: { score: number }) {
   const radius = 38;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
-  const scoreColor = score >= 70 ? '#10B981' : score >= 40 ? '#EAB308' : '#6366F1';
+  const scoreColor = score >= 70 ? '#8B5CF6' : score >= 40 ? '#D946EF' : '#6366F1';
 
   return (
     <div className="flex items-center gap-4">
@@ -779,7 +779,7 @@ export default function AnalyticsPage() {
                           data={insights.seasonalDistribution.map((s, i) => ({
                             name: s.season,
                             value: s.count,
-                            color: ['#8B5CF6', '#EC4899', '#F97316', '#10B981'][i % 4],
+                            color: ['#8B5CF6', '#D946EF', '#6366F1', '#C084FC'][i % 4],
                           }))}
                         />
                       </CardContent>

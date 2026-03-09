@@ -51,7 +51,7 @@ const itemVariants = {
 
 export default function WardrobePage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-teal-600" /></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>}>
       <WardrobePageContent />
     </Suspense>
   );
@@ -534,9 +534,9 @@ function WardrobePageContent() {
   const getRecommendationReadiness = () => {
     const itemCount = wardrobeItems.length;
     if (itemCount === 0) return { level: 0, message: 'Add items to get started', color: 'text-gray-500' };
-    if (itemCount < 5) return { level: 1, message: 'Getting started - add more for better suggestions', color: 'text-amber-600' };
-    if (itemCount < 10) return { level: 2, message: 'Good progress - recommendations improving', color: 'text-teal-600' };
-    if (itemCount < 20) return { level: 3, message: 'Great wardrobe - quality recommendations available', color: 'text-emerald-600' };
+    if (itemCount < 5) return { level: 1, message: 'Getting started - add more for better suggestions', color: 'text-violet-600' };
+    if (itemCount < 10) return { level: 2, message: 'Good progress - recommendations improving', color: 'text-violet-600' };
+    if (itemCount < 20) return { level: 3, message: 'Great wardrobe - quality recommendations available', color: 'text-purple-600' };
     return { level: 4, message: 'Excellent wardrobe - best recommendations', color: 'text-green-600' };
   };
 
@@ -658,7 +658,7 @@ function WardrobePageContent() {
         insights.push({
           type: 'context-limited',
           icon: Info,
-          color: 'teal',
+          color: 'violet',
           title: `${contextItems.length} ${contextLabel} item${contextItems.length > 1 ? 's' : ''}`,
           description: `Consider adding more ${contextLabel} options`,
           items: contextItems,
@@ -733,7 +733,7 @@ function WardrobePageContent() {
       insights.push({
         type: 'category-underused',
         icon: Info,
-        color: 'teal',
+        color: 'violet',
         title: `Underused ${type.type}s`,
         description: `You have ${type.items.length} ${type.type}s that rarely get worn — time to mix them in?`,
         items: type.items.slice(0, 3),
@@ -757,7 +757,7 @@ function WardrobePageContent() {
       insights.push({
         type: 'seasonal-reminder',
         icon: CloudSun,
-        color: 'teal',
+        color: 'violet',
         title: `Perfect for ${currentSeason}`,
         description: `${seasonalUnused.length} ${currentSeason} items haven't been worn recently`,
         items: seasonalUnused.slice(0, 3),
@@ -783,7 +783,7 @@ function WardrobePageContent() {
       insights.push({
         type: 'new-unworn',
         icon: Star,
-        color: 'teal',
+        color: 'violet',
         title: 'New additions ready',
         description: neverWorn.map(i => i.description).join(', '),
         items: neverWorn,
@@ -842,22 +842,22 @@ function WardrobePageContent() {
 
     // High usage - worn significantly more than average
     if (avgWearCount > 0 && item.wornCount > avgWearCount * 2 && item.wornCount >= 8) {
-      return { label: `${item.wornCount}x`, color: 'bg-blue-100 text-blue-700 border-blue-300', icon: Flame };
+      return { label: `${item.wornCount}x`, color: 'bg-violet-100 text-violet-700 border-violet-300', icon: Flame };
     }
 
     // Favorite milestone (worn 5+ times)
     if (item.wornCount >= 5) {
-      return { label: `${item.wornCount}x`, color: 'bg-rose-100 text-rose-700 border-rose-300', icon: Heart };
+      return { label: `${item.wornCount}x`, color: 'bg-purple-100 text-purple-700 border-purple-300', icon: Heart };
     }
 
     // Never worn but old enough to notice
     if (!item.wornCount || item.wornCount === 0) {
       const daysSinceAdded = item.addedDate ? Math.floor((now - item.addedDate) / (24 * 60 * 60 * 1000)) : 0;
       if (daysSinceAdded < 7) {
-        return { label: 'New', color: 'bg-teal-100 text-teal-700 border-teal-300', icon: Sparkles };
+        return { label: 'New', color: 'bg-violet-100 text-violet-700 border-violet-300', icon: Sparkles };
       }
       if (daysSinceAdded > 30) {
-        return { label: 'Try me', color: 'bg-amber-100 text-amber-700 border-amber-300', icon: Star };
+        return { label: 'Try me', color: 'bg-fuchsia-100 text-fuchsia-700 border-fuchsia-300', icon: Star };
       }
       return { label: 'Unworn', color: 'bg-gray-100 text-gray-700 border-gray-300', icon: Package };
     }
@@ -874,7 +874,7 @@ function WardrobePageContent() {
 
     // Recently worn (within 2 weeks)
     if (item.lastWornDate && (now - item.lastWornDate) < TWO_WEEKS) {
-      return { label: 'Recent', color: 'bg-emerald-100 text-emerald-700 border-emerald-300', icon: CheckCircle2 };
+      return { label: 'Recent', color: 'bg-purple-100 text-purple-700 border-purple-300', icon: CheckCircle2 };
     }
 
     return null;
@@ -943,7 +943,7 @@ function WardrobePageContent() {
       <TooltipProvider delayDuration={300}>
       <a 
         href="#main-content" 
-        className="sr-only focus:not-sr-only focus:fixed focus:top-24 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-teal-600 focus:text-white focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-teal-400 focus:ring-offset-2 focus:ring-offset-background"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-24 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-violet-600 focus:text-white focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-violet-400 focus:ring-offset-2 focus:ring-offset-background"
       >
         Skip to main content
       </a>
@@ -953,7 +953,7 @@ function WardrobePageContent() {
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="fixed top-0 left-0 right-0 z-50 bg-amber-600 text-white px-4 py-2 text-center text-sm font-medium shadow-lg"
+            className="fixed top-0 left-0 right-0 z-50 bg-violet-700 text-white px-4 py-2 text-center text-sm font-medium shadow-lg"
             role="alert"
             aria-live="assertive"
           >
@@ -967,10 +967,10 @@ function WardrobePageContent() {
         {/* Particles Background - Optimized for performance */}
         <div className="absolute inset-0 -z-10">
           {isMounted && (
-            <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-teal-50 to-emerald-50" />}>
+            <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-violet-50 to-purple-50" />}>
               <Particles
                 className="absolute inset-0"
-                particleColors={['#14b8a6', '#0f766e']}
+                particleColors={['#7c3aed', '#5b21b6']}
                 particleCount={200}
                 particleSpread={10}
                 speed={0.5}
@@ -988,14 +988,14 @@ function WardrobePageContent() {
           <header className="text-center mb-8 sm:mb-12 md:mb-16 relative" role="banner">
             <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto" aria-label="Page title">
               {isMounted && (
-                <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-teal-900">My Wardrobe</h1>}>
+                <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-violet-900">My Wardrobe</h1>}>
                   <TextPressure
                     text="My Wardrobe"
                     stroke={true}
                     width={true}
                   weight={false}
-                  textColor="#5eead4"
-                  strokeColor="#0d9488"
+                  textColor="#c4b5fd"
+                  strokeColor="#6d28d9"
                   minFontSize={32}
                 />
                 </Suspense>
@@ -1004,12 +1004,12 @@ function WardrobePageContent() {
 
             {/* Privacy Reassurance Badge with Sync Status */}
             <div className="flex items-center justify-center gap-2 mb-4 text-sm" role="status" aria-live="polite">
-              <Shield className="h-4 w-4 text-teal-600" aria-hidden="true" />
+              <Shield className="h-4 w-4 text-violet-600" aria-hidden="true" />
               <span className="text-gray-700">Your wardrobe is private</span>
               {isSyncing && (
                 <>
                   <span className="text-gray-400">•</span>
-                  <Loader2 className="h-3 w-3 text-teal-600 animate-spin" aria-hidden="true" />
+                  <Loader2 className="h-3 w-3 text-violet-600 animate-spin" aria-hidden="true" />
                   <span className="text-gray-500 text-xs">Syncing...</span>
                 </>
               )}
@@ -1024,7 +1024,7 @@ function WardrobePageContent() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button 
-                    className="inline-flex items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2"
+                    className="inline-flex items-center justify-center rounded-full focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-offset-2"
                     aria-label="Learn more about privacy"
                   >
                     <Info className="h-3.5 w-3.5 text-gray-400 hover:text-gray-600 transition-colors" aria-hidden="true" />
@@ -1044,7 +1044,7 @@ function WardrobePageContent() {
                   <Link href={`/wardrobe/suggest${contextMode !== 'all' ? `?context=${contextMode}` : ''}`} className="w-full sm:w-auto">
                     <Button 
                       size="lg" 
-                      className="w-full sm:w-auto bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 gap-2 h-12 sm:h-11 text-base sm:text-sm touch-manipulation active:scale-95"
+                      className="w-full sm:w-auto bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 gap-2 h-12 sm:h-11 text-base sm:text-sm touch-manipulation active:scale-95"
                       aria-label="Get AI-powered outfit suggestions"
                     >
                       <Sparkles className="h-5 w-5" aria-hidden="true" />
@@ -1052,10 +1052,10 @@ function WardrobePageContent() {
                     </Button>
                   </Link>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="bg-teal-900 text-white border-teal-700 max-w-xs hidden sm:block">
+                <TooltipContent side="bottom" className="bg-violet-900 text-white border-violet-700 max-w-xs hidden sm:block">
                   <p>AI creates {contextMode !== 'all' ? `${contextMode} ` : ''}outfits from your wardrobe</p>
                   <p className="text-xs opacity-80 mt-1">Works best with 10+ items</p>
-                  <div className="flex items-center gap-1 mt-2 pt-2 border-t border-teal-700">
+                  <div className="flex items-center gap-1 mt-2 pt-2 border-t border-violet-700">
                     <Shield className="h-3 w-3" aria-hidden="true" />
                     <span className="text-xs opacity-90">AI runs securely on your data only</span>
                   </div>
@@ -1067,7 +1067,7 @@ function WardrobePageContent() {
                   <Button 
                     size="lg" 
                     variant="outline"
-                    className="w-full sm:w-auto border-2 border-teal-600 text-teal-600 hover:bg-teal-50 shadow-md gap-2 h-12 sm:h-11 text-base sm:text-sm focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 touch-manipulation active:scale-95"
+                    className="w-full sm:w-auto border-2 border-violet-600 text-violet-600 hover:bg-violet-50 shadow-md gap-2 h-12 sm:h-11 text-base sm:text-sm focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 touch-manipulation active:scale-95"
                     onClick={() => setShowUploadModal(true)}
                     aria-label="Add a new clothing item to your wardrobe"
                   >
@@ -1075,7 +1075,7 @@ function WardrobePageContent() {
                     Add Item
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" className="bg-teal-900 text-white border-teal-700 hidden sm:block">
+                <TooltipContent side="bottom" className="bg-violet-900 text-white border-violet-700 hidden sm:block">
                   <p>Upload a photo of your clothing item</p>
                 </TooltipContent>
               </Tooltip>
@@ -1085,7 +1085,7 @@ function WardrobePageContent() {
                   onClick={handleRefresh}
                   variant="outline"
                   size="lg"
-                  className="w-full sm:w-auto border-teal-600 text-teal-600 hover:bg-teal-50 shadow-md h-12 sm:h-11 text-base sm:text-sm focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 touch-manipulation active:scale-95"
+                  className="w-full sm:w-auto border-violet-600 text-violet-600 hover:bg-violet-50 shadow-md h-12 sm:h-11 text-base sm:text-sm focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 touch-manipulation active:scale-95"
                   disabled={loading || isSyncing || !isOnline}
                   aria-label="Refresh wardrobe items"
                   aria-live="polite"
@@ -1114,21 +1114,21 @@ function WardrobePageContent() {
                 aria-label="Wardrobe statistics"
               >
                 <div className="flex flex-wrap gap-2 sm:gap-4 justify-center px-4 sm:px-0">
-                  <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2">
-                    <span className="text-teal-900 font-semibold" aria-label={`${wardrobeItems.length} total items`}>{wardrobeItems.length}</span>
-                    <span className="text-teal-700 ml-1">Total Items</span>
+                  <div className="bg-violet-50 border border-violet-200 rounded-lg px-4 py-2">
+                    <span className="text-violet-900 font-semibold" aria-label={`${wardrobeItems.length} total items`}>{wardrobeItems.length}</span>
+                    <span className="text-violet-700 ml-1">Total Items</span>
                   </div>
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
-                  <span className="text-emerald-900 font-semibold" aria-label={`${wardrobeItems.filter(i => i.wornCount > 0).length} worn items`}>
+                <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-2">
+                  <span className="text-purple-900 font-semibold" aria-label={`${wardrobeItems.filter(i => i.wornCount > 0).length} worn items`}>
                     {wardrobeItems.filter(i => i.wornCount > 0).length}
                   </span>
-                  <span className="text-emerald-700 ml-1">Worn</span>
+                  <span className="text-purple-700 ml-1">Worn</span>
                 </div>
-                <div className="bg-cyan-50 border border-cyan-200 rounded-lg px-4 py-2">
-                  <span className="text-cyan-900 font-semibold" aria-label={`${wardrobeItems.filter(i => i.wornCount === 0).length} never worn items`}>
+                <div className="bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2">
+                  <span className="text-indigo-900 font-semibold" aria-label={`${wardrobeItems.filter(i => i.wornCount === 0).length} never worn items`}>
                     {wardrobeItems.filter(i => i.wornCount === 0).length}
                   </span>
-                  <span className="text-cyan-700 ml-1">Never Worn</span>
+                  <span className="text-indigo-700 ml-1">Never Worn</span>
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -1149,10 +1149,10 @@ function WardrobePageContent() {
               
               {/* Large Wardrobe Performance Tip */}
               {isLargeWardrobe && (
-                <Alert className="max-w-2xl mx-auto border-amber-200 bg-amber-50">
-                  <Zap className="h-4 w-4 text-amber-600" />
-                  <AlertTitle className="text-amber-900">Large Wardrobe Detected</AlertTitle>
-                  <AlertDescription className="text-amber-800 text-sm">
+                <Alert className="max-w-2xl mx-auto border-violet-200 bg-violet-50">
+                  <Zap className="h-4 w-4 text-violet-600" />
+                  <AlertTitle className="text-violet-900">Large Wardrobe Detected</AlertTitle>
+                  <AlertDescription className="text-violet-800 text-sm">
                     You have {wardrobeItems.length} items! Use filters, search, or context modes above for faster browsing. 
                     {filteredItems.length < wardrobeItems.length && (
                       <span className="font-medium"> Currently showing {filteredItems.length} items.</span>
@@ -1179,7 +1179,7 @@ function WardrobePageContent() {
                   placeholder="Search by description, brand, category, or tags..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 pr-10 py-3 border-teal-200 focus:border-teal-500 focus:ring-teal-500 rounded-xl shadow-sm"
+                  className="pl-10 pr-10 py-3 border-violet-200 focus:border-violet-500 focus:ring-violet-500 rounded-xl shadow-sm"
                   aria-label="Search wardrobe items"
                 />
                 {searchQuery ? (
@@ -1224,7 +1224,7 @@ function WardrobePageContent() {
                           variant={sortBy === option ? 'default' : 'outline'}
                           onClick={() => setSortBy(option)}
                           className={sortBy === option 
-                            ? 'bg-teal-600 text-white h-8 px-3' 
+                            ? 'bg-violet-600 text-white h-8 px-3' 
                             : 'border-gray-300 text-gray-700 hover:bg-gray-50 h-8 px-3'}
                         >
                           {labels[option]}
@@ -1243,7 +1243,7 @@ function WardrobePageContent() {
                       variant={groupByColor ? 'default' : 'outline'}
                       onClick={() => setGroupByColor(!groupByColor)}
                       className={groupByColor 
-                        ? 'bg-teal-600 text-white h-8' 
+                        ? 'bg-violet-600 text-white h-8' 
                         : 'border-gray-300 text-gray-700 hover:bg-gray-50 h-8'}
                     >
                       <Palette className="h-4 w-4 mr-1" />
@@ -1261,12 +1261,12 @@ function WardrobePageContent() {
                 <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
                   <span className="text-gray-500">Active:</span>
                   {searchQuery && (
-                    <Badge variant="secondary" className="bg-teal-100 text-teal-700">
+                    <Badge variant="secondary" className="bg-violet-100 text-violet-700">
                       Search: &quot;{searchQuery.slice(0, 20)}{searchQuery.length > 20 ? '...' : ''}&quot;
                     </Badge>
                   )}
                   {sortBy !== 'recent' && (
-                    <Badge variant="secondary" className="bg-blue-100 text-blue-700">
+                    <Badge variant="secondary" className="bg-violet-100 text-violet-700">
                       Sort: {sortBy.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
                     </Badge>
                   )}
@@ -1295,7 +1295,7 @@ function WardrobePageContent() {
                       size="sm"
                       variant={contextMode === 'all' ? 'default' : 'outline'}
                       onClick={() => setContextMode('all')}
-                      className={contextMode === 'all' ? 'bg-teal-600 text-white' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}
+                      className={contextMode === 'all' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
                     >
                       <Home className="h-4 w-4 mr-1" />
                       All
@@ -1309,7 +1309,7 @@ function WardrobePageContent() {
                       size="sm"
                       variant={contextMode === 'work' ? 'default' : 'outline'}
                       onClick={() => setContextMode('work')}
-                      className={contextMode === 'work' ? 'bg-teal-600 text-white' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}
+                      className={contextMode === 'work' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
                     >
                       <Briefcase className="h-4 w-4 mr-1" />
                       Work
@@ -1323,7 +1323,7 @@ function WardrobePageContent() {
                       size="sm"
                       variant={contextMode === 'casual' ? 'default' : 'outline'}
                       onClick={() => setContextMode('casual')}
-                      className={contextMode === 'casual' ? 'bg-teal-600 text-white' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}
+                      className={contextMode === 'casual' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
                     >
                       <Coffee className="h-4 w-4 mr-1" />
                       Casual
@@ -1337,7 +1337,7 @@ function WardrobePageContent() {
                       size="sm"
                       variant={contextMode === 'travel' ? 'default' : 'outline'}
                       onClick={() => setContextMode('travel')}
-                      className={contextMode === 'travel' ? 'bg-teal-600 text-white' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}
+                      className={contextMode === 'travel' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
                     >
                       <Plane className="h-4 w-4 mr-1" />
                       Travel
@@ -1351,7 +1351,7 @@ function WardrobePageContent() {
                       size="sm"
                       variant={contextMode === 'weather' ? 'default' : 'outline'}
                       onClick={() => setContextMode('weather')}
-                      className={contextMode === 'weather' ? 'bg-teal-600 text-white' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}
+                      className={contextMode === 'weather' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
                     >
                       <CloudSun className="h-4 w-4 mr-1" />
                       Seasonal
@@ -1365,7 +1365,7 @@ function WardrobePageContent() {
                       size="sm"
                       variant={contextMode === 'occasion' ? 'default' : 'outline'}
                       onClick={() => setContextMode('occasion')}
-                      className={contextMode === 'occasion' ? 'bg-teal-600 text-white' : 'border-teal-300 text-teal-700 hover:bg-teal-50'}
+                      className={contextMode === 'occasion' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
                     >
                       <PartyPopper className="h-4 w-4 mr-1" />
                       Special
@@ -1387,25 +1387,25 @@ function WardrobePageContent() {
               role="region"
               aria-label="Smart insights"
             >
-              <div className="bg-gradient-to-r from-teal-50 via-emerald-50 to-cyan-50 border border-teal-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-gradient-to-r from-violet-50 via-purple-50 to-indigo-50 border border-violet-200 rounded-xl overflow-hidden shadow-sm">
                 <button
                   onClick={() => setShowInsights(!showInsights)}
-                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-white/30 transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-inset"
+                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-white/30 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-inset"
                   aria-expanded={showInsights}
                   aria-controls="insights-content"
                   aria-label={showInsights ? 'Collapse smart insights' : 'Expand smart insights'}
                 >
                   <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-teal-600" aria-hidden="true" />
-                    <span className="font-semibold text-teal-900">Smart Insights</span>
-                    <Badge variant="secondary" className="bg-teal-100 text-teal-700 text-xs">
+                    <Zap className="h-4 w-4 text-violet-600" aria-hidden="true" />
+                    <span className="font-semibold text-violet-900">Smart Insights</span>
+                    <Badge variant="secondary" className="bg-violet-100 text-violet-700 text-xs">
                       {smartInsights.length}
                     </Badge>
                   </div>
                   {showInsights ? (
-                    <ChevronUp className="h-4 w-4 text-teal-600" aria-hidden="true" />
+                    <ChevronUp className="h-4 w-4 text-violet-600" aria-hidden="true" />
                   ) : (
-                    <ChevronDown className="h-4 w-4 text-teal-600" aria-hidden="true" />
+                    <ChevronDown className="h-4 w-4 text-violet-600" aria-hidden="true" />
                   )}
                 </button>
                 
@@ -1423,16 +1423,16 @@ function WardrobePageContent() {
                         {smartInsights.map((insight, idx) => {
                           const IconComponent = insight.icon;
                           const colorClasses = {
-                            amber: 'bg-amber-50 border-amber-200 text-amber-900',
+                            amber: 'bg-amber-50 border-amber-200 text-violet-900',
                             rose: 'bg-rose-50 border-rose-200 text-rose-900',
                             purple: 'bg-purple-50 border-purple-200 text-purple-900',
-                            teal: 'bg-teal-50 border-teal-200 text-teal-900',
+                            teal: 'bg-violet-50 border-violet-200 text-violet-900',
                           };
                           const iconColors = {
-                            amber: 'text-amber-600',
+                            amber: 'text-violet-600',
                             rose: 'text-rose-600',
                             purple: 'text-purple-600',
-                            teal: 'text-teal-600',
+                            teal: 'text-violet-600',
                           };
                           
                           return (
@@ -1466,7 +1466,7 @@ function WardrobePageContent() {
             <div className="space-y-3 mb-8">
               {contextMode !== 'all' && (
                 <div className="flex justify-center">
-                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-teal-50 border border-teal-200 rounded-full text-sm text-teal-700">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 border border-violet-200 rounded-full text-sm text-violet-700">
                     <Filter className="h-3.5 w-3.5" />
                     <span>Showing {filteredItems.length} {contextMode} item{filteredItems.length !== 1 ? 's' : ''}</span>
                   </div>
@@ -1482,8 +1482,8 @@ function WardrobePageContent() {
                       size="sm"
                       className={`min-h-[44px] px-4 touch-manipulation active:scale-95 ${
                         selectedFilter === filter 
-                          ? 'bg-teal-600 hover:bg-teal-700 text-white shadow-md' 
-                          : 'border-2 border-teal-300 text-teal-700 hover:bg-teal-50'
+                          ? 'bg-violet-600 hover:bg-violet-700 text-white shadow-md' 
+                          : 'border-2 border-violet-300 text-violet-700 hover:bg-violet-50'
                       }`}
                       role="tab"
                       aria-selected={selectedFilter === filter}
@@ -1508,7 +1508,7 @@ function WardrobePageContent() {
           {loading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <Card key={i} className="overflow-hidden border-teal-200">
+                <Card key={i} className="overflow-hidden border-violet-200">
                   <Skeleton className="h-48 w-full" />
                   <CardContent className="p-4">
                     <Skeleton className="h-6 w-3/4 mb-2" />
@@ -1535,12 +1535,12 @@ function WardrobePageContent() {
               animate={{ opacity: 1, scale: 1 }}
               className="text-center py-16"
             >
-              <div className="bg-gradient-to-br from-teal-50 to-emerald-50 border-2 border-dashed border-teal-300 rounded-2xl p-12 max-w-2xl mx-auto">
-                <Shirt className="h-20 w-20 mx-auto mb-6 text-teal-400" />
-                <h3 className="text-2xl font-bold text-teal-900 mb-3">
+              <div className="bg-gradient-to-br from-violet-50 to-purple-50 border-2 border-dashed border-violet-300 rounded-2xl p-12 max-w-2xl mx-auto">
+                <Shirt className="h-20 w-20 mx-auto mb-6 text-violet-400" />
+                <h3 className="text-2xl font-bold text-violet-900 mb-3">
                   Let&apos;s Build Your Digital Wardrobe
                 </h3>
-                <p className="text-teal-700 mb-6 text-lg">
+                <p className="text-violet-700 mb-6 text-lg">
                   Add photos of your clothing items to get personalized outfit suggestions.
                 </p>
                 
@@ -1549,24 +1549,24 @@ function WardrobePageContent() {
                   <div className="flex items-start gap-3 mb-3">
                     <LightbulbIcon className="h-5 w-5 text-amber-500 mt-0.5 flex-shrink-0" />
                     <div>
-                      <h4 className="font-semibold text-teal-900 mb-2">Getting Started</h4>
-                      <ul className="space-y-2 text-sm text-teal-700">
+                      <h4 className="font-semibold text-violet-900 mb-2">Getting Started</h4>
+                      <ul className="space-y-2 text-sm text-violet-700">
                         <li className="flex items-start gap-2">
-                          <span className="text-teal-500 font-bold">1.</span>
+                          <span className="text-violet-500 font-bold">1.</span>
                           <span>Take photos or upload images of your clothes</span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <span className="text-teal-500 font-bold">2.</span>
+                          <span className="text-violet-500 font-bold">2.</span>
                           <span>Add at least 5-10 items for best results</span>
                         </li>
                         <li className="flex items-start gap-2">
-                          <span className="text-teal-500 font-bold">3.</span>
+                          <span className="text-violet-500 font-bold">3.</span>
                           <span>Get AI-powered outfit recommendations based on your style</span>
                         </li>
                       </ul>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-teal-600 bg-teal-50 rounded-lg p-3 mt-3">
+                  <div className="flex items-center gap-2 text-xs text-violet-600 bg-violet-50 rounded-lg p-3 mt-3">
                     <Shield className="h-4 w-4" />
                     <span>Your photos are stored securely and privately in your account</span>
                   </div>
@@ -1574,7 +1574,7 @@ function WardrobePageContent() {
                 
                 <Button 
                   size="lg" 
-                  className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white gap-2"
+                  className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white gap-2"
                   onClick={() => setShowUploadModal(true)}
                 >
                   <Plus className="h-5 w-5" />
@@ -1603,7 +1603,7 @@ function WardrobePageContent() {
                           className="w-8 h-8 rounded-full border-2 border-white shadow-md"
                           style={{ backgroundColor: group.color }}
                         />
-                        <h3 className="text-lg font-semibold text-gray-900">
+                        <h3 className="text-lg font-semibold text-foreground">
                           {group.count} item{group.count !== 1 ? 's' : ''}
                         </h3>
                         <div className="flex-1 h-px bg-gradient-to-r from-gray-300 to-transparent" />
@@ -1625,11 +1625,11 @@ function WardrobePageContent() {
                               whileHover={nudge ? { scale: 1.02 } : {}}
                               transition={{ duration: 0.2 }}
                             >
-                              <Card className={`group overflow-hidden border-teal-200 hover:border-teal-400 hover:shadow-xl transition-all duration-500 ease-out will-change-transform ${
+                              <Card className={`group overflow-hidden border-violet-200 hover:border-violet-400 hover:shadow-xl transition-all duration-500 ease-out will-change-transform ${
                                 nudge ? 'ring-1 ring-offset-2 ring-' + (nudge.color.includes('amber') ? 'amber' : nudge.color.includes('rose') ? 'rose' : nudge.color.includes('purple') ? 'purple' : 'teal') + '-200' : ''
                               }`}>
                               {/* Image */}
-                              <div className="relative h-64 overflow-hidden bg-gradient-to-br from-teal-50 to-emerald-50">
+                              <div className="relative h-64 overflow-hidden bg-gradient-to-br from-violet-50 to-purple-50">
                                 <Image
                                   src={item.images?.thumbnail || item.imageUrl}
                                   alt={item.description}
@@ -1643,7 +1643,7 @@ function WardrobePageContent() {
                                 />
                                 
                                 {/* Item Type Badge */}
-                                <Badge className="absolute top-3 left-3 bg-teal-600/90 backdrop-blur-sm text-white gap-1.5">
+                                <Badge className="absolute top-3 left-3 bg-violet-600/90 backdrop-blur-sm text-white gap-1.5">
                                   {getItemTypeIcon(item.itemType)}
                                   <span className="capitalize">{item.itemType}</span>
                                 </Badge>
@@ -1671,7 +1671,7 @@ function WardrobePageContent() {
                                 {!getItemNudge(item) && item.wornCount > 0 && (
                                   <Tooltip>
                                     <TooltipTrigger asChild>
-                                      <Badge className="absolute top-3 right-3 bg-emerald-600 text-white cursor-help">
+                                      <Badge className="absolute top-3 right-3 bg-purple-600 text-white cursor-help">
                                         Worn {item.wornCount}x
                                       </Badge>
                                     </TooltipTrigger>
@@ -1684,7 +1684,7 @@ function WardrobePageContent() {
 
                               <CardContent className="p-4">
                                 {/* Description */}
-                                <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-1">
+                                <h3 className="text-lg font-bold text-foreground mb-2 line-clamp-1">
                                   {item.description}
                                 </h3>
 
@@ -1705,12 +1705,12 @@ function WardrobePageContent() {
                                 {/* Meta Info */}
                                 <div className="flex flex-wrap gap-2 mb-3">
                                   {item.category && (
-                                    <Badge variant="outline" className="text-xs border-teal-300 text-teal-700">
+                                    <Badge variant="outline" className="text-xs border-violet-300 text-violet-700">
                                       {item.category}
                                     </Badge>
                                   )}
                                   {item.brand && (
-                                    <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700">
+                                    <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">
                                       {item.brand}
                                     </Badge>
                                   )}
@@ -1723,7 +1723,7 @@ function WardrobePageContent() {
                                       <Button
                                         size="sm"
                                         variant="outline"
-                                        className="flex-1 min-h-[44px] border-2 border-teal-600 text-teal-600 hover:bg-teal-50 focus:ring-2 focus:ring-teal-500 focus:ring-offset-1 touch-manipulation active:scale-95"
+                                        className="flex-1 min-h-[44px] border-2 border-violet-600 text-violet-600 hover:bg-violet-50 focus:ring-2 focus:ring-violet-500 focus:ring-offset-1 touch-manipulation active:scale-95"
                                         onClick={() => handleMarkAsWorn(item.id!, item.description)}
                                         disabled={deletingItemId === item.id}
                                         aria-label={`Mark ${item.description} as worn today`}
@@ -1793,11 +1793,11 @@ function WardrobePageContent() {
                         transition={isLargeWardrobe ? undefined : { duration: 0.2 }}
                         className={isLargeWardrobe ? "animate-fade-in-up" : ""}
                       >
-                        <Card className={`group overflow-hidden border-teal-200 hover:border-teal-400 hover:shadow-xl transition-all duration-500 ease-out will-change-transform ${
+                        <Card className={`group overflow-hidden border-violet-200 hover:border-violet-400 hover:shadow-xl transition-all duration-500 ease-out will-change-transform ${
                           nudge ? 'ring-1 ring-offset-2 ring-' + (nudge.color.includes('amber') ? 'amber' : nudge.color.includes('rose') ? 'rose' : nudge.color.includes('purple') ? 'purple' : 'teal') + '-200' : ''
                         }`}>
                         {/* Image */}
-                        <div className="relative h-64 overflow-hidden bg-gradient-to-br from-teal-50 to-emerald-50">
+                        <div className="relative h-64 overflow-hidden bg-gradient-to-br from-violet-50 to-purple-50">
                           <Image
                             src={item.images?.thumbnail || item.imageUrl}
                             alt={item.description}
@@ -1811,7 +1811,7 @@ function WardrobePageContent() {
                           />
                           
                           {/* Item Type Badge */}
-                          <Badge className="absolute top-3 left-3 bg-teal-600/90 backdrop-blur-sm text-white gap-1.5">
+                          <Badge className="absolute top-3 left-3 bg-violet-600/90 backdrop-blur-sm text-white gap-1.5">
                             {getItemTypeIcon(item.itemType)}
                             <span className="capitalize">{item.itemType}</span>
                           </Badge>
@@ -1839,7 +1839,7 @@ function WardrobePageContent() {
                           {!getItemNudge(item) && item.wornCount > 0 && (
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Badge className="absolute top-3 right-3 bg-emerald-600 text-white cursor-help">
+                                <Badge className="absolute top-3 right-3 bg-purple-600 text-white cursor-help">
                                   Worn {item.wornCount}x
                                 </Badge>
                               </TooltipTrigger>
@@ -1852,7 +1852,7 @@ function WardrobePageContent() {
 
                         <CardContent className="p-4">
                           {/* Description */}
-                          <h3 className="text-lg font-bold text-gray-900 mb-2 line-clamp-1">
+                          <h3 className="text-lg font-bold text-foreground mb-2 line-clamp-1">
                             {item.description}
                           </h3>
 
@@ -1873,12 +1873,12 @@ function WardrobePageContent() {
                           {/* Meta Info */}
                           <div className="flex flex-wrap gap-2 mb-3">
                             {item.category && (
-                              <Badge variant="outline" className="text-xs border-teal-300 text-teal-700">
+                              <Badge variant="outline" className="text-xs border-violet-300 text-violet-700">
                                 {item.category}
                               </Badge>
                             )}
                             {item.brand && (
-                              <Badge variant="outline" className="text-xs border-emerald-300 text-emerald-700">
+                              <Badge variant="outline" className="text-xs border-purple-300 text-purple-700">
                                 {item.brand}
                               </Badge>
                             )}
@@ -1891,7 +1891,7 @@ function WardrobePageContent() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  className="flex-1 min-h-[44px] border-2 border-teal-600 text-teal-600 hover:bg-teal-50 focus:ring-2 focus:ring-teal-500 focus:ring-offset-1 touch-manipulation active:scale-95"
+                                  className="flex-1 min-h-[44px] border-2 border-violet-600 text-violet-600 hover:bg-violet-50 focus:ring-2 focus:ring-violet-500 focus:ring-offset-1 touch-manipulation active:scale-95"
                                   onClick={() => handleMarkAsWorn(item.id!, item.description)}
                                   disabled={deletingItemId === item.id}
                                   aria-label={`Mark ${item.description} as worn today`}
@@ -1951,26 +1951,26 @@ function WardrobePageContent() {
               animate={{ opacity: 1, scale: 1 }}
               className="text-center py-16"
             >
-              <div className="bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-200 rounded-xl p-10 max-w-lg mx-auto">
+              <div className="bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200 rounded-xl p-10 max-w-lg mx-auto">
                 {searchQuery ? (
                   <>
-                    <Search className="h-16 w-16 mx-auto mb-4 text-teal-400" />
-                    <h3 className="text-xl font-bold text-teal-900 mb-2">
+                    <Search className="h-16 w-16 mx-auto mb-4 text-violet-400" />
+                    <h3 className="text-xl font-bold text-violet-900 mb-2">
                       No items match &quot;{searchQuery}&quot;
                     </h3>
-                    <p className="text-teal-700 mb-4">
+                    <p className="text-violet-700 mb-4">
                       Try searching with different keywords or clear your filters.
                     </p>
                   </>
                 ) : (
                   <>
-                    <Filter className="h-16 w-16 mx-auto mb-4 text-teal-400" />
-                    <h3 className="text-xl font-bold text-teal-900 mb-2">
+                    <Filter className="h-16 w-16 mx-auto mb-4 text-violet-400" />
+                    <h3 className="text-xl font-bold text-violet-900 mb-2">
                       {contextMode !== 'all' 
                         ? `No ${contextMode} ${selectedFilter !== 'all' ? selectedFilter : ''} items found`
                         : `No ${selectedFilter === 'all' ? '' : selectedFilter} items yet`}
                     </h3>
-                    <p className="text-teal-700 mb-4">
+                    <p className="text-violet-700 mb-4">
                       {contextMode !== 'all'
                         ? `Tag items with "${contextMode}" occasions to see them in this context.`
                         : selectedFilter === 'all' 
@@ -1983,7 +1983,7 @@ function WardrobePageContent() {
                   {searchQuery && (
                     <Button 
                       variant="outline"
-                      className="border-teal-600 text-teal-600 hover:bg-teal-50"
+                      className="border-violet-600 text-violet-600 hover:bg-violet-50"
                       onClick={() => setSearchQuery('')}
                     >
                       Clear Search
@@ -1992,7 +1992,7 @@ function WardrobePageContent() {
                   {contextMode !== 'all' && (
                     <Button 
                       variant="outline"
-                      className="border-teal-600 text-teal-600 hover:bg-teal-50"
+                      className="border-violet-600 text-violet-600 hover:bg-violet-50"
                       onClick={() => setContextMode('all')}
                     >
                       Clear Context
@@ -2001,14 +2001,14 @@ function WardrobePageContent() {
                   {selectedFilter !== 'all' && (
                     <Button 
                       variant="outline"
-                      className="border-teal-600 text-teal-600 hover:bg-teal-50"
+                      className="border-violet-600 text-violet-600 hover:bg-violet-50"
                       onClick={() => setSelectedFilter('all')}
                     >
                       View All Items
                     </Button>
                   )}
                   <Button 
-                    className="bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white gap-2"
+                    className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white gap-2"
                     onClick={() => setShowUploadModal(true)}
                   >
                     <Plus className="h-4 w-4" />
@@ -2022,7 +2022,7 @@ function WardrobePageContent() {
 
         {/* Upload Modal - Lazy loaded for better performance */}
         {showUploadModal && (
-          <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><Loader2 className="h-8 w-8 animate-spin text-teal-600" /></div>}>
+          <Suspense fallback={<div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>}>
             <WardrobeItemUpload 
               open={showUploadModal}
               onOpenChange={setShowUploadModal}
@@ -2052,7 +2052,7 @@ function WardrobePageContent() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <p className="font-semibold">Item removed</p>
-                    <Shield className="h-3.5 w-3.5 text-teal-400" aria-hidden="true" />
+                    <Shield className="h-3.5 w-3.5 text-violet-400" aria-hidden="true" />
                   </div>
                   <p className="text-sm text-gray-300 mb-1">{lastDeletedItem.item.description}</p>
                   <p className="text-xs text-gray-400" role="timer" aria-live="off">You have 10 seconds to restore it</p>

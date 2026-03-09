@@ -164,10 +164,10 @@ export default function ColorMatchPage() {
       {/* Particles Background - Optimized, respects reduced motion */}
       <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
       {isMounted && !prefersReducedMotion && (
-          <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-blue-500/10" />}>
+          <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-violet-500/10" />}>
             <Particles
                 className="absolute inset-0"
-                particleColors={['#3b82f6', '#93c5fd']}
+                particleColors={['#7c3aed', '#c4b5fd']}
                 particleCount={200}
                 particleSpread={10}
                 speed={0.5}
@@ -179,7 +179,7 @@ export default function ColorMatchPage() {
           </Suspense>
       )}
       {prefersReducedMotion && (
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-blue-500/10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-violet-500/10" />
       )}
       </div>
 
@@ -188,14 +188,14 @@ export default function ColorMatchPage() {
         <header className="text-center mb-8 sm:mb-12 md:mb-16">
           <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto">
             {isMounted && (
-              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-blue-400 to-blue-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">Color-Match</h1>}>
+              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-violet-400 to-violet-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">Color-Match</h1>}>
                 <TextPressure
                   text="Color-Match"
                   stroke={true}
                   width={true}
                   weight={false}
-                  textColor="#93c5fd"
-                  strokeColor="#1d4ed8"
+                  textColor="#c4b5fd"
+                  strokeColor="#5b21b6"
                   minFontSize={32}
                 />
               </Suspense>
@@ -358,7 +358,7 @@ export default function ColorMatchPage() {
                 <div className="relative flex-1">
                   <Input
                     type="text"
-                    placeholder='e.g., "red", "#3b82f6", "rgb(59, 130, 246)"'
+                    placeholder='e.g., "red", "#7c3aed", "rgb(59, 130, 246)"'
                     value={color}
                     onChange={(e) => setColor(e.target.value)}
                     onKeyDown={(e) => {
@@ -390,7 +390,7 @@ export default function ColorMatchPage() {
                   <label className="text-sm font-medium">Pick Color:</label>
                   <input
                     type="color"
-                    value={color.startsWith('#') ? color : '#3b82f6'}
+                    value={color.startsWith('#') ? color : '#7c3aed'}
                     onChange={(e) => setColor(e.target.value)}
                     className="w-12 h-12 rounded cursor-pointer border-2 border-border"
                   />
@@ -417,10 +417,10 @@ export default function ColorMatchPage() {
               </Button>
             </div>
 
-            <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/50 rounded-lg">
+            <div className="mt-4 p-3 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/50 rounded-lg">
               <div className="flex items-start gap-2">
-                <Info className="w-4 h-4 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-blue-700 dark:text-blue-300">
+                <Info className="w-4 h-4 text-violet-600 dark:text-violet-400 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-violet-700 dark:text-violet-300">
                   Try color names, hex codes (#FF0000), or pick from swatches above
                 </p>
               </div>
@@ -721,7 +721,7 @@ export default function ColorMatchPage() {
 
             {/* Quick Fashion Tips - Always Visible */}
             <motion.div variants={itemVariants} className="mb-6">
-              <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 border border-purple-200 dark:border-purple-800/30 shadow-lg rounded-xl p-6">
+              <div className="bg-gradient-to-br from-purple-50 to-purple-50 dark:from-purple-950/20 dark:to-purple-950/20 border border-purple-200 dark:border-purple-800/30 shadow-lg rounded-xl p-6">
                 <h3 className="font-semibold text-base mb-3 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                   Quick Styling Tips
@@ -782,7 +782,7 @@ export default function ColorMatchPage() {
                 </div>
 
                 {/* Detailed Fashion Tips */}
-                <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 border border-purple-200 dark:border-purple-800/30 shadow-lg rounded-2xl p-6">
+                <div className="bg-gradient-to-br from-purple-50 to-purple-50 dark:from-purple-950/20 dark:to-purple-950/20 border border-purple-200 dark:border-purple-800/30 shadow-lg rounded-2xl p-6">
                   <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400" />
                     Advanced Styling Techniques
