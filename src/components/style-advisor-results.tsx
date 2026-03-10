@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Sparkles, Palette, Shirt, PenTool, Wand2, ShoppingCart, ShoppingBag, ExternalLink, Check, Heart, Info, ChevronDown, ChevronUp, Star, Lightbulb, Eye } from "lucide-react";
 import type { AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
 import type { ShoppingLinkResult, ItemShoppingLinks, ProductLink } from "@/lib/tavily";
+import { optimizeItemLinks, buildOutfitSearchUrls } from "@/lib/shopping-query-optimizer";
 import { Separator } from "./ui/separator";
 import { RecommendationFeedback } from "./RecommendationFeedback";
 import { auth, db } from "@/lib/firebase";
@@ -1185,46 +1186,5 @@ export function StyleAdvisorResults({
   );
 }
 
-// Helper function to build optimized shopping URLs for individual items
-function optimizeItemLinks(item: string, gender?: string): { item: string; amazon: string; tatacliq: string; myntra: string } {
-  // Clean and optimize the item query
-  const cleanItem = item.trim().toLowerCase();
-  
-  // Build gender-aware search query
-  let searchQuery = item;
-  if (gender) {
-    // Add gender prefix for better results
-    searchQuery = `${gender} ${item}`;
-  }
-  
-  // URL-encode the search query
-  const encodedQuery = encodeURIComponent(searchQuery);
-  
-  return {
-    item,
-    amazon: `https://www.amazon.in/s?k=${encodedQuery}`,
-    tatacliq: `https://www.tatacliq.com/search/?searchCategory=all&text=${encodedQuery}`,
-    myntra: `https://www.myntra.com/${encodedQuery.replace(/\s+/g, '-')}`,
-  };
-}
 
-// Helper function to build optimized shopping URLs for complete outfits
-function buildOutfitSearchUrls(items: string[], gender?: string): { query: string; amazon: string; tatacliq: string; myntra: string } {
-  // Use first 2 items for focused search (e.g., "white shirt black pants")
-  const primaryItems = items.slice(0, 2).join(' ');
-  let query = primaryItems;
-  
-  if (gender) {
-    query = `${gender} ${primaryItems}`;
-  }
-  
-  const encodedQuery = encodeURIComponent(query);
-  
-  return {
-    query,
-    amazon: `https://www.amazon.in/s?k=${encodedQuery}`,
-    tatacliq: `https://www.tatacliq.com/search/?searchCategory=all&text=${encodedQuery}`,
-    myntra: `https://www.myntra.com/${encodedQuery.replace(/\s+/g, '-')}`,
-  };
-}
 

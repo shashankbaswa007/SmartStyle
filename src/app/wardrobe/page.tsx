@@ -1387,25 +1387,25 @@ function WardrobePageContent() {
               role="region"
               aria-label="Smart insights"
             >
-              <div className="bg-gradient-to-r from-violet-50 via-purple-50 to-indigo-50 border border-violet-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-violet-500/10 border border-violet-500/30 rounded-xl overflow-hidden shadow-sm">
                 <button
                   onClick={() => setShowInsights(!showInsights)}
-                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-white/30 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-inset"
+                  className="w-full px-5 py-3 flex items-center justify-between hover:bg-violet-500/10 transition-colors focus:outline-none focus:ring-2 focus:ring-violet-500 focus:ring-inset"
                   aria-expanded={showInsights}
                   aria-controls="insights-content"
                   aria-label={showInsights ? 'Collapse smart insights' : 'Expand smart insights'}
                 >
                   <div className="flex items-center gap-2">
-                    <Zap className="h-4 w-4 text-violet-600" aria-hidden="true" />
-                    <span className="font-semibold text-violet-900">Smart Insights</span>
-                    <Badge variant="secondary" className="bg-violet-100 text-violet-700 text-xs">
+                    <Zap className="h-4 w-4 text-violet-400" aria-hidden="true" />
+                    <span className="font-semibold text-violet-300">Smart Insights</span>
+                    <Badge variant="secondary" className="bg-violet-500/20 text-violet-300 text-xs">
                       {smartInsights.length}
                     </Badge>
                   </div>
                   {showInsights ? (
-                    <ChevronUp className="h-4 w-4 text-violet-600" aria-hidden="true" />
+                    <ChevronUp className="h-4 w-4 text-violet-400" aria-hidden="true" />
                   ) : (
-                    <ChevronDown className="h-4 w-4 text-violet-600" aria-hidden="true" />
+                    <ChevronDown className="h-4 w-4 text-violet-400" aria-hidden="true" />
                   )}
                 </button>
                 
@@ -1422,18 +1422,6 @@ function WardrobePageContent() {
                       <div className="px-5 pb-4 space-y-3">
                         {smartInsights.map((insight, idx) => {
                           const IconComponent = insight.icon;
-                          const colorClasses = {
-                            amber: 'bg-amber-50 border-amber-200 text-violet-900',
-                            rose: 'bg-rose-50 border-rose-200 text-rose-900',
-                            purple: 'bg-purple-50 border-purple-200 text-purple-900',
-                            teal: 'bg-violet-50 border-violet-200 text-violet-900',
-                          };
-                          const iconColors = {
-                            amber: 'text-violet-600',
-                            rose: 'text-rose-600',
-                            purple: 'text-purple-600',
-                            teal: 'text-violet-600',
-                          };
                           
                           return (
                             <motion.div
@@ -1441,14 +1429,14 @@ function WardrobePageContent() {
                               initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, x: -10 }}
                               animate={{ opacity: 1, x: 0 }}
                               transition={prefersReducedMotion ? { duration: 0 } : { delay: idx * 0.1 }}
-                              className={`${colorClasses[insight.color as keyof typeof colorClasses]} border-2 rounded-lg p-3 flex items-start gap-3`}
+                              className="bg-violet-500/10 border-2 border-violet-500/30 rounded-lg p-3 flex items-start gap-3"
                               role="article"
                               aria-label={`${insight.title}: ${insight.description}`}
                             >
-                              <IconComponent className={`h-5 w-5 ${iconColors[insight.color as keyof typeof iconColors]} mt-0.5 flex-shrink-0`} aria-hidden="true" />
+                              <IconComponent className="h-5 w-5 text-violet-400 mt-0.5 flex-shrink-0" aria-hidden="true" />
                               <div className="flex-1 min-w-0">
-                                <p className="font-semibold text-sm">{insight.title}</p>
-                                <p className="text-xs opacity-80 mt-0.5">{insight.description}</p>
+                                <p className="font-semibold text-sm text-violet-300">{insight.title}</p>
+                                <p className="text-xs text-purple-300/80 mt-0.5">{insight.description}</p>
                               </div>
                             </motion.div>
                           );

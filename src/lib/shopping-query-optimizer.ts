@@ -181,6 +181,8 @@ const NOISE_WORDS = new Set([
   'front', 'back', 'flat',
   'wear', 'wearing', 'outfit', 'attire', 'ensemble', 'clothing',
   'wardrobe', 'everyday', 'daily', 'regular',
+  'color', 'colour', 'shade', 'tone', 'hue', 'finish',
+  'material', 'fabric', 'texture',
 ]);
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -210,20 +212,47 @@ function normalizeItemText(rawItem: string): string {
   text = text.replace(/\(\s*#?[0-9A-Fa-f]{6}\s*\)/g, '');
   text = text.replace(/\(\s*hex:\s*#?[0-9A-Fa-f]{6}\s*\)/gi, '');
   text = text.replace(/\s+#[0-9A-Fa-f]{6}\b/g, '');
+  // Also match hex codes without parens at end of a word: "brown#964B00" or standalone "#964B00"
+  text = text.replace(/#[0-9A-Fa-f]{6}\b/g, '');
   
-  // 2. Remove "made of [material]" patterns (redundant since material is already in text)
+  // 2. Remove "made of [material]", "and [material] material", "[material] material" patterns
   text = text.replace(/\bmade\s+of\s+\w+/gi, '');
   text = text.replace(/\bcrafted\s+from\s+\w+/gi, '');
   text = text.replace(/\bin\s+\w+\s+fabric/gi, '');
+  text = text.replace(/\band\s+\w+\s+material\b/gi, '');
+  text = text.replace(/\b(\w+)\s+material\b/gi, '$1');
   
-  // 3. Remove collar/lapel/neckline details (too specific for e-commerce search)
+  // 2b. Remove "with [adjective] [color] color" and "with [color] color" patterns
+  // e.g., "with earthy brown color" → "", "with blue color" → ""
+  text = text.replace(/\bwith\s+[\w-]+\s+[\w-]+\s+colou?r\b/gi, '');
+  text = text.replace(/\bwith\s+[\w-]+\s+colou?r\b/gi, '');
+  // Remove standalone "color" word left behind after hex removal
+  text = text.replace(/\bcolou?r\b/gi, '');
+  
+  // 2c. Remove "and [adjective] [noun]" filler phrases at end
+  // e.g., "and elegant styling", "and formal look"
+  text = text.replace(/\band\s+(elegant|formal|casual|modern|classic|stylish|beautiful|gorgeous)\s+\w+$/gi, '');
+  
+  // 2d. Remove color-qualifying adjectives not in KNOWN_COLORS
+  // e.g., "earthy brown" → "brown", "muted olive" → "olive", "rich burgundy" → "burgundy"
+  const colorQualifiers = [
+    'earthy', 'muted', 'rich', 'vibrant', 'bright', 'pale', 'soft', 'deep',
+    'warm', 'cool', 'vivid', 'subtle', 'faded', 'washed', 'heathered',
+    'electric', 'neon', 'bold', 'neutral', 'natural', 'solid', 'pure',
+  ];
+  const qualifierPattern = new RegExp(`\\b(${colorQualifiers.join('|')})\\s+`, 'gi');
+  text = text.replace(qualifierPattern, '');
+  
+  // 3. Remove collar/lapel/neckline/structural details (too specific for e-commerce search)
   const tailoringDetails = [
     /\bwith\s+a\s+(wingtip|spread|point|button-down|mandarin|club|cutaway)\s+collar/gi,
-    /\b(peak|notch|shawl|lapel)\s+lapel/gi,
-    /\bwith\s+(peak|notch|shawl)\s+lapels?/gi,
+    /\bwith\s+(peak|notch|notched|shawl)\s+lapels?/gi,
+    /\b(peak|notch|notched|shawl|lapel)\s+lapels?/gi,
     /\b(v-neck|crew\s+neck|round\s+neck|boat\s+neck|cowl\s+neck|mock\s+neck)/gi,
     /\bwith\s+a\s+(single|double)\s+button/gi,
     /\b(single|double)-breasted/gi,
+    // Structural details: "and structured shoulders", "with padded shoulders"
+    /\b(and|with)\s+(structured|padded|reinforced|articulated|dropped)\s+(shoulders?|sleeves?|waist|hems?|cuffs?)/gi,
   ];
   
   for (const pattern of tailoringDetails) {
@@ -245,11 +274,17 @@ function normalizeItemText(rawItem: string): string {
   
   // 5. Remove verbose AI phrasing patterns
   const verbosePatterns = [
-    /\bwith\s+(elegant|sophisticated|modern|classic|timeless|perfect|ideal|great|beautiful|clean|sharp|polished)\s+\w+/gi,
+    /\bwith\s+(elegant|sophisticated|modern|classic|timeless|perfect|ideal|great|beautiful|clean|sharp|polished|formal|casual|rich|subtle)\s+\w+/gi,
     /\bfeaturing\s+[^,\.]+/gi,
-    /\b(elegant|sophisticated|modern|classic|timeless|perfect|polished|refined|tailored)\s+(styling|design|look|aesthetic|finish|details?)/gi,
+    /\b(elegant|sophisticated|modern|classic|timeless|perfect|polished|refined|tailored|formal|casual)\s+(styling|design|look|aesthetic|finish|details?|tone|hue)/gi,
     /\s+(for|to)\s+(create|achieve|ensure|provide|give|add|complete)\s+[^,\.]+/gi,
     /\bthat\s+(creates?|adds?|provides?|ensures?)\s+[^,\.]+/gi,
+    // Catch "with [adjective] [noun]" remnants: "with formal styling", "with burgundy tone"
+    /\bwith\s+\w+\s+(styling|design|look|aesthetic|finish|details?|tone|hue|pattern|print|motif)\b/gi,
+    // Catch pattern/print descriptors: "diagonal stripes", "floral print", "checked pattern"
+    /\b(diagonal|horizontal|vertical|geometric|floral|paisley|abstract|subtle|intricate|delicate)\s+(stripes?|print|pattern|design|motif|detailing)\b/gi,
+    // Catch standalone pattern words after other cleanup
+    /\b(stripes?|checks?|plaids?|polka\s*dots?|prints?|motifs?|detailing)\b/gi,
   ];
   
   for (const pattern of verbosePatterns) {
