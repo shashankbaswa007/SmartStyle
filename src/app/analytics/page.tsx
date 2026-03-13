@@ -543,7 +543,9 @@ export default function AnalyticsPage() {
             <CardDescription>We need your account to load personalized insights.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
-            <Link href="/auth"><Button className="w-full">Go to Sign In</Button></Link>
+            <Button asChild className="w-full">
+              <Link href="/auth">Go to Sign In</Link>
+            </Button>
             <Link href="/" className="text-sm text-muted-foreground hover:text-foreground">Back to home</Link>
           </CardContent>
         </Card>
@@ -798,11 +800,11 @@ export default function AnalyticsPage() {
                           <Shirt className="h-5 w-5 text-primary" />
                           <CardTitle className="text-base">Wardrobe Overview</CardTitle>
                         </div>
-                        <Link href="/wardrobe">
-                          <Button variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground">
+                        <Button asChild variant="ghost" size="sm" className="gap-1 text-xs text-muted-foreground">
+                          <Link href="/wardrobe">
                             View Wardrobe <ChevronRight className="h-3 w-3" />
-                          </Button>
-                        </Link>
+                          </Link>
+                        </Button>
                       </div>
                       <CardDescription>Your digital wardrobe at a glance</CardDescription>
                     </CardHeader>
@@ -874,15 +876,9 @@ export default function AnalyticsPage() {
                     <h3 className="text-2xl font-bold mb-2">Ready for More Style Insights?</h3>
                     <p className="text-muted-foreground mb-6">Get personalized recommendations to discover your perfect style</p>
                     <div className="flex gap-4 justify-center flex-wrap">
-                      <Link href="/style-check">
-                        <Button size="lg" className="gap-2"><Sparkles className="h-5 w-5" />Get Style Advice</Button>
-                      </Link>
-                      <Link href="/likes">
-                        <Button size="lg" variant="outline" className="gap-2"><Heart className="h-5 w-5" />View Liked Outfits</Button>
-                      </Link>
-                      <Link href="/wardrobe">
-                        <Button size="lg" variant="outline" className="gap-2"><Shirt className="h-5 w-5" />Manage Wardrobe</Button>
-                      </Link>
+                      <Button asChild size="lg" className="gap-2"><Link href="/style-check"><Sparkles className="h-5 w-5" />Get Style Advice</Link></Button>
+                      <Button asChild size="lg" variant="outline" className="gap-2"><Link href="/likes"><Heart className="h-5 w-5" />View Liked Outfits</Link></Button>
+                      <Button asChild size="lg" variant="outline" className="gap-2"><Link href="/wardrobe"><Shirt className="h-5 w-5" />Manage Wardrobe</Link></Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -904,12 +900,8 @@ export default function AnalyticsPage() {
                   Your analytics will appear here as you explore different styles!
                 </p>
                 <div className="flex gap-4 justify-center flex-wrap">
-                  <Link href="/style-check">
-                    <Button size="lg" className="gap-2"><Sparkles className="h-5 w-5" />Get Your First Recommendation</Button>
-                  </Link>
-                  <Link href="/wardrobe">
-                    <Button size="lg" variant="outline" className="gap-2"><Shirt className="h-5 w-5" />Build Your Wardrobe</Button>
-                  </Link>
+                  <Button asChild size="lg" className="gap-2"><Link href="/style-check"><Sparkles className="h-5 w-5" />Get Your First Recommendation</Link></Button>
+                  <Button asChild size="lg" variant="outline" className="gap-2"><Link href="/wardrobe"><Shirt className="h-5 w-5" />Build Your Wardrobe</Link></Button>
                 </div>
               </div>
             </motion.div>

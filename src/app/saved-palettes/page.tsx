@@ -8,6 +8,16 @@ import { getSavedPalettes, deleteColorPalette, type SavedColorPalette } from '@/
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Trash2, Calendar, Tag, Sparkles, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 
@@ -17,6 +27,7 @@ export default function SavedPalettesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [filterOccasion, setFilterOccasion] = useState<string>('all');
   const [filterSeason, setFilterSeason] = useState<string>('all');
+  const [palettePendingDelete, setPalettePendingDelete] = useState<SavedColorPalette | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -54,10 +65,6 @@ export default function SavedPalettesPage() {
   const handleDelete = async (paletteId: string) => {
     if (!user || !paletteId) return;
 
-    if (!confirm('Are you sure you want to delete this palette?')) {
-      return;
-    }
-
     try {
       const result = await deleteColorPalette(user.uid, paletteId);
       if (result.success) {
@@ -65,6 +72,7 @@ export default function SavedPalettesPage() {
           title: 'Palette Deleted',
           description: 'Color palette removed successfully',
         });
+        setPalettePendingDelete(null);
         loadPalettes();
       } else {
         throw new Error(result.message);
@@ -170,12 +178,12 @@ export default function SavedPalettesPage() {
               <p className="text-muted-foreground mb-6">
                 Start creating and saving your favorite color combinations
               </p>
-              <Link href="/color-match">
-                <Button className="gap-2">
+              <Button asChild className="gap-2">
+                <Link href="/color-match">
                   <Sparkles className="w-4 h-4" />
                   Discover Colors
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           )}
 
@@ -200,7 +208,7 @@ export default function SavedPalettesPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleDelete(palette.id!)}
+                      onClick={() => setPalettePendingDelete(palette)}
                       className="text-red-500 hover:text-red-700 hover:bg-red-50"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -299,6 +307,39 @@ export default function SavedPalettesPage() {
               </Button>
             </div>
           )}
+
+          <AlertDialog
+            open={Boolean(palettePendingDelete)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setPalettePendingDelete(null);
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete saved palette?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {palettePendingDelete
+                    ? `This will permanently remove \"${palettePendingDelete.name}\" from your saved palettes.`
+                    : 'This will permanently remove the selected palette from your saved palettes.'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    if (palettePendingDelete?.id) {
+                      void handleDelete(palettePendingDelete.id);
+                    }
+                  }}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </ProtectedRoute>

@@ -1,6 +1,6 @@
 export default function AuthLoading() {
   return (
-    <main className="relative min-h-screen flex items-center justify-center">
+    <div className="relative min-h-screen flex items-center justify-center">
       <div className="absolute inset-0 -z-10 bg-gradient-to-br from-violet-500/10 via-transparent to-purple-500/10" />
       <div className="w-full max-w-md mx-auto px-4">
         <div className="animate-pulse space-y-6 text-center">
@@ -9,6 +9,6 @@ export default function AuthLoading() {
           <div className="h-12 w-full rounded-xl bg-muted" />
         </div>
       </div>
-    </main>
+    </div>
   );
 }

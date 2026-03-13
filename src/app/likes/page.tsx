@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { auth, db } from '@/lib/firebase';
+import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { motion } from 'framer-motion';
-import { Heart, ShoppingCart, ExternalLink, Sparkles, Trash2, Shirt } from 'lucide-react';
+import { Heart, ShoppingCart, Sparkles, Trash2, Shirt } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -13,7 +13,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { lazy, Suspense } from 'react';
 import dynamic from 'next/dynamic';
 const Particles = dynamic(() => import('@/components/Particles'), { ssr: false });
-const DotGrid = dynamic(() => import('@/components/DotGrid'), { ssr: false });
 const ShinyText = lazy(() => import('@/components/ShinyText'));
 const TextPressure = lazy(() => import('@/components/TextPressure'));
 import { useMounted } from '@/hooks/useMounted';
@@ -178,7 +177,7 @@ export default function LikesPage() {
 
   return (
     <ProtectedRoute>
-      <main className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
+      <div className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
       {/* Particles Background */}
       <div className="absolute inset-0 -z-10" >
         {isMounted && (
@@ -337,7 +336,6 @@ export default function LikesPage() {
                       fill
                       className="object-cover"
                       sizes="(max-width: 768px) 100vw, 33vw"
-                      priority={true}
                     />
                     {/* Like indicator and Remove button */}
                     <div className="absolute top-3 right-3 flex gap-2">
@@ -480,7 +478,7 @@ export default function LikesPage() {
           </motion.div>
         )}
       </div>
-    </main>
+    </div>
     </ProtectedRoute>
   );
 }

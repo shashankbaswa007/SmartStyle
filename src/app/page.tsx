@@ -25,7 +25,7 @@ export default function Home() {
   return (
     <HomePageWrapper>
     <div className="flex flex-col min-h-screen">
-      <main className="flex-grow">
+      <section className="flex-grow">
         {/* 1. Hero Section */}
         <section className="relative h-[80vh] min-h-[400px] sm:min-h-[500px] md:min-h-[600px] flex items-center justify-center text-center">
           <Image
@@ -53,14 +53,15 @@ export default function Home() {
               instant, intelligent feedback and visual recommendations.
             </p>
             <div className="mt-12">
-              <Link href="/style-check">
-                <Button
+              <Button
+                  asChild
                   size="lg"
                   className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30"
                 >
+                <Link href="/style-check">
                   Upload Your Outfit <ArrowRight className="ml-2" />
+                </Link>
                 </Button>
-              </Link>
             </div>
           </div>
         </section>
@@ -191,15 +192,15 @@ export default function Home() {
             </GradientText>
             <FooterText />
             <div className="mt-8">
-              <Link href="/style-check">
-                <Button size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30">
+              <Button asChild size="lg" className="text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30">
+                <Link href="/style-check">
                   Try SmartStyle Now ✨
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           </div>
         </section>
-      </main>
+      </section>
     </div>
     </HomePageWrapper>
   );

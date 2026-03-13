@@ -947,7 +947,7 @@ function WardrobePageContent() {
       >
         Skip to main content
       </a>
-      <main id="main-content" className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8" role="main" aria-label="Wardrobe management">
+      <section id="main-content" className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8" aria-label="Wardrobe management">
         {/* Offline Notification Banner */}
         {!isOnline && (
           <motion.div
@@ -1041,16 +1041,17 @@ function WardrobePageContent() {
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-3 justify-center mt-6 sm:mt-8 px-4 sm:px-0">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Link href={`/wardrobe/suggest${contextMode !== 'all' ? `?context=${contextMode}` : ''}`} className="w-full sm:w-auto">
                     <Button 
+                      asChild
                       size="lg" 
                       className="w-full sm:w-auto bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 gap-2 h-12 sm:h-11 text-base sm:text-sm touch-manipulation active:scale-95"
                       aria-label="Get AI-powered outfit suggestions"
                     >
-                      <Sparkles className="h-5 w-5" aria-hidden="true" />
-                      <span className="truncate">{contextMode !== 'all' ? `${contextMode.charAt(0).toUpperCase() + contextMode.slice(1)} Outfits` : 'Get Outfit Suggestions'}</span>
+                      <Link href={`/wardrobe/suggest${contextMode !== 'all' ? `?context=${contextMode}` : ''}`}>
+                        <Sparkles className="h-5 w-5" aria-hidden="true" />
+                        <span className="truncate">{contextMode !== 'all' ? `${contextMode.charAt(0).toUpperCase() + contextMode.slice(1)} Outfits` : 'Get Outfit Suggestions'}</span>
+                      </Link>
                     </Button>
-                  </Link>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="bg-violet-900 text-white border-violet-700 max-w-xs hidden sm:block">
                   <p>AI creates {contextMode !== 'all' ? `${contextMode} ` : ''}outfits from your wardrobe</p>
@@ -2060,7 +2061,7 @@ function WardrobePageContent() {
             </motion.div>
           )}
         </AnimatePresence>
-      </main>
+      </section>
       </TooltipProvider>
     </ProtectedRoute>
   );

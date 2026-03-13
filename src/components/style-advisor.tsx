@@ -503,149 +503,270 @@ export function StyleAdvisor() {
 
     console.time('colorExtraction');
     
-    const width = canvas.width;
-    const height = canvas.height;
-    const imageData = ctx.getImageData(0, 0, width, height);
+    // ═══════════════════════════════════════════════════════════════════
+    // STAGE 0: Lightweight preprocessing
+    // Downscale → 3×3 Gaussian blur (gray-world applied after skin detect)
+    // ═══════════════════════════════════════════════════════════════════
+    const MAX_DIM = 256;
+    const origW = canvas.width;
+    const origH = canvas.height;
+    const scale = Math.min(1, MAX_DIM / Math.max(origW, origH));
+    const width = Math.round(origW * scale);
+    const height = Math.round(origH * scale);
+
+    // Scale sampling rates proportionally so counts stay consistent
+    const skinSampleRate = Math.max(2, Math.round(12 * scale));
+    const clothingSampleRate = Math.max(2, Math.round(10 * scale));
+    const edgeStride = Math.max(1, Math.round(4 * scale));
+
+    // Downscale via an offscreen canvas for anti-aliased resampling
+    const workCanvas = document.createElement('canvas');
+    workCanvas.width = width;
+    workCanvas.height = height;
+    const workCtx = workCanvas.getContext('2d', { willReadFrequently: true })!;
+    workCtx.drawImage(canvas, 0, 0, width, height);
+    const imageData = workCtx.getImageData(0, 0, width, height);
     const data = imageData.data;
+
+    // 3×3 Gaussian blur (σ≈0.85, kernel: [1 2 1; 2 4 2; 1 2 1] / 16)
+    const blurred = new Uint8ClampedArray(data.length);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const oi = (y * width + x) * 4;
+        if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+          blurred[oi] = data[oi]; blurred[oi + 1] = data[oi + 1];
+          blurred[oi + 2] = data[oi + 2]; blurred[oi + 3] = data[oi + 3];
+          continue;
+        }
+        for (let ch = 0; ch < 3; ch++) {
+          const tl = data[((y-1)*width+(x-1))*4+ch], tc = data[((y-1)*width+x)*4+ch], tr = data[((y-1)*width+(x+1))*4+ch];
+          const ml = data[(y*width+(x-1))*4+ch],                                       mr = data[(y*width+(x+1))*4+ch];
+          const bl_ = data[((y+1)*width+(x-1))*4+ch], bc = data[((y+1)*width+x)*4+ch], br = data[((y+1)*width+(x+1))*4+ch];
+          blurred[oi + ch] = (tl + 2*tc + tr + 2*ml + 4*data[oi+ch] + 2*mr + bl_ + 2*bc + br) >> 4;
+        }
+        blurred[oi + 3] = data[oi + 3];
+      }
+    }
+
+    // Write blurred data back (gray-world applied after skin detection)
+    for (let i = 0; i < data.length; i++) data[i] = blurred[i];
     
-    // STAGE 1: Fast skin detection to locate person
+    // ═══════════════════════════════════════════════════════════════════
+    // STAGE 1: Fast skin detection (preserved voting system)
+    // Runs on blurred-only data so skin thresholds remain accurate.
+    // ═══════════════════════════════════════════════════════════════════
     const skinPixels: { x: number; y: number; r: number; g: number; b: number }[] = [];
-    const skinSampleRate = 12; // Sample every 12th pixel for speed
     
     for (let y = 0; y < height; y += skinSampleRate) {
       for (let x = 0; x < width; x += skinSampleRate) {
         const idx = (y * width + x) * 4;
         const r = data[idx], g = data[idx + 1], b = data[idx + 2];
-        
         if (isSkinColor(r, g, b)) {
           skinPixels.push({ x, y, r, g, b });
         }
       }
     }
     
-    // Calculate person center from skin pixels
+    // ═══════════════════════════════════════════════════════════════════
+    // STAGE 1b: Gray-world color normalization
+    // Applied after skin detection to preserve skin color thresholds,
+    // but before clothing sampling for illumination-stable clustering.
+    // ═══════════════════════════════════════════════════════════════════
+    {
+      let sumR = 0, sumG = 0, sumB = 0;
+      const totalPx = width * height;
+      for (let i = 0; i < data.length; i += 4) {
+        sumR += data[i]; sumG += data[i + 1]; sumB += data[i + 2];
+      }
+      const avgR = sumR / totalPx, avgG = sumG / totalPx, avgB = sumB / totalPx;
+      const avgGray = (avgR + avgG + avgB) / 3;
+      // Clamp scale factors to prevent extreme corrections with colored backgrounds
+      const gwScaleR = avgR > 0 ? Math.min(1.2, Math.max(0.8, avgGray / avgR)) : 1;
+      const gwScaleG = avgG > 0 ? Math.min(1.2, Math.max(0.8, avgGray / avgG)) : 1;
+      const gwScaleB = avgB > 0 ? Math.min(1.2, Math.max(0.8, avgGray / avgB)) : 1;
+      for (let i = 0; i < data.length; i += 4) {
+        data[i]     = Math.min(255, Math.max(0, Math.round(data[i] * gwScaleR)));
+        data[i + 1] = Math.min(255, Math.max(0, Math.round(data[i + 1] * gwScaleG)));
+        data[i + 2] = Math.min(255, Math.max(0, Math.round(data[i + 2] * gwScaleB)));
+      }
+    }
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // STAGE 2: DBSCAN person localization
+    // Clusters skin pixels spatially; largest cluster = person center.
+    // Eliminates background skin-colored objects (furniture, walls).
+    // ═══════════════════════════════════════════════════════════════════
     let personCenterX = width / 2;
     let personCenterY = height / 2;
     
     if (skinPixels.length > 20) {
-      personCenterX = skinPixels.reduce((sum, p) => sum + p.x, 0) / skinPixels.length;
-      personCenterY = skinPixels.reduce((sum, p) => sum + p.y, 0) / skinPixels.length;
+      const eps = Math.min(width, height) * 0.08; // neighbourhood radius ≈ 8% of image
+      const minPts = 3;
+      const labels = new Int16Array(skinPixels.length).fill(-1); // -1 = unvisited
+      let clusterId = 0;
+
+      for (let i = 0; i < skinPixels.length; i++) {
+        if (labels[i] !== -1) continue;
+        // Region query — find neighbours within eps
+        const seeds: number[] = [];
+        for (let j = 0; j < skinPixels.length; j++) {
+          const dx = skinPixels[i].x - skinPixels[j].x;
+          const dy = skinPixels[i].y - skinPixels[j].y;
+          if (dx * dx + dy * dy <= eps * eps) seeds.push(j);
+        }
+        if (seeds.length < minPts) { labels[i] = -2; continue; } // noise
+        labels[i] = clusterId;
+        const queue = [...seeds];
+        let qi = 0;
+        while (qi < queue.length) {
+          const q = queue[qi++];
+          if (labels[q] === -2) labels[q] = clusterId; // noise → border
+          if (labels[q] !== -1 && labels[q] !== clusterId) continue;
+          if (labels[q] === clusterId) continue;
+          labels[q] = clusterId;
+          const qNeighbours: number[] = [];
+          for (let j = 0; j < skinPixels.length; j++) {
+            const dx = skinPixels[q].x - skinPixels[j].x;
+            const dy = skinPixels[q].y - skinPixels[j].y;
+            if (dx * dx + dy * dy <= eps * eps) qNeighbours.push(j);
+          }
+          if (qNeighbours.length >= minPts) {
+            for (const n of qNeighbours) if (labels[n] === -1 || labels[n] === -2) queue.push(n);
+          }
+        }
+        clusterId++;
+      }
+
+      // Find largest cluster and compute its centroid
+      const clusterSizes = new Map<number, { sumX: number; sumY: number; count: number }>();
+      for (let i = 0; i < skinPixels.length; i++) {
+        const cid = labels[i];
+        if (cid < 0) continue;
+        const entry = clusterSizes.get(cid) || { sumX: 0, sumY: 0, count: 0 };
+        entry.sumX += skinPixels[i].x;
+        entry.sumY += skinPixels[i].y;
+        entry.count++;
+        clusterSizes.set(cid, entry);
+      }
+      let bestCluster = { sumX: 0, sumY: 0, count: 0 };
+      for (const entry of clusterSizes.values()) {
+        if (entry.count > bestCluster.count) bestCluster = entry;
+      }
+      if (bestCluster.count > 5) {
+        personCenterX = bestCluster.sumX / bestCluster.count;
+        personCenterY = bestCluster.sumY / bestCluster.count;
+      }
     }
     
-    // STAGE 2: Define person region based on skin location
-    const personRadius = Math.min(width, height) * 0.35; // 35% of image size
-    const bodyStartY = Math.max(0, personCenterY - personRadius * 0.5);
-    const bodyEndY = Math.min(height, personCenterY + personRadius * 1.2);
-    const bodyStartX = Math.max(0, personCenterX - personRadius * 0.8);
-    const bodyEndX = Math.min(width, personCenterX + personRadius * 0.8);
+    // Shift center from face down toward torso for better clothing coverage
+    const personRadius = Math.min(width, height) * 0.35;
+    personCenterY = Math.min(height * 0.85, personCenterY + personRadius * 0.5);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // STAGE 3: Gaussian-weighted CIELab clothing pixel sampling
+    // ═══════════════════════════════════════════════════════════════════
+    const sigma = personRadius * 0.6;
+    const twoSigmaSq = 2 * sigma * sigma;
     
-    // STAGE 3: Build color histogram from PERSON REGION ONLY
-    const colorMap = new Map<string, { count: number; r: number; g: number; b: number }>();
-    const clothingSampleRate = 10; // Every 10th pixel for speed
+    // Scan region around person
+    const bodyStartY = Math.max(0, Math.floor(personCenterY - personRadius * 0.5));
+    const bodyEndY   = Math.min(height, Math.ceil(personCenterY + personRadius * 1.8));
+    const bodyStartX = Math.max(0, Math.floor(personCenterX - personRadius * 0.8));
+    const bodyEndX   = Math.min(width, Math.ceil(personCenterX + personRadius * 0.8));
     
-    // Calculate edge density for texture detection
+    // Edge texture map (preserved from original)
     const edgeStrength = new Uint8Array(width * height);
-    for (let y = 2; y < height - 2; y += 4) {
-      for (let x = 2; x < width - 2; x += 4) {
+    for (let y = 2; y < height - 2; y += edgeStride) {
+      for (let x = 2; x < width - 2; x += edgeStride) {
         const idx = (y * width + x) * 4;
         const gx = Math.abs(data[idx + 4] - data[idx - 4]);
         const gy = Math.abs(data[idx + width * 4] - data[idx - width * 4]);
-        const strength = Math.min(255, gx + gy);
-        edgeStrength[y * width + x] = strength;
+        edgeStrength[y * width + x] = Math.min(255, gx + gy);
       }
+    }
+    
+    // Collect clothing samples in Lab space with Gaussian weights
+    interface LabSample { L: number; a: number; b: number; weight: number; r: number; g: number; bVal: number }
+    const clothingSamples: LabSample[] = [];
+    const MAX_SAMPLES = 2000; // Cap for K-Means performance
+    
+    // Compute average skin Lab for later skin-cluster rejection
+    let skinLabL = 60, skinLabA = 15, skinLabB = 20; // defaults
+    if (skinPixels.length > 30) {
+      const avgR = skinPixels.reduce((s, p) => s + p.r, 0) / skinPixels.length;
+      const avgG = skinPixels.reduce((s, p) => s + p.g, 0) / skinPixels.length;
+      const avgB = skinPixels.reduce((s, p) => s + p.b, 0) / skinPixels.length;
+      try {
+        const skinLab = chroma(avgR, avgG, avgB).lab();
+        skinLabL = skinLab[0]; skinLabA = skinLab[1]; skinLabB = skinLab[2];
+      } catch { /* use defaults */ }
     }
     
     for (let y = bodyStartY; y < bodyEndY; y += clothingSampleRate) {
       for (let x = bodyStartX; x < bodyEndX; x += clothingSampleRate) {
+        if (clothingSamples.length >= MAX_SAMPLES) break;
         const idx = (y * width + x) * 4;
         const r = data[idx], g = data[idx + 1], b = data[idx + 2], a = data[idx + 3];
         
         if (a < 128) continue;
-        if (isSkinColor(r, g, b)) continue; // Skip skin pixels
+        if (isSkinColor(r, g, b)) continue;
         
         const hsv = rgbToHsv(r, g, b);
+        const dx = x - personCenterX;
+        const dy = y - personCenterY;
+        const distSq = dx * dx + dy * dy;
+        const normalizedDist = Math.sqrt(distSq) / personRadius;
         
-        // CRITICAL: Advanced background rejection
-        const distFromCenter = Math.sqrt(
-          Math.pow(x - personCenterX, 2) + Math.pow(y - personCenterY, 2)
-        );
-        const normalizedDist = distFromCenter / personRadius;
-        
-        // Pixels far from person center are likely background
+        // Hard cutoff for far pixels
         if (normalizedDist > 1.2) continue;
         
-        // Multi-layer background filters
-        const isDefinitelyBackground = (
-          // Very bright (white walls, bright backgrounds)
+        // Background rejection (preserved multi-layer filters)
+        const isBackground = (
           (hsv.v > 90 && hsv.s < 15) ||
-          
-          // Very dark (deep shadows, black backgrounds)
           (hsv.v < 8) ||
-          
-          // Very low saturation at image edges (gray/beige walls)
           (hsv.s < 8 && normalizedDist > 0.7) ||
-          
-          // Specific wall colors - RED/ORANGE (the user's problem!)
-          (hsv.h >= 0 && hsv.h <= 35 && hsv.s > 55 && hsv.v > 50 && normalizedDist > 0.6) ||
-          
-          // Yellow/beige walls
-          (hsv.h >= 35 && hsv.h <= 65 && hsv.s > 40 && hsv.v > 65 && normalizedDist > 0.6) ||
-          
-          // Blue walls
+          (hsv.h >= 0 && hsv.h <= 35 && hsv.s > 55 && hsv.v > 50 && normalizedDist > 0.9) ||
+          (hsv.h >= 35 && hsv.h <= 65 && hsv.s > 40 && hsv.v > 65 && normalizedDist > 0.9) ||
           (hsv.h >= 200 && hsv.h <= 230 && hsv.s > 30 && hsv.s < 60 && hsv.v > 65) ||
-          
-          // Green walls
-          (hsv.h >= 100 && hsv.h <= 140 && hsv.s > 35 && hsv.s < 70 && hsv.v > 50 && normalizedDist > 0.6)
+          (hsv.h >= 100 && hsv.h <= 140 && hsv.s > 35 && hsv.s < 70 && hsv.v > 50 && normalizedDist > 0.9)
         );
+        if (isBackground) continue;
         
-        if (isDefinitelyBackground) continue;
-        
-        // Accept clothing colors (including grey/black)
-        const isLikelyClothing = (
+        const isClothing = (
           (hsv.s >= 5 && hsv.s <= 95 && hsv.v >= 12 && hsv.v <= 88) ||
-          // Grey clothing (low sat, mid value, near person center)
           (hsv.s >= 1 && hsv.s <= 15 && hsv.v >= 15 && hsv.v <= 75 && normalizedDist < 0.8)
         );
+        if (!isClothing) continue;
         
-        if (!isLikelyClothing) continue;
-        
-        // Check texture (clothing has texture, walls are flat)
+        // Texture check
         const edgeValue = edgeStrength[y * width + x] || 0;
         const hasTexture = edgeValue > 30;
+        if (!hasTexture && normalizedDist > 1.0) continue;
         
-        // Skip flat colors far from center (likely walls)
-        if (!hasTexture && normalizedDist > 0.7) continue;
+        // Gaussian weight: higher near person center, falls off radially
+        const gaussianWeight = Math.exp(-distSq / twoSigmaSq);
+        const textureBonus = hasTexture ? 1.5 : 1.0;
+        const weight = gaussianWeight * textureBonus;
         
-        // Quantize colors (30 hue bins for better discrimination)
-        const h_bin = Math.round(hsv.h / 12) * 12;
-        const s_bin = Math.round(hsv.s / 15) * 15;
-        const v_bin = Math.round(hsv.v / 15) * 15;
-        const colorKey = `${h_bin},${s_bin},${v_bin}`;
-        
-        // Weight by proximity to person center and texture
-        const proximityWeight = Math.max(1, Math.floor(8 * (1 - normalizedDist)));
-        const textureBonus = hasTexture ? 2 : 1;
-        const weight = proximityWeight * textureBonus;
-        
-        const existing = colorMap.get(colorKey);
-        if (existing) {
-          existing.count += weight;
-          existing.r = (existing.r * existing.count + r * weight) / (existing.count + weight);
-          existing.g = (existing.g * existing.count + g * weight) / (existing.count + weight);
-          existing.b = (existing.b * existing.count + b * weight) / (existing.count + weight);
-        } else {
-          colorMap.set(colorKey, { count: weight, r, g, b });
+        // Convert to CIELab via chroma.js
+        try {
+          const lab = chroma(r, g, b).lab();
+          clothingSamples.push({ L: lab[0], a: lab[1], b: lab[2], weight, r, g, bVal: b });
+        } catch {
+          // Skip invalid pixels
         }
       }
+      if (clothingSamples.length >= MAX_SAMPLES) break;
     }
     
-    // STAGE 4: Determine skin tone
+    // ═══════════════════════════════════════════════════════════════════
+    // STAGE 4: Determine skin tone (preserved)
+    // ═══════════════════════════════════════════════════════════════════
     let skinTone = "medium";
     if (skinPixels.length > 30) {
       const avgR = skinPixels.reduce((sum, p) => sum + p.r, 0) / skinPixels.length;
       const avgG = skinPixels.reduce((sum, p) => sum + p.g, 0) / skinPixels.length;
       const avgB = skinPixels.reduce((sum, p) => sum + p.b, 0) / skinPixels.length;
-      
       const luminance = 0.299 * avgR + 0.587 * avgG + 0.114 * avgB;
       
       if (luminance > 200) skinTone = "very fair";
@@ -656,66 +777,152 @@ export function StyleAdvisor() {
       else skinTone = "dark";
     }
     
-    // STAGE 5: Extract dominant clothing colors with chroma-js enhancements
-    const colorArray = Array.from(colorMap.entries());
-    const totalWeight = colorArray.reduce((sum, [, data]) => sum + data.count, 0);
-    const threshold = totalWeight * 0.03; // Lowered to 3% to capture more colors
+    // ═══════════════════════════════════════════════════════════════════
+    // STAGE 5: K-Means clustering in CIELab space
+    // Replaces histogram-sort with perceptual clustering for more
+    // accurate dominant clothing color extraction.
+    // ═══════════════════════════════════════════════════════════════════
+    const K = Math.min(5, Math.max(2, Math.ceil(clothingSamples.length / 100)));
     
-    // Get more color candidates (up to 20)
-    const candidateColors = colorArray
-      .filter(([, data]) => data.count >= threshold)
-      .sort(([, a], [, b]) => b.count - a.count)
-      .slice(0, 20)
-      .map(([, data]) => ({
-        r: Math.round(data.r),
-        g: Math.round(data.g),
-        b: Math.round(data.b),
-        count: data.count,
-        hex: `#${Math.round(data.r).toString(16).padStart(2, '0')}${Math.round(data.g).toString(16).padStart(2, '0')}${Math.round(data.b).toString(16).padStart(2, '0')}`
-      }));
+    if (clothingSamples.length < 10) {
+      console.timeEnd('colorExtraction');
+      return { skinTone, dressColors: 'neutral tones', colorPalette: [] };
+    }
     
-    // Use chroma-js to ensure color diversity (ΔE distance filtering)
+    // Initialize centroids via K-Means++ for better convergence
+    const centroids: { L: number; a: number; b: number }[] = [];
+    // Pick first centroid randomly (highest-weight sample for stability)
+    const sorted = [...clothingSamples].sort((a, b) => b.weight - a.weight);
+    centroids.push({ L: sorted[0].L, a: sorted[0].a, b: sorted[0].b });
+    
+    for (let c = 1; c < K; c++) {
+      // Compute distance of each sample to nearest existing centroid
+      let totalDistSq = 0;
+      const dists = clothingSamples.map(s => {
+        let minD = Infinity;
+        for (const cent of centroids) {
+          const dL = s.L - cent.L, da = s.a - cent.a, db = s.b - cent.b;
+          minD = Math.min(minD, dL * dL + da * da + db * db);
+        }
+        totalDistSq += minD;
+        return minD;
+      });
+      // Weighted random selection proportional to distance²
+      let threshold = Math.random() * totalDistSq;
+      for (let i = 0; i < dists.length; i++) {
+        threshold -= dists[i];
+        if (threshold <= 0) {
+          centroids.push({ L: clothingSamples[i].L, a: clothingSamples[i].a, b: clothingSamples[i].b });
+          break;
+        }
+      }
+      // Safety: if loop exhausts, pick last
+      if (centroids.length <= c) {
+        const last = clothingSamples[clothingSamples.length - 1];
+        centroids.push({ L: last.L, a: last.a, b: last.b });
+      }
+    }
+    
+    // Run K-Means (max 15 iterations — converges fast on small sample)
+    const assignments = new Uint8Array(clothingSamples.length);
+    for (let iter = 0; iter < 15; iter++) {
+      let changed = false;
+      
+      // Assign each sample to nearest centroid
+      for (let i = 0; i < clothingSamples.length; i++) {
+        const s = clothingSamples[i];
+        let bestD = Infinity, bestC = 0;
+        for (let c = 0; c < centroids.length; c++) {
+          const dL = s.L - centroids[c].L;
+          const da = s.a - centroids[c].a;
+          const db = s.b - centroids[c].b;
+          const d = dL * dL + da * da + db * db;
+          if (d < bestD) { bestD = d; bestC = c; }
+        }
+        if (assignments[i] !== bestC) { assignments[i] = bestC; changed = true; }
+      }
+      
+      if (!changed) break;
+      
+      // Recompute centroids (weighted by Gaussian weight)
+      for (let c = 0; c < centroids.length; c++) {
+        let sumL = 0, sumA = 0, sumB = 0, sumW = 0;
+        for (let i = 0; i < clothingSamples.length; i++) {
+          if (assignments[i] !== c) continue;
+          const w = clothingSamples[i].weight;
+          sumL += clothingSamples[i].L * w;
+          sumA += clothingSamples[i].a * w;
+          sumB += clothingSamples[i].b * w;
+          sumW += w;
+        }
+        if (sumW > 0) {
+          centroids[c].L = sumL / sumW;
+          centroids[c].a = sumA / sumW;
+          centroids[c].b = sumB / sumW;
+        }
+      }
+    }
+    
+    // Compute cluster populations (weighted)
+    const clusterPops = centroids.map(() => 0);
+    for (let i = 0; i < clothingSamples.length; i++) {
+      clusterPops[assignments[i]] += clothingSamples[i].weight;
+    }
+    
+    // Sort clusters by population (largest first)
+    const clusterOrder = centroids.map((c, i) => ({ ...c, pop: clusterPops[i], idx: i }))
+      .sort((a, b) => b.pop - a.pop);
+    
+    // ═══════════════════════════════════════════════════════════════════
+    // STAGE 6: Filter clusters and build palette
+    // Remove skin-tone clusters, then apply deltaE diversity.
+    // ═══════════════════════════════════════════════════════════════════
+    const MIN_SKIN_DELTA_E = 18;
+    const candidateColors: { hex: string; r: number; g: number; b: number; count: number }[] = [];
+    
+    for (const cluster of clusterOrder) {
+      // Reject clusters too close to detected skin tone
+      const dL = cluster.L - skinLabL;
+      const da = cluster.a - skinLabA;
+      const db = cluster.b - skinLabB;
+      const skinDistLab = Math.sqrt(dL * dL + da * da + db * db);
+      if (skinDistLab < MIN_SKIN_DELTA_E) continue;
+      
+      try {
+        const rgb = chroma.lab(cluster.L, cluster.a, cluster.b).rgb();
+        const hex = chroma.lab(cluster.L, cluster.a, cluster.b).hex();
+        candidateColors.push({ hex, r: rgb[0], g: rgb[1], b: rgb[2], count: cluster.pop });
+      } catch { /* skip invalid Lab coords */ }
+    }
+    
+    // DeltaE diversity filtering (preserved)
     const diverseColors: typeof candidateColors = [];
-    const MIN_DELTA_E = 15; // Minimum perceptual difference between colors
+    const MIN_DELTA_E = 15;
     
     for (const candidate of candidateColors) {
       if (diverseColors.length === 0) {
         diverseColors.push(candidate);
         continue;
       }
-      
-      // Check if this color is sufficiently different from all selected colors
       const isDifferent = diverseColors.every(existing => {
         try {
-          const candidateChroma = chroma(candidate.hex);
-          const existingChroma = chroma(existing.hex);
-          const deltaE = chroma.deltaE(candidateChroma, existingChroma);
-          return deltaE >= MIN_DELTA_E;
-        } catch {
-          return true; // If chroma fails, include the color
-        }
+          return chroma.deltaE(chroma(candidate.hex), chroma(existing.hex)) >= MIN_DELTA_E;
+        } catch { return true; }
       });
-      
       if (isDifferent) {
         diverseColors.push(candidate);
-        if (diverseColors.length >= 10) break; // Target 10 colors maximum
+        if (diverseColors.length >= 10) break;
       }
     }
     
-    // Ensure we have at least 8 colors - if not, relax the threshold
-    if (diverseColors.length < 8 && candidateColors.length >= 8) {
-      const relaxedMinDeltaE = 10;
+    // Relax threshold if we have too few colors
+    if (diverseColors.length < 5 && candidateColors.length >= 5) {
       for (const candidate of candidateColors) {
         if (diverseColors.some(c => c.hex === candidate.hex)) continue;
-        
         const isDifferent = diverseColors.every(existing => {
-          try {
-            return chroma.deltaE(chroma(candidate.hex), chroma(existing.hex)) >= relaxedMinDeltaE;
-          } catch {
-            return true;
-          }
+          try { return chroma.deltaE(chroma(candidate.hex), chroma(existing.hex)) >= 10; }
+          catch { return true; }
         });
-        
         if (isDifferent) {
           diverseColors.push(candidate);
           if (diverseColors.length >= 8) break;
@@ -723,18 +930,12 @@ export function StyleAdvisor() {
       }
     }
     
-    // Convert to color names for backward compatibility
-    const dominantColorNames = diverseColors.map(color => {
-      return getColorName(color.r, color.g, color.b);
-    });
-    
-    // Extract hex colors for the palette
+    // Color names for backward compatibility
+    const dominantColorNames = diverseColors.map(c => getColorName(c.r, c.g, c.b));
     const extractedPalette = diverseColors.map(c => c.hex);
-    
-    // Remove duplicates from names
     const uniqueColors = Array.from(new Set(dominantColorNames))
       .filter(color => color !== 'neutral')
-      .slice(0, 10); // Keep up to 10 unique color names
+      .slice(0, 10);
     
     const dressColorsStr = uniqueColors.join(', ');
     
@@ -743,7 +944,7 @@ export function StyleAdvisor() {
     return { 
       skinTone, 
       dressColors: dressColorsStr || 'neutral tones',
-      colorPalette: extractedPalette // NEW: Return hex palette
+      colorPalette: extractedPalette
     };
   };
 

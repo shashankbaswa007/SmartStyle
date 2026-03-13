@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 
 export default function WardrobeLoading() {
   return (
-    <main className="relative min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+    <div className="relative min-h-screen py-12 px-4 sm:px-6 lg:px-8">
       <div className="absolute inset-0 -z-10 bg-gradient-to-br from-violet-500/10 via-transparent to-purple-500/10" />
       <div className="relative z-10 max-w-6xl mx-auto">
         <header className="text-center mb-10">
@@ -28,6 +28,6 @@ export default function WardrobeLoading() {
           ))}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -15,18 +15,18 @@ export default function NotFound() {
           The page you&apos;re looking for doesn&apos;t exist or has been moved.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
-          <Link href="/">
-            <Button size="lg" className="gap-2 w-full sm:w-auto">
+          <Button asChild size="lg" className="gap-2 w-full sm:w-auto">
+            <Link href="/">
               <Home className="h-4 w-4" />
               Go Home
-            </Button>
-          </Link>
-          <Link href="/style-check">
-            <Button size="lg" variant="outline" className="gap-2 w-full sm:w-auto">
+            </Link>
+          </Button>
+          <Button asChild size="lg" variant="outline" className="gap-2 w-full sm:w-auto">
+            <Link href="/style-check">
               <ArrowLeft className="h-4 w-4" />
               Try Style Check
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </div>
     </div>

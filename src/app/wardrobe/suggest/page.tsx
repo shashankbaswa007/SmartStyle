@@ -290,7 +290,7 @@ function WardrobeSuggestPageContent() {
                 <div
                   key={idx}
                   className="w-3.5 h-3.5 rounded-full ring-1 ring-black/10 shadow-sm"
-                  style={{ backgroundColor: color.startsWith('#') ? color : `#${color}` }}
+                  style={{ backgroundColor: color }}
                   title={color}
                 />
               ))}
@@ -303,7 +303,7 @@ function WardrobeSuggestPageContent() {
 
   return (
     <ProtectedRoute>
-      <main className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
+      <div className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
         {/* Background */}
         <div className="absolute inset-0 -z-10">
           {isMounted && (
@@ -415,8 +415,8 @@ function WardrobeSuggestPageContent() {
                 )}
               </Button>
 
-              <Link href={backToWardrobeHref}>
-                <Button variant="outline" className="w-full border-violet-300 text-violet-700 hover:bg-violet-50 gap-2">
+              <Button asChild variant="outline" className="w-full border-violet-300 text-violet-700 hover:bg-violet-50 gap-2">
+                <Link href={backToWardrobeHref}>
                   <ArrowLeft className="h-4 w-4" />
                   Back to Wardrobe
                   {activeContext !== 'all' && (
@@ -424,8 +424,8 @@ function WardrobeSuggestPageContent() {
                       {activeContext}
                     </Badge>
                   )}
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </CardContent>
           </Card>
 
@@ -437,12 +437,12 @@ function WardrobeSuggestPageContent() {
                 {error}
                 {(error.includes('Empty wardrobe') || error.includes('Insufficient items')) && (
                   <div className="mt-3">
-                    <Link href={backToWardrobeHref}>
-                      <Button variant="outline" size="sm" className="bg-white hover:bg-gray-50">
+                    <Button asChild variant="outline" size="sm" className="bg-white hover:bg-gray-50">
+                      <Link href={backToWardrobeHref}>
                         <Shirt className="h-4 w-4 mr-2" />
                         Go to Wardrobe
-                      </Button>
-                    </Link>
+                      </Link>
+                    </Button>
                   </div>
                 )}
               </AlertDescription>
@@ -702,16 +702,16 @@ function WardrobeSuggestPageContent() {
                   We couldn&apos;t create outfit combinations with your current wardrobe items.
                   Try adding more items to get personalized suggestions!
                 </p>
-                <Link href={backToWardrobeHref}>
-                  <Button className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white">
+                <Button asChild className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white">
+                  <Link href={backToWardrobeHref}>
                     Add More Items
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           )}
         </div>
-      </main>
+      </div>
     </ProtectedRoute>
   );
 }

@@ -17,7 +17,7 @@ export default function StyleCheckPage() {
 
   return (
     <ProtectedRoute>
-      <main className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
+      <div className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
       <div className="absolute inset-0 -z-10">
         {isMounted && (
           <>
@@ -69,7 +69,7 @@ export default function StyleCheckPage() {
           <StyleAdvisor />
         </Suspense>
       </div>
-    </main>
+    </div>
     </ProtectedRoute>
   );
 }

@@ -43,7 +43,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { signOut } from '@/lib/auth';
 
 export default function AccountSettingsPage() {
   const { user, loading: authLoading } = useAuth();

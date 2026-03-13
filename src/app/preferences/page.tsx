@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
@@ -62,6 +63,7 @@ interface BlocklistData {
 }
 
 export default function PreferencesPage() {
+  const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
@@ -166,7 +168,7 @@ export default function PreferencesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => window.location.href = '/auth'} className="w-full">
+            <Button onClick={() => router.push('/auth')} className="w-full">
               Sign In
             </Button>
           </CardContent>
@@ -186,7 +188,7 @@ export default function PreferencesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => window.location.href = '/style-check'} className="w-full">
+            <Button onClick={() => router.push('/style-check')} className="w-full">
               Get Started
             </Button>
           </CardContent>
