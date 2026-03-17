@@ -20,6 +20,7 @@ import {
   updateDoc,
   increment,
   writeBatch,
+  FieldValue,
 } from 'firebase/firestore';
 import { userPreferencesCache } from './cache';
 import { FirebaseError } from 'firebase/app';
@@ -185,6 +186,8 @@ export interface UserPreferences {
     min: number;
     max: number;
   };
+  // Co-occurrence matrix for item/color pairing signals (key: 'colorA__colorB')
+  coOccurrence?: { [pair: string]: number };
   // Learning stats
   totalRecommendations: number;
   totalLikes: number;
@@ -428,7 +431,8 @@ export async function submitRecommendationFeedback(
   feedback: RecommendationHistory['feedback']
 ): Promise<void> {
   try {
-    const historyRef = doc(db, 'recommendationHistory', recommendationId);
+    // Fix: recommendations are stored in users/{userId}/recommendationHistory subcollection
+    const historyRef = doc(db, `users/${userId}/recommendationHistory`, recommendationId);
     await updateDoc(historyRef, {
       feedback,
       feedbackAt: Timestamp.now(),
@@ -523,7 +527,8 @@ async function updatePreferencesFromFeedback(
     const prefs = await getUserPreferences(userId);
     if (!prefs) return;
 
-    const historyRef = doc(db, 'recommendationHistory', recommendationId);
+    // Fix: use correct subcollection path (same as saveRecommendation)
+    const historyRef = doc(db, `users/${userId}/recommendationHistory`, recommendationId);
     const historyDoc = await getDoc(historyRef);
     if (!historyDoc.exists()) return;
 
@@ -600,6 +605,22 @@ async function updatePreferencesFromFeedback(
       });
       updates.avoidedStyles = newAvoidedStyles.slice(0, 10);
 
+      // Decrement colorWeights for disliked colors (symmetric to like weight of +2)
+      const colorWeightsForDislike = { ...(prefs.colorWeights || {}) };
+      dislikedColors.forEach(color => {
+        const normalizedColor = color.toLowerCase().trim();
+        colorWeightsForDislike[normalizedColor] = (colorWeightsForDislike[normalizedColor] || 0) - 2;
+      });
+      updates.colorWeights = colorWeightsForDislike;
+
+      // Decrement styleWeights for disliked styles
+      const styleWeightsForDislike = { ...(prefs.styleWeights || {}) };
+      dislikedStyles.forEach(style => {
+        const normalizedStyle = style.toLowerCase().trim();
+        styleWeightsForDislike[normalizedStyle] = (styleWeightsForDislike[normalizedStyle] || 0) - 2;
+      });
+      updates.styleWeights = styleWeightsForDislike;
+
       updates.totalDislikes = prefs.totalDislikes + feedback.disliked.length;
     }
 
@@ -635,17 +656,69 @@ async function updatePreferencesFromFeedback(
       updates.occasionPreferences = occasionPrefs;
     }
 
-    // Calculate accuracy score
-    const totalFeedback = (updates.totalLikes || prefs.totalLikes) + 
-                         (updates.totalDislikes || prefs.totalDislikes);
-    if (totalFeedback > 0) {
-      const likes = updates.totalLikes || prefs.totalLikes;
-      updates.accuracyScore = Math.round((likes / totalFeedback) * 100);
+    // Calculate accuracy score (clamped to 0–100)
+    const totalFeedbackCount = (updates.totalLikes ?? prefs.totalLikes) +
+                               (updates.totalDislikes ?? prefs.totalDislikes);
+    if (totalFeedbackCount > 0) {
+      const likeCount = updates.totalLikes ?? prefs.totalLikes;
+      updates.accuracyScore = Math.max(0, Math.min(100,
+        Math.round((likeCount / totalFeedbackCount) * 100)
+      ));
     }
 
     // Apply updates
     await updateUserPreferences(userId, updates);
   } catch (error) {
+  }
+}
+
+/**
+ * Atomically apply a single interaction signal (like/wear/select) to preferences.
+ * Uses Firestore dot-notation with increment() to avoid read-then-write races.
+ */
+export async function applyInteractionSignal(
+  userId: string,
+  colors: string[],
+  style: string,
+  signal: 'like' | 'wear' | 'select'
+): Promise<void> {
+  const delta = signal === 'select' ? 3 : signal === 'wear' ? 5 : 2;
+  try {
+    const prefsRef = doc(db, 'userPreferences', userId);
+    const atomicUpdates: Record<string, FieldValue> = {};
+    colors.forEach(color => {
+      atomicUpdates[`colorWeights.${color.toLowerCase().trim()}`] = increment(delta);
+    });
+    atomicUpdates[`styleWeights.${style.toLowerCase().trim()}`] = increment(delta);
+    await updateDoc(prefsRef, atomicUpdates);
+    userPreferencesCache.clear();
+  } catch {
+    // Non-critical — silently swallow to avoid breaking the calling flow
+  }
+}
+
+/**
+ * Update co-occurrence matrix for colors that appear together in an accepted outfit.
+ * Stored as flat keys 'colorA__colorB' (sorted) to avoid duplicates.
+ */
+export async function updateCoOccurrence(
+  userId: string,
+  colors: string[]
+): Promise<void> {
+  if (colors.length < 2) return;
+  try {
+    const prefsRef = doc(db, 'userPreferences', userId);
+    const atomicUpdates: Record<string, FieldValue> = {};
+    const sorted = [...colors].map(c => c.toLowerCase().trim()).sort();
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        const key = `coOccurrence.${sorted[i]}__${sorted[j]}`;
+        atomicUpdates[key] = increment(1);
+      }
+    }
+    await updateDoc(prefsRef, atomicUpdates);
+  } catch {
+    // Non-critical
   }
 }
 
@@ -726,6 +799,9 @@ export async function trackOutfitSelection(
     const recentLikedOutfitIds = prefs.recentLikedOutfitIds || [];
     recentLikedOutfitIds.unshift(outfitId);
     const updatedLikedIds = recentLikedOutfitIds.slice(0, 10);
+
+    // Update co-occurrence matrix for this selection (fire-and-forget)
+    updateCoOccurrence(userId, selectedOutfit.colors).catch(() => {});
 
     // Update preferences with denormalized data
     await updateUserPreferences(userId, {

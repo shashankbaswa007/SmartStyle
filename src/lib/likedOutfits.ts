@@ -1,5 +1,5 @@
 import { db, auth } from './firebase';
-import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
 import { logDeletion } from './audit-log';
 
 export interface LikedOutfitData {
@@ -23,6 +23,7 @@ export interface LikedOutfitData {
     myntra: string;
   }>; // Individual item shopping links
   likedAt: number;
+  wornAt?: number;
   recommendationId: string;
 }
 
@@ -121,6 +122,7 @@ export async function saveLikedOutfit(
       },
       itemShoppingLinks: outfitData.itemShoppingLinks || [],
       likedAt: Date.now(),
+      wornAt: outfitData.wornAt || null,
       recommendationId: outfitData.recommendationId || '',
     };
     
@@ -156,6 +158,55 @@ export async function saveLikedOutfit(
       success: false,
       message: userMessage,
       isDuplicate: false,
+    };
+  }
+}
+
+/**
+ * Mark a liked outfit as worn so the UI can reflect the stronger feedback signal.
+ */
+export async function markLikedOutfitAsWorn(
+  userId: string,
+  outfitId: string,
+  wornAt: number = Date.now()
+): Promise<{ success: boolean; message: string }> {
+  try {
+    if (!userId || userId.trim() === '' || userId === 'anonymous') {
+      return {
+        success: false,
+        message: 'Invalid user ID',
+      };
+    }
+
+    if (!outfitId || outfitId.trim() === '') {
+      return {
+        success: false,
+        message: 'Invalid outfit ID',
+      };
+    }
+
+    const outfitRef = doc(db, 'users', userId, 'likedOutfits', outfitId);
+    await updateDoc(outfitRef, { wornAt });
+
+    return {
+      success: true,
+      message: 'Outfit marked as worn',
+    };
+  } catch (error) {
+    let userMessage = 'Failed to mark outfit as worn';
+    if (error && typeof error === 'object' && 'code' in error) {
+      if (error.code === 'permission-denied') {
+        userMessage = 'Permission denied. Please sign in again.';
+      } else if (error.code === 'not-found') {
+        userMessage = 'Outfit not found';
+      } else if (error.code === 'unavailable') {
+        userMessage = 'Database temporarily unavailable. Please try again.';
+      }
+    }
+
+    return {
+      success: false,
+      message: userMessage,
     };
   }
 }

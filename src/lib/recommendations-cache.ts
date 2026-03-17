@@ -55,13 +55,15 @@ export function generateRequestHash(params: {
   season?: string;
   preferences?: any;
   wardrobeItemIds?: string[];
+  preferenceUpdatedAt?: string;
 }): string {
   const hashData = [
     params.userId,
     params.occasion || '',
     params.season || '',
     JSON.stringify(params.preferences || {}),
-    (params.wardrobeItemIds || []).sort().join(',')
+    (params.wardrobeItemIds || []).sort().join(','),
+    params.preferenceUpdatedAt || ''
   ].join('|');
   
   return simpleHash(hashData);

@@ -17,10 +17,11 @@ const ShinyText = lazy(() => import('@/components/ShinyText'));
 const TextPressure = lazy(() => import('@/components/TextPressure'));
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { getLikedOutfits, removeLikedOutfit } from '@/lib/likedOutfits';
+import { getLikedOutfits, markLikedOutfitAsWorn, removeLikedOutfit } from '@/lib/likedOutfits';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import Image from 'next/image';
+import { updatePreferencesFromWear } from '@/lib/preference-engine';
 
 interface LikedOutfit {
   id: string;
@@ -43,6 +44,7 @@ interface LikedOutfit {
     myntra: string;
   }>;
   likedAt: number;
+  wornAt?: number;
 }
 
 const containerVariants = {
@@ -75,6 +77,7 @@ export default function LikesPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [markingWornId, setMarkingWornId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -155,6 +158,59 @@ export default function LikesPage() {
       setLikedOutfits([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getCurrentSeason = (): 'summer' | 'winter' | 'monsoon' => {
+    const month = new Date().getMonth() + 1;
+    if (month >= 6 && month <= 9) return 'monsoon';
+    if (month >= 11 || month <= 2) return 'winter';
+    return 'summer';
+  };
+
+  const handleMarkAsWorn = async (outfit: LikedOutfit) => {
+    if (!userId || !outfit.id || outfit.wornAt) return;
+
+    setMarkingWornId(outfit.id);
+    try {
+      const season = getCurrentSeason();
+      const prefResult = await updatePreferencesFromWear(userId, {
+        colorPalette: outfit.colorPalette,
+        items: outfit.items,
+        styleType: outfit.styleType,
+        occasion: outfit.occasion,
+        description: outfit.description,
+        title: outfit.title,
+      }, {
+        occasion: outfit.occasion || 'casual',
+        season,
+      });
+
+      if (!prefResult.success) {
+        throw new Error(prefResult.message || 'Failed to update preferences');
+      }
+
+      const wearResult = await markLikedOutfitAsWorn(userId, outfit.id);
+      if (!wearResult.success) {
+        throw new Error(wearResult.message || 'Failed to save worn state');
+      }
+
+      setLikedOutfits(prev => prev.map(item =>
+        item.id === outfit.id ? { ...item, wornAt: Date.now() } : item
+      ));
+
+      toast({
+        title: 'Marked as worn',
+        description: `We'll use ${outfit.title} as a strong preference signal for future recommendations.`,
+      });
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Update failed',
+        description: error instanceof Error ? error.message : 'Failed to mark outfit as worn',
+      });
+    } finally {
+      setMarkingWornId(null);
     }
   };
 
@@ -471,6 +527,22 @@ export default function LikesPage() {
 
                     
                     {/* Overall shopping links removed per request */}
+
+                    <div className="pt-4 mt-4 border-t border-border/20">
+                      <Button
+                        onClick={() => handleMarkAsWorn(outfit)}
+                        disabled={Boolean(outfit.wornAt) || markingWornId === outfit.id}
+                        className={`w-full gap-2 ${outfit.wornAt ? 'bg-emerald-600 hover:bg-emerald-600 text-white' : ''}`}
+                        variant={outfit.wornAt ? 'default' : 'outline'}
+                      >
+                        <Shirt className="w-4 h-4" />
+                        {markingWornId === outfit.id
+                          ? 'Saving...'
+                          : outfit.wornAt
+                          ? 'Worn ✓'
+                          : 'I Wore This'}
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>

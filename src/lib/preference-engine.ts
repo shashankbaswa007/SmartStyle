@@ -659,20 +659,122 @@ export async function getComprehensivePreferences(userId: string): Promise<Compr
 }
 
 // ============================================
+// WEIGHT DECAY
+// ============================================
+
+/**
+ * Return user preferences with time-based weight decay applied.
+ * Weights decay by 10% per week (factor 0.90). Entries below 0.1 are pruned.
+ * This is a lazy read-time decay — does NOT write back to Firestore.
+ */
+export function getPreferencesWithDecay(
+  prefs: { colorWeights?: Record<string, number>; styleWeights?: Record<string, number>; updatedAt?: { toDate: () => Date } },
+  now: Date = new Date()
+): { colorWeights: Record<string, number>; styleWeights: Record<string, number> } {
+  const DECAY_RATE = 0.90; // 10% per week
+  const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+
+  let weeksElapsed = 0;
+  if (prefs.updatedAt) {
+    const updatedAt = prefs.updatedAt.toDate();
+    weeksElapsed = Math.max(0, (now.getTime() - updatedAt.getTime()) / MS_PER_WEEK);
+  }
+
+  const decayFactor = Math.pow(DECAY_RATE, weeksElapsed);
+
+  function applyDecay(weights: Record<string, number>): Record<string, number> {
+    const result: Record<string, number> = {};
+    for (const [key, val] of Object.entries(weights)) {
+      const decayed = val * decayFactor;
+      if (Math.abs(decayed) >= 0.1) {
+        result[key] = decayed;
+      }
+    }
+    return result;
+  }
+
+  return {
+    colorWeights: applyDecay(prefs.colorWeights || {}),
+    styleWeights: applyDecay(prefs.styleWeights || {}),
+  };
+}
+
+// ============================================
 // HELPER FUNCTIONS
 // ============================================
 
 function normalizeColorToHex(color: string): string {
-  if (color.startsWith('#')) return color.toUpperCase();
-  
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) return color.toUpperCase();
+
+  const lower = color.toLowerCase().trim();
+
+  // Full 140+ color fashion database (covers all common AI-generated color names)
   const colorMap: Record<string, string> = {
-    'black': '#000000', 'white': '#FFFFFF', 'gray': '#808080', 'red': '#FF0000',
-    'blue': '#0000FF', 'green': '#008000', 'yellow': '#FFFF00', 'orange': '#FFA500',
-    'purple': '#800080', 'pink': '#FFC0CB', 'brown': '#A52A2A', 'navy': '#000080',
-    'beige': '#F5F5DC', 'cream': '#FFFDD0', 'coral': '#FF7F50',
+    // Basics
+    'black': '#000000', 'white': '#FFFFFF', 'gray': '#808080', 'grey': '#808080',
+    'red': '#FF0000', 'blue': '#0000FF', 'green': '#008000', 'yellow': '#FFFF00',
+    'orange': '#FFA500', 'purple': '#800080', 'pink': '#FFC0CB', 'brown': '#A52A2A',
+    // Fashion neutrals
+    'navy': '#000080', 'beige': '#F5F5DC', 'cream': '#FFFDD0', 'ivory': '#FFFFF0',
+    'khaki': '#C3B091', 'tan': '#D2B48C', 'taupe': '#483C32', 'camel': '#C19A6B',
+    'sand': '#C2B280', 'wheat': '#F5DEB3', 'champagne': '#F7E7CE', 'mushroom': '#ADA397',
+    'charcoal': '#36454F', 'slate': '#708090', 'pewter': '#96A8A1', 'ash': '#B2BEB5',
+    'silver': '#C0C0C0', 'graphite': '#383428', 'smoke': '#738276', 'fog': '#DCDCDC',
+    // Reds & pinks
+    'coral': '#FF7F50', 'salmon': '#FA8072', 'peach': '#FFE5B4', 'blush': '#DE5D83',
+    'rose': '#FF007F', 'burgundy': '#800020', 'maroon': '#800000', 'crimson': '#DC143C',
+    'scarlet': '#FF2400', 'rust': '#B7410E', 'terracotta': '#E2725B', 'sienna': '#A0522D',
+    'mahogany': '#C04000', 'chestnut': '#954535', 'brick': '#CB4154', 'vermillion': '#E34234',
+    // Pinks & purples
+    'fuchsia': '#FF00FF', 'magenta': '#FF00FF', 'hot pink': '#FF69B4',
+    'deep pink': '#FF1493', 'light pink': '#FFB6C1', 'baby pink': '#F4C2C2',
+    'lilac': '#C8A2C8', 'lavender': '#E6E6FA', 'plum': '#DDA0DD',
+    'violet': '#EE82EE', 'orchid': '#DA70D6', 'mauve': '#E0B0FF',
+    'wisteria': '#C9A0DC', 'heather': '#B7A8C7', 'thistle': '#D8BFD8',
+    'amethyst': '#9966CC', 'indigo': '#4B0082', 'periwinkle': '#CCCCFF',
+    // Blues
+    'sky blue': '#87CEEB', 'baby blue': '#89CFF0', 'powder blue': '#B0E0E6',
+    'cobalt': '#0047AB', 'royal blue': '#4169E1', 'sapphire': '#0F52BA',
+    'cerulean': '#007BA7', 'azure': '#007FFF', 'teal': '#008080',
+    'midnight blue': '#191970', 'steel blue': '#4682B4', 'denim': '#1560BD',
+    'cornflower': '#6495ED', 'aqua': '#00FFFF', 'cyan': '#00FFFF',
+    'turquoise': '#40E0D0', 'aquamarine': '#7FFFD4',
+    // Greens
+    'emerald': '#50C878', 'jade': '#00A86B', 'forest green': '#228B22',
+    'hunter green': '#355E3B', 'olive': '#808000', 'sage': '#9DC183',
+    'mint': '#98FF98', 'mint green': '#98FF98', 'seafoam': '#93E9BE',
+    'lime': '#BFFF00', 'chartreuse': '#7FFF00', 'avocado': '#568203',
+    'moss': '#8A9A5B', 'pine': '#01796F', 'celadon': '#ACE1AF',
+    'pistachio': '#93C572', 'bottle green': '#006A4E',
+    // Warm colors
+    'mustard': '#FFDB58', 'gold': '#FFD700', 'amber': '#FFBF00',
+    'honey': '#EB9605', 'lemon': '#FFF44F', 'canary': '#FFFF99',
+    'butterscotch': '#E39842', 'caramel': '#AF6E4D', 'cinnamon': '#D2691E',
+    'ochre': '#CC7722', 'bronze': '#CD7F32', 'copper': '#B87333',
+    'cognac': '#9A463D', 'tangerine': '#F28500', 'apricot': '#FBCEB1',
+    // Browns & earth tones
+    'chocolate': '#7B3F00', 'coffee': '#6F4E37', 'espresso': '#4E312D',
+    'mocha': '#967969', 'umber': '#635147',
+    // Pastels
+    'misty rose': '#FFE4E1', 'lemon chiffon': '#FFFACD', 'alice blue': '#F0F8FF',
+    'honeydew': '#F0FFF0', 'seashell': '#FFF5EE', 'peach puff': '#FFDAB9',
+    // Whites
+    'snow': '#FFFAFA', 'alabaster': '#F2F0E6', 'porcelain': '#F4EDE4',
+    'cloud': '#F5F5F5', 'pearl': '#EAE0C8', 'dove': '#D3D3D3',
+    // Jewel tones
+    'ruby': '#E0115F', 'garnet': '#733635', 'topaz': '#FFC87C',
+    'citrine': '#E4D00A', 'onyx': '#353839', 'opal': '#A8C3BC',
   };
 
-  return colorMap[color.toLowerCase()] || '#808080';
+  // Exact match first
+  if (colorMap[lower]) return colorMap[lower];
+
+  // Partial match — handles "dusty rose", "deep navy", "muted sage", etc.
+  const partialMatch = Object.entries(colorMap).find(
+    ([name]) => lower.includes(name) || name.includes(lower)
+  );
+
+  return partialMatch ? partialMatch[1] : '#808080';
 }
 
 function getColorSaturation(hex: string): number {

@@ -24,6 +24,32 @@ import type { ComprehensivePreferences } from './preference-engine';
 import type { Blocklists, BlocklistItem, TemporaryBlockItem } from './blocklist-manager';
 
 // ============================================
+// STYLE ADJACENCY GRAPH
+// Enables partial match credit for semantically related styles.
+// Prevents "business casual" from scoring 0 against a "smart casual" preference.
+// ============================================
+
+const STYLE_ADJACENCY: Record<string, string[]> = {
+  'casual': ['streetwear', 'relaxed', 'everyday', 'smart casual', 'sporty', 'weekend'],
+  'formal': ['business', 'professional', 'elegant', 'classic', 'office', 'corporate'],
+  'smart casual': ['business casual', 'casual', 'polished', 'semi-formal', 'neat'],
+  'minimalist': ['clean', 'modern', 'neutral', 'simple', 'monochrome', 'understated'],
+  'bohemian': ['ethnic', 'free-spirited', 'artistic', 'vintage', 'eclectic', 'boho'],
+  'streetwear': ['urban', 'casual', 'edgy', 'sporty', 'hip-hop', 'contemporary'],
+  'classic': ['traditional', 'preppy', 'formal', 'timeless', 'heritage', 'refined'],
+  'romantic': ['feminine', 'floral', 'soft', 'chic', 'delicate', 'whimsical'],
+  'vintage': ['retro', 'bohemian', 'classic', 'antique', 'nostalgic', 'old-school'],
+  'sporty': ['athletic', 'casual', 'active', 'streetwear', 'performance'],
+  'ethnic': ['traditional', 'cultural', 'bohemian', 'festive', 'fusion'],
+  'preppy': ['classic', 'formal', 'collegiate', 'polished', 'smart casual'],
+  'edgy': ['streetwear', 'grunge', 'punk', 'urban', 'dark', 'bold'],
+  'chic': ['elegant', 'sophisticated', 'polished', 'feminine', 'modern'],
+  'contemporary': ['modern', 'minimalist', 'current', 'trendy', 'urban'],
+  'elegant': ['formal', 'sophisticated', 'chic', 'refined', 'graceful'],
+  'fusion': ['ethnic', 'contemporary', 'eclectic', 'mixed'],
+};
+
+// ============================================
 // TYPE DEFINITIONS
 // ============================================
 
@@ -154,6 +180,8 @@ export function calculateOutfitMatchScore(
 
 /**
  * Calculate color match score (0-100)
+ * Uses max-normalization so scores are relative to the user's strongest preference,
+ * preventing all frequently-seen colors from scoring 100.
  */
 function calculateColorMatch(
   outfitColors: string[],
@@ -161,65 +189,75 @@ function calculateColorMatch(
 ): number {
   if (outfitColors.length === 0) return 50; // Neutral if no colors
 
-  const favoriteColors = preferences.colors.favoriteColors.map(c => c.name.toLowerCase());
+  const favoriteColors = preferences.colors.favoriteColors;
   const dislikedColors = preferences.colors.dislikedColors.map(c => c.name.toLowerCase());
 
+  // Max-normalize: find the highest weight to scale all scores against it
+  const maxWeight = Math.max(...favoriteColors.map(c => c.weight), 1);
+
   let matchPoints = 0;
-  let totalPoints = outfitColors.length * 100;
 
   outfitColors.forEach(color => {
     const normalizedColor = color.toLowerCase().trim();
-    
+
     // Check favorite colors
-    const favoriteMatch = favoriteColors.find(fav => 
-      normalizedColor.includes(fav) || fav.includes(normalizedColor)
+    const favMatch = favoriteColors.find(fav =>
+      normalizedColor.includes(fav.name.toLowerCase()) ||
+      fav.name.toLowerCase().includes(normalizedColor) ||
+      normalizedColor === fav.hex.toLowerCase()
     );
-    
-    if (favoriteMatch) {
-      const colorPref = preferences.colors.favoriteColors.find(c => 
-        c.name.toLowerCase() === favoriteMatch
-      );
-      matchPoints += colorPref ? Math.min(colorPref.weight * 10, 100) : 80;
-    }
-    // Check disliked colors
-    else if (dislikedColors.some(dis => normalizedColor.includes(dis) || dis.includes(normalizedColor))) {
-      matchPoints += 20; // Low score for disliked colors
-    }
-    // Neutral color
-    else {
-      matchPoints += 50;
+
+    if (favMatch) {
+      // Normalized score: top-weight color = 95, others proportionally lower
+      matchPoints += Math.round((favMatch.weight / maxWeight) * 85) + 10;
+    } else if (dislikedColors.some(dis =>
+      normalizedColor.includes(dis) || dis.includes(normalizedColor)
+    )) {
+      matchPoints += 10; // Hard penalty for explicitly disliked colors
+    } else {
+      matchPoints += 50; // Truly neutral color
     }
   });
 
-  return Math.min(100, Math.round((matchPoints / totalPoints) * 100));
+  return Math.max(0, Math.min(100, Math.round(matchPoints / outfitColors.length)));
 }
 
 /**
  * Calculate style match score (0-100)
+ * Uses the STYLE_ADJACENCY graph so related styles receive partial credit
+ * instead of scoring as completely unrelated (50).
  */
 function calculateStyleMatch(
   outfitStyle: string,
   preferences: ComprehensivePreferences
 ): number {
+  if (preferences.styles.topStyles.length === 0) return 50;
+
   const normalizedStyle = outfitStyle.toLowerCase().trim();
-  
-  // Check if style matches top preferences
-  const styleMatch = preferences.styles.topStyles.find(s => 
-    normalizedStyle.includes(s.name.toLowerCase()) || s.name.toLowerCase().includes(normalizedStyle)
+  const maxWeight = Math.max(...preferences.styles.topStyles.map(s => s.weight), 1);
+
+  // Direct match — highest score, proportionally scaled
+  const directMatch = preferences.styles.topStyles.find(s =>
+    normalizedStyle.includes(s.name.toLowerCase()) ||
+    s.name.toLowerCase().includes(normalizedStyle)
   );
-
-  if (styleMatch) {
-    // Higher weight = better match
-    return Math.min(100, Math.round(styleMatch.weight * 10));
+  if (directMatch) {
+    return Math.round((directMatch.weight / maxWeight) * 85) + 10;
   }
 
-  // Check if it's a related style
-  const relatedKeywords = ['casual', 'formal', 'smart', 'elegant', 'modern', 'classic'];
-  if (relatedKeywords.some(kw => normalizedStyle.includes(kw))) {
-    return 60; // Neutral score for common styles
+  // Adjacent match — 75% of direct match credit
+  for (const pref of preferences.styles.topStyles) {
+    const prefName = pref.name.toLowerCase();
+    const adjacent = STYLE_ADJACENCY[prefName] || [];
+    const isAdjacent = adjacent.some(adj =>
+      normalizedStyle.includes(adj) || adj.includes(normalizedStyle)
+    );
+    if (isAdjacent) {
+      return Math.round(((pref.weight / maxWeight) * 85 + 10) * 0.75);
+    }
   }
 
-  return 50; // Default neutral score
+  return 40; // Unrelated style — slightly below neutral
 }
 
 /**
@@ -781,3 +819,76 @@ export async function detectPatternLock(
     };
   }
 }
+
+// ============================================
+// UCB1 EXPLORATION ENGINE
+// ============================================
+
+export interface StyleArmStats {
+  style: string;
+  totalShown: number;   // How many times this style was presented
+  totalLiked: number;   // How many times user liked it
+}
+
+/**
+ * UCB1 (Upper Confidence Bound) exploration target selection.
+ *
+ * Balances exploitation (preferred styles) with exploration (under-tried styles).
+ * Returns the style with the highest UCB1 score — either because it was rarely shown
+ * (high uncertainty bonus) or because it has a high like rate (high reward).
+ *
+ * Formula: ucb1 = likeRate + sqrt(2 * ln(totalRounds) / timesShown)
+ */
+export function getExplorationTarget(
+  arms: StyleArmStats[],
+  candidateStyles: string[]
+): string | null {
+  if (arms.length === 0 || candidateStyles.length === 0) return null;
+
+  const totalRounds = arms.reduce((sum, a) => sum + a.totalShown, 0);
+  if (totalRounds === 0) {
+    // Cold start: pick the first candidate not yet shown
+    const notShown = candidateStyles.find(s => !arms.find(a => a.style === s));
+    return notShown ?? candidateStyles[0];
+  }
+
+  let bestStyle: string | null = null;
+  let bestScore = -Infinity;
+
+  for (const style of candidateStyles) {
+    const arm = arms.find(a => a.style === style);
+    if (!arm || arm.totalShown === 0) {
+      // Never shown — highest priority (infinite UCB1)
+      return style;
+    }
+    const likeRate = arm.totalLiked / arm.totalShown;
+    const ucb1 = likeRate + Math.sqrt((2 * Math.log(totalRounds)) / arm.totalShown);
+    if (ucb1 > bestScore) {
+      bestScore = ucb1;
+      bestStyle = style;
+    }
+  }
+
+  return bestStyle;
+}
+
+/**
+ * Update per-style arm statistics after an exploration round.
+ * Call with liked=true when user interacts positively with the shown style.
+ */
+export function updateExplorationStats(
+  arms: StyleArmStats[],
+  shownStyle: string,
+  liked: boolean
+): StyleArmStats[] {
+  const updated = arms.map(a => ({ ...a })); // shallow clone
+  const existing = updated.find(a => a.style === shownStyle);
+  if (existing) {
+    existing.totalShown += 1;
+    if (liked) existing.totalLiked += 1;
+  } else {
+    updated.push({ style: shownStyle, totalShown: 1, totalLiked: liked ? 1 : 0 });
+  }
+  return updated;
+}
+

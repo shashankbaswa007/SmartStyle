@@ -1567,6 +1567,7 @@ export function StyleAdvisor() {
                   imageSources={imageSources}
                   recommendationId={recommendationId}
                   gender={lastAnalysisRequest?.gender}
+                  detectedDressColors={lastAnalysisRequest?.dressColors || extractedData?.dressColors}
                 />
               </CardContent>
               <CardFooter className="flex flex-col md:flex-row gap-4 p-6 bg-primary/20">

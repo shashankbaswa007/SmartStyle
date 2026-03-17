@@ -29,6 +29,7 @@ interface StyleAdvisorResultsProps {
   imageSources?: ('gemini' | 'pollinations' | 'placeholder')[];
   recommendationId: string | null;
   gender?: string; // Add gender for better shopping link results
+  detectedDressColors?: string;
   // NEW: Enhanced shopping links from structured analysis
   enhancedShoppingLinks?: ShoppingLinkResult[];
 }
@@ -363,12 +364,48 @@ const itemVariants = {
 
 const cardClasses = "bg-card/60 dark:bg-card/40 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl overflow-hidden";
 
+const neutralColors = new Set([
+  'black', 'white', 'gray', 'grey', 'beige', 'cream', 'ivory', 'tan', 'taupe', 'navy',
+]);
+
+function parseDetectedColors(detectedDressColors?: string): string[] {
+  if (!detectedDressColors) return [];
+  return detectedDressColors
+    .split(',')
+    .map(c => c.trim())
+    .filter(Boolean)
+    .filter((value, index, arr) => arr.findIndex(v => v.toLowerCase() === value.toLowerCase()) === index)
+    .slice(0, 5);
+}
+
+function buildColorCombinationInsight(colors: string[]): string {
+  if (colors.length === 0) {
+    return 'Your outfit uses a balanced palette. Let us refine it into sharper combinations for your next looks.';
+  }
+
+  if (colors.length === 1) {
+    return `You are using a focused monochrome base with ${colors[0]}. This gives a clean foundation and makes texture or accessories stand out.`;
+  }
+
+  const neutralCount = colors.filter(c => neutralColors.has(c.toLowerCase())).length;
+  const statement = neutralCount >= 1
+    ? 'You are pairing neutrals with accent shades, which keeps the look grounded while still adding personality.'
+    : 'You are combining multiple statement shades, which creates a bold and expressive visual identity.';
+
+  if (colors.length === 2) {
+    return `${statement} The two-color mix is easy to style and reads cohesive in most occasions.`;
+  }
+
+  return `${statement} The layered palette adds depth, and the recommendations below build on this harmony with more polished combinations.`;
+}
+
 export function StyleAdvisorResults({
   analysisResult,
   generatedImageUrls,
   imageSources = [],
   recommendationId,
   gender,
+  detectedDressColors,
   enhancedShoppingLinks,
 }: StyleAdvisorResultsProps) {
   const [userId, setUserId] = useState<string | null>(null);
@@ -382,6 +419,9 @@ export function StyleAdvisorResults({
   const [enrichedOutfits, setEnrichedOutfits] = useState(analysisResult.outfitRecommendations);
   const [loadingLinks, setLoadingLinks] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const detectedColors = parseDetectedColors(detectedDressColors);
+  const colorCombinationInsight = buildColorCombinationInsight(detectedColors);
+  const suggestedAccentColors = analysisResult.colorSuggestions.slice(0, 3);
   
   // Track per-image loading state: 'loading' | 'loaded' | 'error' | 'placeholder'
   const [imageStates, setImageStates] = useState<Map<number, 'loading' | 'loaded' | 'error' | 'placeholder'>>(new Map());
@@ -825,9 +865,56 @@ export function StyleAdvisorResults({
         <h2 className="text-3xl md:text-4xl font-headline font-bold text-foreground flex items-center justify-center gap-3">
           <Sparkles className="w-8 h-8 text-accent" /> Your Style Analysis
         </h2>
-        
-        <p className="mt-4 text-muted-foreground">{analysisResult.feedback}</p>
       </header>
+
+      <motion.div variants={itemVariants} className={cardClasses}>
+        <div className="p-6 space-y-4">
+          <h3 className="font-bold text-xl text-foreground flex items-center gap-2">
+            <Palette className="text-accent" /> Your Current Color Combination
+          </h3>
+
+          {detectedColors.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {detectedColors.map((color, index) => (
+                <span
+                  key={`${color}-${index}`}
+                  className="inline-flex items-center rounded-full border border-border/30 bg-muted/40 px-3 py-1 text-xs font-semibold text-foreground"
+                >
+                  {color}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <p className="text-muted-foreground">{colorCombinationInsight}</p>
+          <p className="text-muted-foreground">{analysisResult.feedback}</p>
+
+          {suggestedAccentColors.length > 0 && (
+            <div className="rounded-xl border border-border/20 bg-accent/5 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
+                Quick Upgrade Colors To Try
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {suggestedAccentColors.map((color, idx) => (
+                  <button
+                    key={`${color.name}-${idx}`}
+                    onClick={() => {
+                      navigator.clipboard?.writeText(color.hex);
+                      toast({ title: 'Copied!', description: `${color.hex} copied to clipboard`, duration: 1500 });
+                    }}
+                    className="inline-flex items-center gap-2 rounded-full border border-border/30 bg-background/70 px-2.5 py-1 text-xs hover:bg-background transition-colors"
+                    title={`${color.name} (${color.hex})`}
+                  >
+                    <span className="inline-block w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: color.hex }} />
+                    <span className="font-medium text-foreground">{color.name}</span>
+                    <span className="text-muted-foreground">{color.hex}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
       
       <Separator />
 
