@@ -37,7 +37,7 @@ interface ProcessingStep {
 const genders = [
   { value: "male", label: "Male" },
   { value: "female", label: "Female" },
-  { value: "neutral", label: "Neutral" },
+  { value: "unisex", label: "Unisex" },
 ];
 
 const formSchema = z.object({

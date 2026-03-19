@@ -10,6 +10,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from 'firebase/auth';
 import { onAuthChange } from '@/lib/auth';
+import { logger } from '@/lib/logger';
 
 interface AuthContextType {
   user: User | null;
@@ -29,19 +30,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
+    const syncSession = async (user: User | null) => {
+      try {
+        if (user) {
+          const idToken = await user.getIdToken();
+          await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ idToken }),
+            credentials: 'include',
+          });
+        } else {
+          await fetch('/api/auth/session', {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+        }
+      } catch (error) {
+        logger.warn('Failed to sync auth session cookie', error);
+      }
+    };
+
     // Subscribe to auth state changes
     const unsubscribe = onAuthChange((user) => {
       setUser(user);
       setLoading(false);
       setInitialized(true);
 
-      if (typeof document !== 'undefined') {
-        if (user) {
-          document.cookie = 'smartstyle-auth=1; Path=/; Max-Age=2592000; SameSite=Lax; Secure';
-        } else {
-          document.cookie = 'smartstyle-auth=; Path=/; Max-Age=0; SameSite=Lax; Secure';
-        }
-      }
+      // Keep a secure HttpOnly session cookie in sync for middleware checks.
+      void syncSession(user);
     });
 
     // Cleanup subscription on unmount

@@ -1,42 +1,6 @@
 /** @type {import('next').NextConfig} */
 
-// Manually load environment variables from .env files
-// This ensures they're available during the build process
-const fs = require('fs');
-const path = require('path');
-
-function loadEnvFile(filePath) {
-  try {
-    const envFile = fs.readFileSync(filePath, 'utf8');
-    envFile.split('\n').forEach(line => {
-      const match = line.match(/^([^#][^=]+)=(.*)$/);
-      if (match) {
-        const key = match[1].trim();
-        const value = match[2].trim().replace(/^["']|["']$/g, ''); // Remove quotes
-        if (key.startsWith('NEXT_PUBLIC_') && !process.env[key]) {
-          process.env[key] = value;
-        }
-      }
-    });
-  } catch (err) {
-    // File doesn't exist, skip
-  }
-}
-
-// Load .env files in order of priority (.env.local overrides .env)
-loadEnvFile(path.join(__dirname, '.env.local'));
-loadEnvFile(path.join(__dirname, '.env'));
-
 const nextConfig = {
-  env: {
-    // Explicitly pass Firebase config to ensure it's in the client bundle
-    NEXT_PUBLIC_FIREBASE_API_KEY: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-    NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-    NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-    NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-    NEXT_PUBLIC_FIREBASE_APP_ID: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  },
   experimental: {
     // Increase Server Actions body size limit so image uploads up to 20MB are accepted
     serverActions: {
@@ -79,18 +43,7 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'www.pexels.com',
-        port: '',
-        pathname: '/**',
-      },
+
       {
         protocol: 'https',
         hostname: 'images.pexels.com',
@@ -115,24 +68,7 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
-      {
-        protocol: 'https',
-        hostname: 'www.freepik.com',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'api.together.xyz',
-        port: '',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.together.xyz',
-        port: '',
-        pathname: '/**',
-      }
+
     ],
     // Disable optimization for external images to prevent 500 errors
     unoptimized: false,
@@ -141,8 +77,7 @@ const nextConfig = {
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 60,
-    // Add dangerouslyAllowSVG for better compatibility
-    dangerouslyAllowSVG: true,
+    dangerouslyAllowSVG: false,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },

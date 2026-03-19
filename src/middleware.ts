@@ -7,21 +7,44 @@
  * 3. Sets Permissions-Policy to disable unused browser features
  * 4. Adds Content-Security-Policy to prevent XSS attacks
  * 
- * Note: Firebase Auth is client-side. Actual auth enforcement happens via the
- * <ProtectedRoute> component and API-level token verification.
+ * Protected routes require a verified Firebase session cookie.
+ * API routes still enforce bearer-token validation for data operations.
  */
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { createRemoteJWKSet } from 'jose/jwks/remote';
+import { jwtVerify } from 'jose/jwt/verify';
 import { isProtectedPath } from '@/lib/protected-routes';
 
-export function middleware(request: NextRequest) {
+const SESSION_COOKIE_NAME = 'smartstyle-session';
+const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
+
+async function verifyFirebaseSessionCookie(sessionCookie: string): Promise<{ sub?: string } | null> {
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+  if (!projectId) {
+    return null;
+  }
+
+  try {
+    const { payload } = await jwtVerify(sessionCookie, GOOGLE_JWKS, {
+      issuer: `https://session.firebase.google.com/${projectId}`,
+      audience: projectId,
+    });
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
+export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const authCookie = request.cookies.get('smartstyle-auth')?.value;
-  const hasSessionHint = authCookie === '1';
+  const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const verifiedSession = sessionCookie ? await verifyFirebaseSessionCookie(sessionCookie) : null;
+  const isAuthenticated = !!verifiedSession?.sub;
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
 
-  if (isProtectedPath(pathname) && !hasSessionHint) {
+  if (isProtectedPath(pathname) && !isAuthenticated) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = '/auth';
     redirectUrl.searchParams.set('next', pathname);

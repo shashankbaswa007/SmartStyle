@@ -8,7 +8,6 @@ import crypto from 'crypto';
 import { getComprehensivePreferences } from '@/lib/preference-engine';
 import { getBlocklists } from '@/lib/blocklist-manager';
 import { generateSessionId, createInteractionSession } from '@/lib/interaction-tracker';
-import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
 import { logger } from '@/lib/logger';
 import { recommendationCache, createCacheKey } from '@/lib/request-cache';
 import { recommendRequestSchema, validateRequest, formatValidationError } from '@/lib/validation';
@@ -22,9 +21,13 @@ import {
 } from '@/lib/recommendation-diversifier';
 import { FirestoreCache } from '@/lib/firestore-cache';
 import { checkDuplicateImage, generateImageHash } from '@/lib/image-deduplication';
-import { checkRateLimit as checkFirestoreRateLimit } from '@/lib/firestore-rate-limiter';
 import { generateImageWithRetry, createFallbackPlaceholder } from '@/lib/smart-image-generation';
 import { getCachedImage, cacheImage } from '@/lib/image-cache';
+import {
+  enforceRecommendAuth,
+  enforceRecommendRateLimit,
+  AuthError,
+} from '@/lib/recommend/request-guard';
 
 /**
  * Sanitize error messages to prevent XSS
@@ -79,23 +82,13 @@ export async function POST(req: Request) {
     // Verify authentication: if a userId is provided, verify it matches the auth token
     let userId = requestedUserId;
     if (userId && userId !== 'anonymous') {
-      const authHeader = req.headers.get('Authorization');
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return NextResponse.json(
-          { error: 'Unauthorized - Authentication required for personalized recommendations' },
-          { status: 401 }
-        );
-      }
       try {
-        const admin = (await import('@/lib/firebase-admin')).default;
-        const decodedToken = await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
-        if (decodedToken.uid !== userId) {
-          return NextResponse.json(
-            { error: 'Unauthorized - User ID mismatch' },
-            { status: 403 }
-          );
+        userId = await enforceRecommendAuth(req, userId);
+      } catch (error) {
+        if (error instanceof AuthError) {
+          return NextResponse.json({ error: error.message }, { status: error.status });
         }
-      } catch {
+
         return NextResponse.json(
           { error: 'Unauthorized - Invalid authentication token' },
           { status: 401 }
@@ -115,9 +108,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🚀 OPTIMIZATION 1: Firestore Rate Limiting (20 req/hour per user)
-    const effectiveUserId = userId || 'anonymous';
-    const rateLimitCheck = await checkFirestoreRateLimit(effectiveUserId);
+    // 🚀 OPTIMIZATION 1: Firestore-backed rate limiting (20 req/hour per user)
+    const { effectiveUserId, rateLimit: rateLimitCheck } = await enforceRecommendRateLimit(req, userId);
     
     if (!rateLimitCheck.allowed) {
       reqLogger.warn('recommend.request.rate_limited', {

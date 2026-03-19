@@ -62,6 +62,16 @@ export default function AuthPage() {
       }
 
       if (user) {
+        const idToken = await user.getIdToken();
+        await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ idToken }),
+          credentials: 'include',
+        });
+
         // Create user document in Firestore with profile data
         await createUserDocument(user.uid, {
           displayName: user.displayName || 'Anonymous User',

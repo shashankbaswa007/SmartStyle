@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import tavilySearch from '@/lib/tavily';
 import { z } from 'zod';
-import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
+import { getClientIdentifier } from '@/lib/rate-limiter';
+import { checkServerRateLimit } from '@/lib/server-rate-limiter';
+import { verifyBearerToken, AuthError } from '@/lib/server-auth';
 
 // Input validation schema
 const tavilyRequestSchema = z.object({
@@ -13,31 +15,26 @@ const tavilyRequestSchema = z.object({
 
 export async function POST(req: Request) {
   try {
-    // Verify authentication — Tavily has API costs, require auth
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Unauthorized', links: { amazon: null, ajio: null, myntra: null } },
-        { status: 401 }
-      );
-    }
-    try {
-      const admin = (await import('@/lib/firebase-admin')).default;
-      await admin.auth().verifyIdToken(authHeader.split('Bearer ')[1]);
-    } catch {
-      return NextResponse.json(
-        { error: 'Unauthorized - Invalid token', links: { amazon: null, ajio: null, myntra: null } },
-        { status: 401 }
-      );
-    }
+    const userId = await verifyBearerToken(req);
 
-    // Rate limit: 30 requests per minute per IP (Tavily has API costs)
+    // Rate limit paid endpoint via Firestore (shared across instances).
     const clientId = getClientIdentifier(req);
-    const rateLimit = checkRateLimit(clientId, { windowMs: 60_000, maxRequests: 30 });
-    if (!rateLimit.success) {
+    const rateLimit = await checkServerRateLimit(`${userId}:${clientId}`, {
+      scope: 'tavily',
+      windowMs: 60_000,
+      maxRequests: 30,
+    });
+    if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: 'Too many requests. Please try again later.', links: { amazon: null, ajio: null, myntra: null } },
-        { status: 429, headers: { 'Retry-After': String(Math.ceil((rateLimit.resetTime - Date.now()) / 1000)) } }
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(Math.ceil((rateLimit.resetAt.getTime() - Date.now()) / 1000)),
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': rateLimit.resetAt.toISOString(),
+          },
+        }
       );
     }
 
@@ -76,7 +73,14 @@ export async function POST(req: Request) {
         warning: 'Shopping links temporarily unavailable'
       });
     }
-  } catch {
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { error: error.message, links: { amazon: null, ajio: null, myntra: null } },
+        { status: error.status }
+      );
+    }
+
     return NextResponse.json({ 
       error: 'Failed to search for shopping links',
       links: { amazon: null, ajio: null, myntra: null }

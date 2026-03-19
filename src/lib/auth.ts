@@ -75,6 +75,14 @@ export async function signInWithGoogle(): Promise<{ user: User | null; error?: s
 export async function signOut(): Promise<{ success: boolean; error?: string }> {
   try {
     await firebaseSignOut(auth);
+    try {
+      await fetch('/api/auth/session', {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+    } catch {
+      // Non-fatal: firebase sign-out already completed.
+    }
     
     return { success: true };
   } catch (error: any) {

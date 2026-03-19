@@ -1,64 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import admin from '@/lib/firebase-admin';
 import { generateWardrobeOutfits } from '@/lib/wardrobeOutfitGenerator';
 import { fetchWeatherForecast } from '@/lib/weather-service';
+import { verifyBearerToken, AuthError } from '@/lib/server-auth';
+import { checkServerRateLimit } from '@/lib/server-rate-limiter';
+import { getClientIdentifier } from '@/lib/rate-limiter';
 import { 
   generateWardrobeHash, 
   generateRequestHash, 
   getCachedRecommendation, 
   cacheRecommendation 
 } from '@/lib/recommendations-cache';
-
-// Rate limiting using simple in-memory store (consider Redis for production)
-const rateLimits = new Map<string, { count: number; resetTime: number }>();
 const MAX_REQUESTS_PER_HOUR = 20;
-const RATE_LIMIT_WINDOW = 60 * 60 * 1000; // 1 hour
-
-function checkRateLimit(userId: string): boolean {
-  const now = Date.now();
-  const userLimit = rateLimits.get(userId);
-
-  if (!userLimit || now > userLimit.resetTime) {
-    rateLimits.set(userId, {
-      count: 1,
-      resetTime: now + RATE_LIMIT_WINDOW,
-    });
-    return true;
-  }
-
-  if (userLimit.count >= MAX_REQUESTS_PER_HOUR) {
-    return false;
-  }
-
-  userLimit.count++;
-  return true;
-}
 
 export async function POST(request: NextRequest) {
   try {
-    // Get auth token
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Missing or invalid authorization header' },
-        { status: 401 }
-      );
-    }
-
-    const idToken = authHeader.split('Bearer ')[1];
-    
-    // Verify authentication
-    let decodedToken;
-    try {
-      decodedToken = await admin.auth().verifyIdToken(idToken);
-    } catch (authError) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Invalid token' },
-        { status: 401 }
-      );
-    }
-
-    const authenticatedUserId = decodedToken.uid;
+    const authenticatedUserId = await verifyBearerToken(request);
 
     // Parse request body
     const body = await request.json();
@@ -88,14 +44,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check rate limit
-    if (!checkRateLimit(userId)) {
+    // Shared, persistent rate limiting for AI-intensive endpoint.
+    const clientId = getClientIdentifier(request);
+    const rateLimit = await checkServerRateLimit(`${userId}:${clientId}`, {
+      scope: 'wardrobe-outfit',
+      windowMs: 60 * 60 * 1000,
+      maxRequests: MAX_REQUESTS_PER_HOUR,
+    });
+
+    if (!rateLimit.allowed) {
       return NextResponse.json(
         { 
           error: 'Rate limit exceeded',
-          message: `You can generate up to ${MAX_REQUESTS_PER_HOUR} outfit suggestions per hour. Please try again later.`
+          message: rateLimit.message || `You can generate up to ${MAX_REQUESTS_PER_HOUR} outfit suggestions per hour. Please try again later.`,
         },
-        { status: 429 }
+        {
+          status: 429,
+          headers: {
+            'X-RateLimit-Remaining': '0',
+            'X-RateLimit-Reset': rateLimit.resetAt.toISOString(),
+          },
+        }
       );
     }
 
@@ -187,6 +156,13 @@ export async function POST(request: NextRequest) {
     );
 
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status }
+      );
+    }
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
@@ -197,29 +173,7 @@ export async function POST(request: NextRequest) {
 // GET endpoint for retrieving saved outfit combinations
 export async function GET(request: NextRequest) {
   try {
-    // Get auth token
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Missing or invalid authorization header' },
-        { status: 401 }
-      );
-    }
-
-    const idToken = authHeader.split('Bearer ')[1];
-    
-    // Verify authentication
-    let decodedToken;
-    try {
-      decodedToken = await admin.auth().verifyIdToken(idToken);
-    } catch (authError) {
-      return NextResponse.json(
-        { error: 'Unauthorized - Invalid token' },
-        { status: 401 }
-      );
-    }
-
-    const userId = decodedToken.uid;
+    const userId = await verifyBearerToken(request);
 
     // Get saved outfits (this would use getWardrobeOutfits from wardrobeService)
     // For now, return empty array as placeholder
@@ -232,6 +186,13 @@ export async function GET(request: NextRequest) {
     );
 
   } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status }
+      );
+    }
+
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

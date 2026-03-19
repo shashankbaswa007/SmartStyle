@@ -1,35 +1,16 @@
 'use server';
 
 import { z } from 'zod';
+import admin from '@/lib/firebase-admin';
 
 /**
- * Verify Firebase ID token using REST API and return user ID
- * This avoids needing Firebase Admin SDK credentials
+ * Verify Firebase ID token and return user ID.
  */
 async function verifyUserToken(idToken: string): Promise<string | null> {
   try {
-    const response = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${process.env.NEXT_PUBLIC_FIREBASE_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-      }
-    );
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    
-    if (data.users && data.users.length > 0) {
-      const userId = data.users[0].localId;
-      return userId;
-    }
-
-    return null;
-  } catch (error) {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    return decoded.uid || null;
+  } catch {
     return null;
   }
 }
