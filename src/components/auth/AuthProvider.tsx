@@ -30,6 +30,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
+    let didResolveAuthState = false;
+
     const syncSession = async (user: User | null) => {
       try {
         if (user) {
@@ -55,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // Subscribe to auth state changes
     const unsubscribe = onAuthChange((user) => {
+      didResolveAuthState = true;
       setUser(user);
       setLoading(false);
       setInitialized(true);
@@ -63,8 +66,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void syncSession(user);
     });
 
+    // Fallback: avoid getting stuck forever if auth callback is delayed.
+    const fallbackTimer = window.setTimeout(() => {
+      if (!didResolveAuthState) {
+        logger.warn('Auth state callback timed out; continuing with unauthenticated UI fallback');
+        setLoading(false);
+        setInitialized(true);
+      }
+    }, 3000);
+
     // Cleanup subscription on unmount
-    return () => unsubscribe();
+    return () => {
+      window.clearTimeout(fallbackTimer);
+      unsubscribe();
+    };
   }, []);
 
   return (

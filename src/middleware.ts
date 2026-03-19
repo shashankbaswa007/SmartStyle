@@ -7,7 +7,7 @@
  * 3. Sets Permissions-Policy to disable unused browser features
  * 4. Adds Content-Security-Policy to prevent XSS attacks
  * 
- * Protected routes require a verified Firebase session cookie.
+ * Protected routes require a verified Firebase auth cookie (session cookie or ID token).
  * API routes still enforce bearer-token validation for data operations.
  */
 
@@ -33,7 +33,16 @@ async function verifyFirebaseSessionCookie(sessionCookie: string): Promise<{ sub
     });
     return payload;
   } catch {
-    return null;
+    // Fallback for local/dev where we persist short-lived Firebase ID tokens.
+    try {
+      const { payload } = await jwtVerify(sessionCookie, GOOGLE_JWKS, {
+        issuer: `https://securetoken.google.com/${projectId}`,
+        audience: projectId,
+      });
+      return payload;
+    } catch {
+      return null;
+    }
   }
 }
 

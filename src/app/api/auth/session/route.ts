@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import admin from '@/lib/firebase-admin';
 
 const sessionSchema = z.object({
   idToken: z.string().min(1),
 });
 
 const SESSION_COOKIE_NAME = 'smartstyle-session';
-const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 5; // 5 days
-const SESSION_EXPIRES_MS = SESSION_MAX_AGE_SECONDS * 1000;
+// Firebase ID tokens are short-lived (~1h), so keep cookie TTL aligned.
+const SESSION_MAX_AGE_SECONDS = 60 * 60;
 
 function clearSessionCookie(response: NextResponse) {
   response.cookies.set({
@@ -33,19 +32,10 @@ export async function POST(request: Request) {
 
     const { idToken } = parsed.data;
 
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    if (!decoded.uid) {
-      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
-    }
-
-    const sessionCookie = await admin.auth().createSessionCookie(idToken, {
-      expiresIn: SESSION_EXPIRES_MS,
-    });
-
     const response = NextResponse.json({ ok: true });
     response.cookies.set({
       name: SESSION_COOKIE_NAME,
-      value: sessionCookie,
+      value: idToken,
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
