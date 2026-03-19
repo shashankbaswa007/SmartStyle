@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { analyzeImageAndProvideRecommendations } from '@/ai/flows/analyze-image-and-provide-recommendations';
+import type { AnalyzeImageAndProvideRecommendationsOutput } from '@/ai/flows/analyze-image-and-provide-recommendations';
 import { generateShoppingLinks } from '@/lib/shopping-query-optimizer';
 import saveRecommendation from '@/lib/firestoreRecommendations';
 import { withTimeout } from '@/lib/timeout-utils';
@@ -42,7 +43,9 @@ function sanitizeErrorMessage(message: string): string {
 
 export async function POST(req: Request) {
   const startTime = Date.now();
-  logger.log('⏱️ [PERF] API request started at', new Date().toISOString());
+  const requestId = req.headers.get('x-request-id') || crypto.randomUUID();
+  const reqLogger = logger.withContext({ requestId, route: '/api/recommend' });
+  reqLogger.info('recommend.request.start', { startedAt: new Date().toISOString() });
   
   try {
     // Parse and validate request body with Zod
@@ -50,7 +53,7 @@ export async function POST(req: Request) {
     try {
       body = await req.json();
     } catch (parseError) {
-      logger.error('❌ Failed to parse request body:', parseError);
+      reqLogger.error('recommend.request.parse_failed', parseError);
       return NextResponse.json(
         { error: 'Invalid JSON in request body' },
         { status: 400 }
@@ -60,7 +63,10 @@ export async function POST(req: Request) {
     // Validate request body against schema
     const validation = validateRequest(recommendRequestSchema, body);
     if (!validation.success) {
-      logger.error('❌ Validation failed:', validation.error);
+      reqLogger.warn('recommend.request.validation_failed', {
+        reason: 'schema_validation',
+        details: validation.error,
+      });
       return NextResponse.json(
         formatValidationError(validation.error),
         { status: 400 }
@@ -100,7 +106,9 @@ export async function POST(req: Request) {
     // Additional server-side security validation for image
     const imageValidation = quickValidateImageDataUri(photoDataUri);
     if (!imageValidation.isValid) {
-      logger.error('❌ Image validation failed:', imageValidation.error);
+      reqLogger.warn('recommend.request.image_validation_failed', {
+        reason: imageValidation.error,
+      });
       return NextResponse.json(
         { error: imageValidation.error },
         { status: 400 }
@@ -112,7 +120,10 @@ export async function POST(req: Request) {
     const rateLimitCheck = await checkFirestoreRateLimit(effectiveUserId);
     
     if (!rateLimitCheck.allowed) {
-      logger.warn(`⚠️ Rate limit exceeded for user ${effectiveUserId}`);
+      reqLogger.warn('recommend.request.rate_limited', {
+        userId: effectiveUserId,
+        reason: 'firestore_rate_limit',
+      });
       return NextResponse.json(
         { 
           error: rateLimitCheck.message,
@@ -129,9 +140,12 @@ export async function POST(req: Request) {
       );
     }
     
-    logger.log(`✅ Rate limit OK: ${rateLimitCheck.remaining} requests remaining`);
+    reqLogger.info('recommend.request.rate_limit_ok', {
+      userId: effectiveUserId,
+      remaining: rateLimitCheck.remaining,
+    });
 
-    logger.log('🎯 Starting recommendation flow:', {
+    reqLogger.info('recommend.flow.start', {
       hasPhoto: !!photoDataUri,
       occasion: occasion || 'not specified',
       gender,
@@ -146,7 +160,11 @@ export async function POST(req: Request) {
     if (userId && userId !== 'anonymous') {
       const duplicateResult = await checkDuplicateImage(userId, imageHash);
       if (duplicateResult) {
-        logger.log('🎯 Returning duplicate image result from 24h history');
+        reqLogger.info('recommend.cache.hit', {
+          cacheSource: '24h-history',
+          userId,
+          reason: 'duplicate_image',
+        });
         return NextResponse.json({
           ...duplicateResult,
           message: 'You recently uploaded this photo. Here are your previous recommendations.',
@@ -171,7 +189,15 @@ export async function POST(req: Request) {
     const cachedResult = await firestoreCache.get(cacheParams);
     if (cachedResult) {
       const totalTime = Date.now() - startTime;
-      logger.log(`✅ [FIRESTORE CACHE HIT] Returning cached result (saved ~10s and API calls!)`);
+      reqLogger.info('recommend.cache.hit', {
+        cacheSource: 'firestore',
+        userId,
+        latencyMs: totalTime,
+      });
+      logger.metric('recommend.latency_ms', totalTime, {
+        requestId,
+        cacheSource: 'firestore',
+      });
       
       return NextResponse.json({
         ...cachedResult,
@@ -182,7 +208,10 @@ export async function POST(req: Request) {
       });
     }
     
-    logger.log('❌ [CACHE MISS] Proceeding with AI generation...');
+    reqLogger.info('recommend.cache.miss', {
+      cacheSource: 'none',
+      reason: 'no_recent_cached_result',
+    });
 
     // ✨ NEW: Fetch user preferences and blocklists for personalization
     let userPreferences = null;
@@ -190,7 +219,7 @@ export async function POST(req: Request) {
     let sessionId = generateSessionId();
     
     if (userId && userId !== 'anonymous') {
-      logger.log('🎨 [Personalization] Fetching user preferences...');
+      reqLogger.info('recommend.personalization.fetch_start', { userId });
       const prefStart = Date.now();
       
       try {
@@ -199,15 +228,22 @@ export async function POST(req: Request) {
           getBlocklists(userId),
         ]);
         
-        logger.log(`⏱️ [PERF] Preferences fetched: ${Date.now() - prefStart}ms`);
-        logger.log('✅ [Personalization] User profile loaded:', {
+        const prefLatency = Date.now() - prefStart;
+        reqLogger.info('recommend.personalization.fetch_complete', {
+          userId,
+          latencyMs: prefLatency,
           interactions: userPreferences.totalInteractions,
           confidence: userPreferences.overallConfidence,
           favoriteColors: userPreferences.colors.favoriteColors.length,
           topStyles: userPreferences.styles.topStyles.length,
         });
+        logger.metric('recommend.personalization_fetch_ms', prefLatency, { requestId, userId });
       } catch (prefError) {
-        logger.error('⚠️ [Personalization] Failed to fetch preferences:', prefError);
+        reqLogger.warn('recommend.personalization.fetch_failed', {
+          userId,
+          reason: 'preference_fetch_error',
+          error: prefError,
+        });
         // Continue without personalization
       }
     }
@@ -231,10 +267,18 @@ export async function POST(req: Request) {
         15000, // 15 second timeout for AI analysis
         'AI analysis timed out after 15 seconds'
       );
-      logger.log(`⏱️ [PERF] Analysis completed: ${Date.now() - analysisStart}ms`);
-      logger.log('✅ Image analysis complete:', analysis.outfitRecommendations.length, 'recommendations');
+      const analysisLatency = Date.now() - analysisStart;
+      reqLogger.info('recommend.analysis.complete', {
+        provider: 'genkit',
+        latencyMs: analysisLatency,
+        recommendationCount: analysis.outfitRecommendations.length,
+      });
+      logger.metric('recommend.analysis_ms', analysisLatency, { requestId, provider: 'genkit' });
     } catch (analysisError) {
-      logger.error('❌ Image analysis failed:', analysisError);
+      reqLogger.error('recommend.analysis.failed', {
+        reason: 'analysis_timeout_or_provider_error',
+        error: analysisError,
+      });
       throw new Error('Failed to analyze image. Please try again with a clearer photo.');
     }
 
@@ -245,8 +289,21 @@ export async function POST(req: Request) {
     logger.log('🔄 [PERF] Processing outfits with PARALLEL image generation (15s budget)...');
     
     // First: extract all text data instantly (no async needed)
-    let enrichedOutfits: any[] = outfitsToProcess.map((outfit: any, index: number) => {
-      const colorHexCodes = outfit.colorPalette?.map((c: any) => {
+    type RecommendationOutfit = AnalyzeImageAndProvideRecommendationsOutput['outfitRecommendations'][number];
+    type EnrichedOutfit = RecommendationOutfit & {
+      imageUrl: string | null;
+      generatedImageColors: unknown;
+      shoppingLinks: {
+        amazon: string | null;
+        myntra: string | null;
+        tatacliq: string | null;
+      };
+      _imagePrompt?: string;
+      _colorHexCodes?: string[];
+    };
+
+    let enrichedOutfits: EnrichedOutfit[] = outfitsToProcess.map((outfit: RecommendationOutfit) => {
+      const colorHexCodes = outfit.colorPalette?.map((c) => {
         if (typeof c === 'string') return c;
         const colorObj = c as { hex?: string; name?: string };
         return colorObj.hex || '#000000';
@@ -289,9 +346,11 @@ export async function POST(req: Request) {
 
     const imagePromises = enrichedOutfits.map(async (outfit, i) => {
       const outfitNumber = i + 1;
+      const prompt = outfit._imagePrompt || '';
+      const colorHexCodes = outfit._colorHexCodes || [];
       try {
         // Check image cache first
-        const cachedImageUrl = await getCachedImage(outfit._imagePrompt, outfit._colorHexCodes);
+        const cachedImageUrl = await getCachedImage(prompt, colorHexCodes);
         if (cachedImageUrl) {
           logger.log(`✅ [OUTFIT ${outfitNumber}] Using cached image`);
           const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
@@ -299,7 +358,7 @@ export async function POST(req: Request) {
         }
 
         logger.log(`🎨 [OUTFIT ${outfitNumber}] Starting image generation...`);
-        const url = await generateImageWithRetry(outfit._imagePrompt, outfit._colorHexCodes, IMAGE_BUDGET);
+        const url = await generateImageWithRetry(prompt, colorHexCodes, IMAGE_BUDGET);
         const elapsed = Date.now() - imageStart;
         logger.log(`✅ [OUTFIT ${outfitNumber}] Image ready in ${elapsed}ms`);
 
@@ -307,7 +366,7 @@ export async function POST(req: Request) {
         const isSvgPlaceholder = url.startsWith('data:image/svg+xml');
         const isPlaceholderUrl = url.includes('via.placeholder.com');
         if (!isSvgPlaceholder && !isPlaceholderUrl) {
-          cacheImage(outfit._imagePrompt, outfit._colorHexCodes, url).catch(() => {});
+          cacheImage(prompt, colorHexCodes, url).catch(() => {});
         }
 
         const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
@@ -315,7 +374,7 @@ export async function POST(req: Request) {
       } catch (err: any) {
         logger.warn(`⚠️ [OUTFIT ${outfitNumber}] Image failed: ${err.message}`);
         const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
-        return { ...cleanOutfit, imageUrl: createFallbackPlaceholder(outfit._imagePrompt, outfit._colorHexCodes) };
+        return { ...cleanOutfit, imageUrl: createFallbackPlaceholder(prompt, colorHexCodes) };
       }
     });
 
@@ -408,7 +467,14 @@ export async function POST(req: Request) {
             position: index + 1,
             title: outfit.title,
             colors: Array.isArray(outfit.colorPalette) 
-              ? outfit.colorPalette.map((c: any) => typeof c === 'string' ? c : c.hex || '#000000')
+              ? outfit.colorPalette.map((c: unknown) => {
+                  if (typeof c === 'string') return c;
+                  if (typeof c === 'object' && c && 'hex' in c) {
+                    const maybeHex = (c as { hex?: string }).hex;
+                    return maybeHex || '#000000';
+                  }
+                  return '#000000';
+                })
               : [],
             styles: outfit.styleType ? [outfit.styleType] : [],
             items: outfit.items || [],
@@ -452,9 +518,18 @@ export async function POST(req: Request) {
     }
 
     const totalTime = Date.now() - startTime;
-    logger.log(`⏱️ [PERF] ============================================`);
-    logger.log(`⏱️ [PERF] TOTAL API TIME: ${totalTime}ms (${(totalTime/1000).toFixed(2)}s)`);
-    logger.log(`⏱️ [PERF] ============================================`);
+    reqLogger.info('recommend.request.complete', {
+      userId: userId || 'anonymous',
+      latencyMs: totalTime,
+      provider: 'genkit',
+      imageProvider: 'pollinations',
+      cacheSource: 'miss',
+    });
+    logger.metric('recommend.latency_ms', totalTime, {
+      requestId,
+      cacheSource: 'miss',
+      provider: 'genkit',
+    });
 
     const response = { 
       success: true, 
@@ -472,8 +547,12 @@ export async function POST(req: Request) {
     return NextResponse.json(response);
   } catch (err: any) {
     const totalTime = Date.now() - startTime;
-    logger.error('❌ Recommend route error:', err);
-    logger.log(`⏱️ [PERF] Failed after ${totalTime}ms`); 
+    reqLogger.error('recommend.request.failed', {
+      reason: err instanceof Error ? err.message : 'unknown_error',
+      latencyMs: totalTime,
+      error: err,
+    });
+    logger.metric('recommend.failure_latency_ms', totalTime, { requestId });
 
     
     // Detailed error logging
