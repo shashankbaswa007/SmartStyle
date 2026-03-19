@@ -368,6 +368,75 @@ const neutralColors = new Set([
   'black', 'white', 'gray', 'grey', 'beige', 'cream', 'ivory', 'tan', 'taupe', 'navy',
 ]);
 
+const hexToCommonColorName: Record<string, string> = {
+  '#000000': 'Black',
+  '#FFFFFF': 'White',
+  '#808080': 'Gray',
+  '#FF0000': 'Red',
+  '#0000FF': 'Blue',
+  '#008000': 'Green',
+  '#FFFF00': 'Yellow',
+  '#FFA500': 'Orange',
+  '#800080': 'Purple',
+  '#FFC0CB': 'Pink',
+  '#A52A2A': 'Brown',
+  '#000080': 'Navy',
+  '#008080': 'Teal',
+  '#FFD700': 'Gold',
+  '#F5F5DC': 'Beige',
+  '#D2B48C': 'Tan',
+  '#F0E68C': 'Khaki',
+  '#FF7F50': 'Coral',
+  '#FA8072': 'Salmon',
+  '#DC143C': 'Crimson',
+  '#800020': 'Burgundy',
+  '#4B0082': 'Indigo',
+  '#EE82EE': 'Violet',
+  '#ADD8E6': 'Light Blue',
+  '#90EE90': 'Light Green',
+  '#FFB6C1': 'Light Pink',
+  '#228B22': 'Forest Green',
+  '#4682B4': 'Steel Blue',
+  '#98FF98': 'Mint',
+  '#FFDAB9': 'Peach',
+  '#9DC183': 'Sage',
+  '#40E0D0': 'Turquoise',
+  '#C8A2C8': 'Lilac',
+};
+
+function toTitleCase(value: string): string {
+  return value
+    .trim()
+    .split(/\s+/)
+    .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
+function isHexLike(value?: string): boolean {
+  if (!value) return false;
+  return /^#?[0-9a-fA-F]{3,8}$/.test(value.trim());
+}
+
+function normalizeHex(hex?: string): string | null {
+  if (!hex) return null;
+  const trimmed = hex.trim().toUpperCase();
+  if (!trimmed) return null;
+  return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+}
+
+function resolveDisplayColorName(name: string | undefined, hex: string | undefined, index: number): string {
+  if (name && !isHexLike(name)) {
+    return toTitleCase(name);
+  }
+
+  const normalizedHex = normalizeHex(hex);
+  if (normalizedHex && hexToCommonColorName[normalizedHex]) {
+    return hexToCommonColorName[normalizedHex];
+  }
+
+  return `Accent Color ${index + 1}`;
+}
+
 function parseDetectedColors(detectedDressColors?: string): string[] {
   if (!detectedDressColors) return [];
   return detectedDressColors
@@ -380,11 +449,11 @@ function parseDetectedColors(detectedDressColors?: string): string[] {
 
 function buildColorCombinationInsight(colors: string[]): string {
   if (colors.length === 0) {
-    return 'Your outfit uses a balanced palette. Let us refine it into sharper combinations for your next looks.';
+    return 'Your outfit has a balanced base palette. The recommendations below focus on improving polish, contrast, and occasion fit.';
   }
 
   if (colors.length === 1) {
-    return `You are using a focused monochrome base with ${colors[0]}. This gives a clean foundation and makes texture or accessories stand out.`;
+    return 'You are using a focused monochrome base, which creates a clean foundation. This is easy to elevate with texture and one thoughtful accent for your occasion.';
   }
 
   const neutralCount = colors.filter(c => neutralColors.has(c.toLowerCase())).length;
@@ -393,10 +462,10 @@ function buildColorCombinationInsight(colors: string[]): string {
     : 'You are combining multiple statement shades, which creates a bold and expressive visual identity.';
 
   if (colors.length === 2) {
-    return `${statement} The two-color mix is easy to style and reads cohesive in most occasions.`;
+    return `${statement} The two-color mix stays cohesive and can be tuned for both everyday and occasion-ready styling.`;
   }
 
-  return `${statement} The layered palette adds depth, and the recommendations below build on this harmony with more polished combinations.`;
+  return `${statement} The layered palette adds depth, and the recommendations below refine it into a more occasion-appropriate finish.`;
 }
 
 export function StyleAdvisorResults({
@@ -421,7 +490,14 @@ export function StyleAdvisorResults({
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const detectedColors = parseDetectedColors(detectedDressColors);
   const colorCombinationInsight = buildColorCombinationInsight(detectedColors);
-  const suggestedAccentColors = analysisResult.colorSuggestions.slice(0, 3);
+  const suggestedAccentColors = analysisResult.colorSuggestions.slice(0, 3).map((color, index) => {
+    const displayHex = normalizeHex(color.hex) ?? convertColorNameToHex(color.name || 'gray');
+    return {
+      ...color,
+      displayHex,
+      displayName: resolveDisplayColorName(color.name, color.hex, index),
+    };
+  });
   
   // Track per-image loading state: 'loading' | 'loaded' | 'error' | 'placeholder'
   const [imageStates, setImageStates] = useState<Map<number, 'loading' | 'loaded' | 'error' | 'placeholder'>>(new Map());
@@ -873,19 +949,6 @@ export function StyleAdvisorResults({
             <Palette className="text-accent" /> Your Current Color Combination
           </h3>
 
-          {detectedColors.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {detectedColors.map((color, index) => (
-                <span
-                  key={`${color}-${index}`}
-                  className="inline-flex items-center rounded-full border border-border/30 bg-muted/40 px-3 py-1 text-xs font-semibold text-foreground"
-                >
-                  {color}
-                </span>
-              ))}
-            </div>
-          )}
-
           <p className="text-muted-foreground">{colorCombinationInsight}</p>
           <p className="text-muted-foreground">{analysisResult.feedback}</p>
 
@@ -897,17 +960,17 @@ export function StyleAdvisorResults({
               <div className="flex flex-wrap gap-2">
                 {suggestedAccentColors.map((color, idx) => (
                   <button
-                    key={`${color.name}-${idx}`}
+                    key={`${color.displayName}-${idx}`}
                     onClick={() => {
-                      navigator.clipboard?.writeText(color.hex);
-                      toast({ title: 'Copied!', description: `${color.hex} copied to clipboard`, duration: 1500 });
+                      navigator.clipboard?.writeText(color.displayHex);
+                      toast({ title: 'Copied!', description: `${color.displayName} (${color.displayHex}) copied to clipboard`, duration: 1500 });
                     }}
                     className="inline-flex items-center gap-2 rounded-full border border-border/30 bg-background/70 px-2.5 py-1 text-xs hover:bg-background transition-colors"
-                    title={`${color.name} (${color.hex})`}
+                    title={`${color.displayName} (${color.displayHex})`}
                   >
-                    <span className="inline-block w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: color.hex }} />
-                    <span className="font-medium text-foreground">{color.name}</span>
-                    <span className="text-muted-foreground">{color.hex}</span>
+                    <span className="inline-block w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: color.displayHex }} />
+                    <span className="font-medium text-foreground">{color.displayName}</span>
+                    <span className="text-muted-foreground">{color.displayHex}</span>
                   </button>
                 ))}
               </div>

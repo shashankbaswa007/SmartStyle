@@ -1011,19 +1011,26 @@ export function StyleAdvisor() {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
+      let effectiveUserId = request.userId;
       if (auth.currentUser) {
         try {
           const idToken = await auth.currentUser.getIdToken();
           headers['Authorization'] = `Bearer ${idToken}`;
         } catch {
-          // Continue without auth - will work as anonymous
+          // If token refresh fails, send request as anonymous to avoid auth mismatch failures.
+          effectiveUserId = undefined;
         }
       }
+
+      const apiRequest = {
+        ...request,
+        userId: effectiveUserId,
+      };
 
       const response = await fetch('/api/recommend', {
         method: 'POST',
         headers,
-        body: JSON.stringify(request),
+        body: JSON.stringify(apiRequest),
         signal: controller.signal,
       });
 
@@ -1240,13 +1247,6 @@ export function StyleAdvisor() {
               userId,
             });
         }
-    };
-    imageElement.onerror = () => {
-      toast({
-        variant: "destructive",
-        title: "Image failed to load",
-        description: "Please try a different image or re-upload your photo.",
-      });
     };
     imageElement.onerror = () => {
         toast({ variant: 'destructive', title: 'Image Load Error', description: 'Could not load the selected image for analysis.' });
