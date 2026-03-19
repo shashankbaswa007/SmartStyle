@@ -11,7 +11,7 @@
  */
 
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Loader2 } from 'lucide-react';
 
@@ -22,13 +22,15 @@ interface ProtectedRouteProps {
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     // Redirect to auth page if user is not authenticated
     if (!loading && !user) {
-      router.push('/auth');
+      const nextPath = pathname || '/';
+      router.replace(`/auth?next=${encodeURIComponent(nextPath)}`);
     }
-  }, [user, loading, router]);
+  }, [user, loading, pathname, router]);
 
   // Show loading state while checking authentication
   if (loading) {

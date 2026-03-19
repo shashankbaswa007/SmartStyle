@@ -13,9 +13,25 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { isProtectedPath } from '@/lib/protected-routes';
 
 export function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const authCookie = request.cookies.get('smartstyle-auth')?.value;
+  const hasSessionHint = authCookie === '1';
+  const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
+
+  if (isProtectedPath(pathname) && !hasSessionHint) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = '/auth';
+    redirectUrl.searchParams.set('next', pathname);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
+    redirectResponse.headers.set('X-Request-Id', requestId);
+    return redirectResponse;
+  }
+
   const response = NextResponse.next();
+  response.headers.set('X-Request-Id', requestId);
 
   // Security headers — protect against XSS, clickjacking, MIME-sniffing
   response.headers.set('X-Content-Type-Options', 'nosniff');
@@ -29,9 +45,14 @@ export function middleware(request: NextRequest) {
   response.headers.set('X-DNS-Prefetch-Control', 'on');
 
   // Content-Security-Policy — restrict resource loading
+  const isProduction = process.env.NODE_ENV === 'production';
+  const scriptSrc = isProduction
+    ? "script-src 'self' 'unsafe-inline' https://apis.google.com https://www.googletagmanager.com"
+    : "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://apis.google.com https://www.googletagmanager.com";
+
   const csp = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://apis.google.com https://www.googletagmanager.com",
+    scriptSrc,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com https://res.cloudinary.com",
     "img-src 'self' data: blob: https: http:",

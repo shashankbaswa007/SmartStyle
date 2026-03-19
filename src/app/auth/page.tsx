@@ -12,7 +12,8 @@
  */
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { signInWithGoogle } from '@/lib/auth';
@@ -27,14 +28,16 @@ const DotGrid = dynamic(() => import('@/components/DotGrid'), { ssr: false });
 export default function AuthPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextPath = searchParams.get('next') || '/';
   const [googleLoading, setGoogleLoading] = useState(false);
 
   // Redirect to home if user is already authenticated
   useEffect(() => {
     if (!authLoading && user) {
-      router.push('/');
+      router.push(nextPath);
     }
-  }, [user, authLoading, router]);
+  }, [user, authLoading, nextPath, router]);
 
   /**
    * Handle Google Sign-In
@@ -75,7 +78,8 @@ export default function AuthPage() {
         });
 
         // Redirect to home page
-        router.push('/');
+        // Redirect to requested path or home page
+        router.push(nextPath);
       }
     } catch (error: any) {
       toast({
@@ -232,8 +236,11 @@ export default function AuthPage() {
                   transition={{ delay: 0.65 }}
                   className="text-[11px] leading-relaxed text-center text-[#6b5f8a]/80"
                 >
-                  By signing in you agree to our Terms&nbsp;of&nbsp;Service
-                  <br />and Privacy&nbsp;Policy. Your data is encrypted.
+                  By signing in you agree to our{' '}
+                  <Link href="/terms" className="underline hover:text-[#b8a9e8]">Terms of Service</Link>
+                  {' '}and{' '}
+                  <Link href="/privacy" className="underline hover:text-[#b8a9e8]">Privacy Policy</Link>.
+                  <br />Read our <Link href="/trust" className="underline hover:text-[#b8a9e8]">Trust Center</Link> for data handling details.
                 </motion.p>
               </div>
             </div>

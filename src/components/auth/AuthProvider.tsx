@@ -34,6 +34,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(user);
       setLoading(false);
       setInitialized(true);
+
+      if (typeof document !== 'undefined') {
+        if (user) {
+          document.cookie = 'smartstyle-auth=1; Path=/; Max-Age=2592000; SameSite=Lax; Secure';
+        } else {
+          document.cookie = 'smartstyle-auth=; Path=/; Max-Age=0; SameSite=Lax; Secure';
+        }
+      }
     });
 
     // Cleanup subscription on unmount
