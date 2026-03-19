@@ -43,7 +43,18 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
-
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.pexels.com',
+        port: '',
+        pathname: '/**',
+      },
       {
         protocol: 'https',
         hostname: 'images.pexels.com',
@@ -68,7 +79,18 @@ const nextConfig = {
         port: '',
         pathname: '/**',
       },
-
+      {
+        protocol: 'https',
+        hostname: 'www.freepik.com',
+        port: '',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'api.together.xyz',
+        port: '',
+        pathname: '/**',
+      },
     ],
     // Disable optimization for external images to prevent 500 errors
     unoptimized: false,

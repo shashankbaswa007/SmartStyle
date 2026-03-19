@@ -8,6 +8,7 @@ import crypto from 'crypto';
 import { getComprehensivePreferences } from '@/lib/preference-engine';
 import { getBlocklists } from '@/lib/blocklist-manager';
 import { generateSessionId, createInteractionSession } from '@/lib/interaction-tracker';
+import { getClientIdentifier } from '@/lib/rate-limiter';
 import { logger } from '@/lib/logger';
 import { recommendationCache, createCacheKey } from '@/lib/request-cache';
 import { recommendRequestSchema, validateRequest, formatValidationError } from '@/lib/validation';
@@ -23,11 +24,8 @@ import { FirestoreCache } from '@/lib/firestore-cache';
 import { checkDuplicateImage, generateImageHash } from '@/lib/image-deduplication';
 import { generateImageWithRetry, createFallbackPlaceholder } from '@/lib/smart-image-generation';
 import { getCachedImage, cacheImage } from '@/lib/image-cache';
-import {
-  enforceRecommendAuth,
-  enforceRecommendRateLimit,
-  AuthError,
-} from '@/lib/recommend/request-guard';
+import { verifyBearerTokenMatchesUser, AuthError } from '@/lib/server-auth';
+import { checkServerRateLimit } from '@/lib/server-rate-limiter';
 
 /**
  * Sanitize error messages to prevent XSS
@@ -83,7 +81,7 @@ export async function POST(req: Request) {
     let userId = requestedUserId;
     if (userId && userId !== 'anonymous') {
       try {
-        userId = await enforceRecommendAuth(req, userId);
+        await verifyBearerTokenMatchesUser(req, userId);
       } catch (error) {
         if (error instanceof AuthError) {
           return NextResponse.json({ error: error.message }, { status: error.status });
@@ -109,7 +107,13 @@ export async function POST(req: Request) {
     }
 
     // 🚀 OPTIMIZATION 1: Firestore-backed rate limiting (20 req/hour per user)
-    const { effectiveUserId, rateLimit: rateLimitCheck } = await enforceRecommendRateLimit(req, userId);
+    const effectiveUserId = userId || 'anonymous';
+    const clientId = getClientIdentifier(req);
+    const rateLimitCheck = await checkServerRateLimit(`${effectiveUserId}:${clientId}`, {
+      scope: 'recommend',
+      windowMs: 60 * 60 * 1000,
+      maxRequests: 20,
+    });
     
     if (!rateLimitCheck.allowed) {
       reqLogger.warn('recommend.request.rate_limited', {
