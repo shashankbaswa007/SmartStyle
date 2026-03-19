@@ -4,7 +4,7 @@ test.describe('SmartStyle Smoke Tests', () => {
   test('homepage loads and shows app title', async ({ page }) => {
     await page.goto('/');
     await expect(page).toHaveTitle(/SmartStyle/i);
-    await expect(page.locator('text=SmartStyle')).toBeVisible();
+    await expect(page.getByRole('link', { name: /^SmartStyle$/i })).toBeVisible();
   });
 
   test('homepage has navigation to Style Check', async ({ page }) => {
@@ -15,7 +15,7 @@ test.describe('SmartStyle Smoke Tests', () => {
 
   test('auth page loads', async ({ page }) => {
     await page.goto('/auth');
-    await expect(page.locator('text=/sign in|log in|get started/i').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /continue with google/i })).toBeVisible();
   });
 
   test('color match page loads', async ({ page }) => {
@@ -31,6 +31,6 @@ test.describe('SmartStyle Smoke Tests', () => {
   test('app is responsive on mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/');
-    await expect(page.locator('text=SmartStyle')).toBeVisible();
+    await expect(page.getByRole('link', { name: /^SmartStyle$/i })).toBeVisible();
   });
 });
