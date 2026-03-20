@@ -8,10 +8,14 @@ export function ServiceWorkerRegister() {
 
   useEffect(() => {
     if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+      let refreshing = false;
+
       // Register service worker
       navigator.serviceWorker
         .register('/sw.js')
         .then((registration) => {
+          // Check for a newer SW script on every page load in production.
+          registration.update().catch(() => {});
 
           // Check for updates
           registration.addEventListener('updatefound', () => {
@@ -20,6 +24,9 @@ export function ServiceWorkerRegister() {
 
             newWorker.addEventListener('statechange', () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // Activate update immediately to avoid stale route/chunk manifests.
+                newWorker.postMessage({ type: 'SKIP_WAITING' });
+
                 // New service worker available
                 toast({
                   title: 'Update Available',
@@ -43,6 +50,9 @@ export function ServiceWorkerRegister() {
 
       // Handle controller change
       navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
       });
 
       // Listen for messages from service worker

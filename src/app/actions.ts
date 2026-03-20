@@ -21,7 +21,12 @@ const WeatherSchema = z.object({
 });
 
 export async function getWeatherData(coords: z.infer<typeof WeatherSchema>) {
-  const { lat, lon } = coords;
+  const parsedCoords = WeatherSchema.safeParse(coords);
+  if (!parsedCoords.success) {
+    return 'Weather data not available for the selected location.';
+  }
+
+  const { lat, lon } = parsedCoords.data;
   const apiKey = process.env.OPENWEATHER_API_KEY;
 
 
@@ -35,7 +40,6 @@ export async function getWeatherData(coords: z.infer<typeof WeatherSchema>) {
     const response = await fetch(url);
     
     if (!response.ok) {
-      const errorData = await response.json();
       return `Could not fetch weather. Status: ${response.status}`;
     }
     
@@ -57,6 +61,7 @@ export async function provideFeedback(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const userId = await verifyUserToken(idToken);
+    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
     
     if (!userId) {
       return { 
@@ -65,9 +70,16 @@ export async function provideFeedback(
       };
     }
 
+    if (!projectId) {
+      return {
+        success: false,
+        error: 'Feedback service is not configured. Please try again later.',
+      };
+    }
+
 
     // Save to Firestore using REST API
-    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${userId}/feedback/${recommendationId}`;
+    const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/feedback/${recommendationId}`;
 
     const firestoreResponse = await fetch(firestoreUrl, {
       method: 'PATCH',
@@ -109,11 +121,19 @@ export async function saveRecommendationUsage(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const userId = await verifyUserToken(idToken);
+    const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
     
     if (!userId) {
       return { 
         success: false, 
         error: 'Please sign in to save outfits' 
+      };
+    }
+
+    if (!projectId) {
+      return {
+        success: false,
+        error: 'Outfit save service is not configured. Please try again later.',
       };
     }
 
@@ -127,7 +147,7 @@ export async function saveRecommendationUsage(
     }
 
     // First, check if the recommendation exists using REST API
-    const getUrl = `https://firestore.googleapis.com/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${userId}/recommendationHistory/${recommendationId}`;
+    const getUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/recommendationHistory/${recommendationId}`;
 
     const getResponse = await fetch(getUrl, {
       method: 'GET',
@@ -158,7 +178,7 @@ export async function saveRecommendationUsage(
 
     // Save outfit usage to Firestore using REST API
     const usageId = `${recommendationId}_${outfitIndex}`;
-    const usageUrl = `https://firestore.googleapis.com/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${userId}/outfitUsage/${usageId}`;
+    const usageUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/outfitUsage/${usageId}`;
 
     const usageResponse = await fetch(usageUrl, {
       method: 'PATCH',
@@ -185,7 +205,7 @@ export async function saveRecommendationUsage(
     }
 
     // Update recommendation document to track usage
-    const updateUrl = `https://firestore.googleapis.com/v1/projects/${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}/databases/(default)/documents/users/${userId}/recommendationHistory/${recommendationId}`;
+    const updateUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/recommendationHistory/${recommendationId}`;
 
     await fetch(updateUrl, {
       method: 'PATCH',

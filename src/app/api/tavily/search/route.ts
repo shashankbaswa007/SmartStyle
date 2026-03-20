@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     });
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: 'Too many requests. Please try again later.', links: { amazon: null, ajio: null, myntra: null } },
+        { error: 'Too many requests. Please try again later.', links: { amazon: null, tatacliq: null, myntra: null } },
         {
           status: 429,
           headers: {
@@ -69,21 +69,21 @@ export async function POST(req: Request) {
     } catch {
       // Return empty links instead of failing
       return NextResponse.json({ 
-        links: { amazon: null, ajio: null, myntra: null },
+        links: { amazon: null, tatacliq: null, myntra: null },
         warning: 'Shopping links temporarily unavailable'
       });
     }
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json(
-        { error: error.message, links: { amazon: null, ajio: null, myntra: null } },
+        { error: error.message, links: { amazon: null, tatacliq: null, myntra: null } },
         { status: error.status }
       );
     }
 
     return NextResponse.json({ 
       error: 'Failed to search for shopping links',
-      links: { amazon: null, ajio: null, myntra: null }
+      links: { amazon: null, tatacliq: null, myntra: null }
     }, { status: 500 });
   }
 }

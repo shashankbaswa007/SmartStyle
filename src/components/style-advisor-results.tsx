@@ -766,7 +766,14 @@ export function StyleAdvisorResults({
         headers,
         body: JSON.stringify({ query, colors, gender: genderParam }),
       });
-      const data = await res.json();
+      if (!res.ok) {
+        return null;
+      }
+
+      const data = await res.json().catch(() => null);
+      if (!data || typeof data !== 'object') {
+        return null;
+      }
       return data?.links as ShoppingLinks | null;
     } catch {
       return null;

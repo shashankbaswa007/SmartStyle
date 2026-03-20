@@ -1,9 +1,9 @@
-const CACHE_NAME = 'smartstyle-v4';
-const STATIC_CACHE = 'smartstyle-static-v4';
-const DYNAMIC_CACHE = 'smartstyle-dynamic-v4';
-const IMAGE_CACHE = 'smartstyle-images-v4';
-const WARDROBE_CACHE = 'smartstyle-wardrobe-v4';
-const API_CACHE = 'smartstyle-api-v4';
+const CACHE_NAME = 'smartstyle-v5';
+const STATIC_CACHE = 'smartstyle-static-v5';
+const DYNAMIC_CACHE = 'smartstyle-dynamic-v5';
+const IMAGE_CACHE = 'smartstyle-images-v5';
+const WARDROBE_CACHE = 'smartstyle-wardrobe-v5';
+const API_CACHE = 'smartstyle-api-v5';
 
 // Cache duration in milliseconds
 const CACHE_DURATION = {
@@ -18,11 +18,6 @@ const CACHE_DURATION = {
 const STATIC_ASSETS = [
   '/',
   '/offline.html',
-  '/style-check',
-  '/color-match',
-  '/likes',
-  '/analytics',
-  '/wardrobe',
   '/manifest.json',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
@@ -46,22 +41,25 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   console.log('[Service Worker] Activating...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => {
-            return name !== STATIC_CACHE && 
-                   name !== DYNAMIC_CACHE && 
-                   name !== IMAGE_CACHE &&
-                   name !== WARDROBE_CACHE &&
-                   name !== API_CACHE;
-          })
-          .map((name) => {
-            console.log('[Service Worker] Deleting old cache:', name);
-            return caches.delete(name);
-          })
-      );
-    })
+    Promise.all([
+      caches.keys().then((cacheNames) => {
+        return Promise.all(
+          cacheNames
+            .filter((name) => {
+              return name !== STATIC_CACHE && 
+                     name !== DYNAMIC_CACHE && 
+                     name !== IMAGE_CACHE &&
+                     name !== WARDROBE_CACHE &&
+                     name !== API_CACHE;
+            })
+            .map((name) => {
+              console.log('[Service Worker] Deleting old cache:', name);
+              return caches.delete(name);
+            })
+        );
+      }),
+      self.registration.navigationPreload ? self.registration.navigationPreload.enable() : Promise.resolve(),
+    ])
   );
   self.clients.claim();
 });
@@ -70,6 +68,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+  const acceptHeader = request.headers.get('accept') || '';
+  const isRSCRequest = request.headers.get('RSC') === '1' || request.headers.has('Next-Router-State-Tree');
+  const isDocumentRequest =
+    request.mode === 'navigate' ||
+    request.destination === 'document' ||
+    acceptHeader.includes('text/html') ||
+    isRSCRequest;
 
   // Skip non-GET requests
   if (request.method !== 'GET') return;
@@ -86,10 +91,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Navigation requests (HTML pages) — always network-first to avoid stale chunk references
-  if (request.mode === 'navigate') {
+  // App documents and Next.js RSC payloads must always be network-first.
+  // Serving cached route payloads causes stale chunk ids after new deployments.
+  if (isDocumentRequest) {
     event.respondWith(
-      fetch(request).catch(() => caches.match(request).then((r) => r || caches.match('/offline.html')))
+      handleDocumentRequest(request)
     );
     return;
   }
@@ -105,6 +111,23 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(handleStaticRequest(request));
   }
 });
+
+// Handle app documents and RSC payloads with strict network-first
+async function handleDocumentRequest(request) {
+  const isNavigate = request.mode === 'navigate';
+
+  try {
+    // Never cache route html/RSC responses — they contain build-specific chunk references.
+    return await fetch(request);
+  } catch (error) {
+    if (isNavigate) {
+      const fallback = await caches.match('/offline.html');
+      if (fallback) return fallback;
+    }
+
+    return new Response('Network unavailable', { status: 503 });
+  }
+}
 
 // Handle static assets (HTML, CSS, JS)
 async function handleStaticRequest(request) {
@@ -122,8 +145,13 @@ async function handleStaticRequest(request) {
     
     // Cache successful responses
     if (networkResponse && networkResponse.status === 200) {
+      const contentType = networkResponse.headers.get('content-type') || '';
+      const shouldCache = !contentType.includes('text/html') && !contentType.includes('text/x-component');
+
+      if (shouldCache) {
       const cache = await caches.open(DYNAMIC_CACHE);
       cache.put(request, networkResponse.clone());
+      }
     }
     
     return networkResponse;
@@ -131,7 +159,7 @@ async function handleStaticRequest(request) {
     console.error('[Service Worker] Fetch failed:', error);
     
     // Return offline page if available
-    const offlineCache = await caches.match('/offline');
+    const offlineCache = await caches.match('/offline.html');
     if (offlineCache) return offlineCache;
     
     // Return basic offline response

@@ -1067,7 +1067,7 @@ export function StyleAdvisor() {
         const hasLinks = outfit.shoppingLinks && (
           outfit.shoppingLinks.amazon || 
           outfit.shoppingLinks.myntra || 
-          outfit.shoppingLinks.nykaa
+          outfit.shoppingLinks.tatacliq
         );
         
         

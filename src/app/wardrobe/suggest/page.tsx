@@ -184,11 +184,16 @@ function WardrobeSuggestPageContent() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate outfit suggestions');
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.error || 'Failed to generate outfit suggestions');
       }
 
       const data = await response.json();
+
+      if (!data || !Array.isArray(data.outfits)) {
+        throw new Error('Invalid outfit response from server');
+      }
+
       setResult(data);
       // Auto-expand first outfit
       if (data.outfits && data.outfits.length > 0) {

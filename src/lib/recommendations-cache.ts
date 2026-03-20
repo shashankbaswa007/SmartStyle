@@ -15,6 +15,7 @@ interface CachedRecommendation {
   timestamp: number;
   wardrobeHash: string; // Hash of wardrobe items to detect changes
   requestHash: string; // Hash of request params (occasion, preferences, etc.)
+  userId: string;
 }
 
 interface CacheEntry {
@@ -118,6 +119,7 @@ export function getCachedRecommendation(
  * Store recommendation in cache
  */
 export function cacheRecommendation(
+  userId: string,
   requestHash: string,
   wardrobeHash: string,
   recommendations: any
@@ -135,6 +137,7 @@ export function cacheRecommendation(
       timestamp: Date.now(),
       wardrobeHash,
       requestHash,
+      userId,
     },
     lastAccessed: Date.now(),
   });
@@ -168,7 +171,7 @@ export function invalidateUserCache(userId: string): void {
   let deletedCount = 0;
   
   for (const [key, entry] of cache.entries()) {
-    if (entry.value.requestHash.startsWith(userId)) {
+    if (entry.value.userId === userId) {
       cache.delete(key);
       deletedCount++;
     }

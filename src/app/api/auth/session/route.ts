@@ -23,7 +23,13 @@ function clearSessionCookie(response: NextResponse) {
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
+    }
+
     const parsed = sessionSchema.safeParse(body);
 
     if (!parsed.success) {
