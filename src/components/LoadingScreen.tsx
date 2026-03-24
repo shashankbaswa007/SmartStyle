@@ -6,7 +6,7 @@ import AnimatedLogo from '@/components/AnimatedLogo';
 
 /**
  * LoadingScreen - Netflix-inspired splash screen (2.8s total)
- * - Plays only once per browsers (uses localStorage "ss_loaded" key)
+ * - Plays on each fresh page load/reopen
  * - 5-stage animation: logo intro → light sweep → ring spiral → text reveal → fade out
  */
 export function LoadingScreen() {
@@ -14,12 +14,6 @@ export function LoadingScreen() {
   const maskId = useId();
 
   useEffect(() => {
-    const isLoaded = localStorage.getItem('ss_loaded') === 'true';
-
-    if (isLoaded) {
-      return;
-    }
-
     setShowLoading(true);
 
     // Stage 5 starts at 2.4s (fade out), unmount at 2.8s.
@@ -27,13 +21,8 @@ export function LoadingScreen() {
       setShowLoading(false);
     }, 2400);
 
-    const doneTimer = window.setTimeout(() => {
-      localStorage.setItem('ss_loaded', 'true');
-    }, 2800);
-
     return () => {
       window.clearTimeout(fadeTimer);
-      window.clearTimeout(doneTimer);
     };
   }, []);
 
