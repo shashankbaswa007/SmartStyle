@@ -3,14 +3,14 @@ import { generateWardrobeOutfits } from '@/lib/wardrobeOutfitGenerator';
 import { fetchWeatherForecast } from '@/lib/weather-service';
 import { verifyBearerToken, AuthError } from '@/lib/server-auth';
 import { checkServerRateLimit } from '@/lib/server-rate-limiter';
-import { getClientIdentifier } from '@/lib/rate-limiter';
+import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 import { 
   generateWardrobeHash, 
   generateRequestHash, 
   getCachedRecommendation, 
   cacheRecommendation 
 } from '@/lib/recommendations-cache';
-const MAX_REQUESTS_PER_HOUR = 20;
+const MAX_REQUESTS_PER_DAY = USAGE_LIMITS.wardrobeOutfit;
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,18 +53,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Shared, persistent rate limiting for AI-intensive endpoint.
-    const clientId = getClientIdentifier(request);
-    const rateLimit = await checkServerRateLimit(`${userId}:${clientId}`, {
-      scope: 'wardrobe-outfit',
-      windowMs: 60 * 60 * 1000,
-      maxRequests: MAX_REQUESTS_PER_HOUR,
+    const rateLimit = await checkServerRateLimit(userId, {
+      scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
+      windowMs: DAILY_WINDOW_MS,
+      maxRequests: MAX_REQUESTS_PER_DAY,
     });
 
     if (!rateLimit.allowed) {
       return NextResponse.json(
         { 
           error: 'Rate limit exceeded',
-          message: rateLimit.message || `You can generate up to ${MAX_REQUESTS_PER_HOUR} outfit suggestions per hour. Please try again later.`,
+          message: rateLimit.message || `You can generate up to ${MAX_REQUESTS_PER_DAY} outfit suggestions per day. Please try again later.`,
         },
         {
           status: 429,

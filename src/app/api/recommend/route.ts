@@ -192,7 +192,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🚀 OPTIMIZATION 1: Firestore-backed rate limiting (20 req/hour per user)
+    // 🚀 OPTIMIZATION 1: Firestore-backed rate limiting (10 req/day per user)
     // If limiter backend is unavailable in local/dev (e.g. missing ADC), fail open.
     let effectiveUserId = userId || 'anonymous';
     let rateLimitCheck: {
@@ -202,8 +202,8 @@ export async function POST(req: Request) {
       message?: string;
     } = {
       allowed: true,
-      remaining: 19,
-      resetAt: new Date(Date.now() + 60 * 60 * 1000),
+      remaining: 9,
+      resetAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     };
 
     try {

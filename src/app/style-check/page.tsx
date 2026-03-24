@@ -1,9 +1,11 @@
 
 'use client';
 
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
+import { auth } from '@/lib/firebase';
+import UsageLimitMeter from '@/components/UsageLimitMeter';
 
 // Lazy load heavy components for better performance
 const StyleAdvisor = lazy(() => import('@/components/style-advisor').then(mod => ({ default: mod.StyleAdvisor })));
@@ -14,6 +16,50 @@ const Particles = lazy(() => import('@/components/Particles'));
 
 export default function StyleCheckPage() {
   const isMounted = useMounted();
+  const [usage, setUsage] = useState<{ remaining: number; limit: number; resetAt?: string } | null>(null);
+
+  const fetchUsage = useCallback(async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch('/api/usage-status', {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+
+      if (!response.ok) return;
+      const data = await response.json();
+      const recommendUsage = data?.usage?.recommend;
+      if (recommendUsage) {
+        setUsage({
+          remaining: recommendUsage.remaining,
+          limit: recommendUsage.limit,
+          resetAt: recommendUsage.resetAt,
+        });
+      }
+    } catch {
+      // Fail silently; style-check flow remains usable.
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUsage();
+  }, [fetchUsage]);
+
+  useEffect(() => {
+    const onUsageConsumed = (event: Event) => {
+      const customEvent = event as CustomEvent<{ scope?: string }>;
+      if (customEvent.detail?.scope === 'recommend') {
+        fetchUsage();
+      }
+    };
+
+    window.addEventListener('usage:consumed', onUsageConsumed as EventListener);
+    return () => window.removeEventListener('usage:consumed', onUsageConsumed as EventListener);
+  }, [fetchUsage]);
 
   return (
     <ProtectedRoute>
@@ -63,6 +109,19 @@ export default function StyleCheckPage() {
               text="Get instant feedback on your outfit. Upload a photo and let our AI-powered style advisor give you personalized recommendations."
             />
           </Suspense>
+          <div className="mx-auto mt-8 max-w-lg">
+            <div className="rounded-lg p-1 bg-gradient-to-r from-purple-500/20 to-violet-500/20">
+              <UsageLimitMeter
+                variant="styleCheck"
+                title="Daily Analysis Limit"
+                subtitle="Analyses remaining today"
+                remaining={usage?.remaining ?? 0}
+                limit={usage?.limit ?? 10}
+                resetAt={usage?.resetAt}
+                className="rounded-lg"
+              />
+            </div>
+          </div>
         </header>
 
         <Suspense fallback={<div className="flex justify-center items-center min-h-[400px]"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div><p className="text-muted-foreground">Loading style advisor...</p></div></div>}>

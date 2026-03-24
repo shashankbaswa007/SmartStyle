@@ -88,13 +88,16 @@ export default function AnimatedLogo({ size = 48, textSize, className = '' }: An
 
         <text
           x="50"
-          y="52"
+          y="51.5"
           textAnchor="middle"
           dominantBaseline="middle"
           fill="#ffffff"
-          fontWeight="600"
-          letterSpacing="1.4"
-          style={{ fontSize: `${resolvedTextSize}px` }}
+          fontWeight="700"
+          letterSpacing="1.05"
+          style={{
+            fontSize: `${resolvedTextSize}px`,
+            fontFamily: '"Space Grotesk", "Sora", "Avenir Next", "Segoe UI", sans-serif',
+          }}
         >
           SS
         </text>

@@ -16,7 +16,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { toast } from '@/hooks/use-toast';
 import { Upload, Camera, X, Loader2, Info, Shield, Shirt } from 'lucide-react';
 import Image from 'next/image';
-import { addWardrobeItem } from '@/lib/wardrobeService';
 import { generateOptimizedImages, type OptimizedImages } from '@/lib/image-optimization';
 import { extractColorsFromDescription } from '@/lib/color-name-extraction';
 
@@ -706,17 +705,35 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
         colorsProcessed: true,
       };
 
-      // Step 4: Add to Firestore with retry
+      // Step 4: Save through server API (enforces daily upload quota)
       let saveAttempt = 0;
       let saveResult = null;
       
       while (saveAttempt < MAX_RETRIES && !saveResult?.success) {
         try {
-          saveResult = await addWardrobeItem(user.uid, itemData);
-          
-          if (!saveResult.success) {
-            throw new Error(saveResult.message);
+          const idToken = await user.getIdToken();
+          const response = await fetch('/api/wardrobe-item', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              userId: user.uid,
+              itemData,
+            }),
+          });
+
+          const payload = await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(payload?.message || payload?.error || 'Failed to save wardrobe item');
           }
+
+          saveResult = {
+            success: true,
+            itemId: payload?.itemId,
+          };
           
         } catch (saveError) {
           saveAttempt++;
@@ -735,6 +752,10 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       }
 
       setUploadStatus('complete');
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'wardrobe-upload' } }));
+      }
       
       // Colors already extracted during upload - no background processing needed
       

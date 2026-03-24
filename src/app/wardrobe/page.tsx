@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import UsageLimitMeter from '@/components/UsageLimitMeter';
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { getWardrobeItems, deleteWardrobeItem, markItemAsWorn, WardrobeItemData } from '@/lib/wardrobeService';
@@ -148,6 +149,10 @@ function WardrobePageContent() {
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   const isSyncingRef = useRef(false);
+  const [usageLimits, setUsageLimits] = useState<{
+    wardrobeOutfit?: { remaining: number; limit: number; resetAt?: string };
+    wardrobeUpload?: { remaining: number; limit: number; resetAt?: string };
+  }>({});
   
   // Scale awareness for large wardrobes
   const LARGE_WARDROBE_THRESHOLD = 100;
@@ -346,6 +351,59 @@ function WardrobePageContent() {
       isSyncingRef.current = false;
     }
   };
+
+  const fetchUsageLimits = useCallback(async (uid?: string | null) => {
+    const activeUser = uid || auth.currentUser?.uid;
+    if (!activeUser || !auth.currentUser) return;
+
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const response = await fetch('/api/usage-status', {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      });
+
+      if (!response.ok) return;
+      const data = await response.json();
+
+      setUsageLimits({
+        wardrobeOutfit: data?.usage?.wardrobeOutfit
+          ? {
+              remaining: data.usage.wardrobeOutfit.remaining,
+              limit: data.usage.wardrobeOutfit.limit,
+              resetAt: data.usage.wardrobeOutfit.resetAt,
+            }
+          : undefined,
+        wardrobeUpload: data?.usage?.wardrobeUpload
+          ? {
+              remaining: data.usage.wardrobeUpload.remaining,
+              limit: data.usage.wardrobeUpload.limit,
+              resetAt: data.usage.wardrobeUpload.resetAt,
+            }
+          : undefined,
+      });
+    } catch {
+      // Non-blocking for wardrobe browsing.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    fetchUsageLimits(userId);
+  }, [userId, fetchUsageLimits]);
+
+  useEffect(() => {
+    const onUsageConsumed = (event: Event) => {
+      const customEvent = event as CustomEvent<{ scope?: string }>;
+      if (customEvent.detail?.scope === 'wardrobe-outfit' || customEvent.detail?.scope === 'wardrobe-upload') {
+        fetchUsageLimits(userId);
+      }
+    };
+
+    window.addEventListener('usage:consumed', onUsageConsumed as EventListener);
+    return () => window.removeEventListener('usage:consumed', onUsageConsumed as EventListener);
+  }, [fetchUsageLimits, userId]);
 
   const handleRefresh = () => {
     if (userId) {
@@ -1161,6 +1219,31 @@ function WardrobePageContent() {
                   </AlertDescription>
                 </Alert>
               )}
+
+              <div className="mx-auto grid w-full max-w-4xl grid-cols-1 gap-4 px-4 sm:px-0">
+                <div className="rounded-lg p-1 bg-gradient-to-r from-purple-500/15 to-violet-500/15 border border-purple-200/40">
+                  <UsageLimitMeter
+                    variant="wardrobe"
+                    title="AI Outfit Suggestions"
+                    subtitle="Daily generation limit"
+                    remaining={usageLimits.wardrobeOutfit?.remaining ?? 0}
+                    limit={usageLimits.wardrobeOutfit?.limit ?? 10}
+                    resetAt={usageLimits.wardrobeOutfit?.resetAt}
+                    className="rounded-md"
+                  />
+                </div>
+                <div className="rounded-lg p-1 bg-gradient-to-r from-violet-500/15 to-indigo-500/15 border border-violet-200/40">
+                  <UsageLimitMeter
+                    variant="wardrobe"
+                    title="Daily Wardrobe Uploads"
+                    subtitle="New items you can add"
+                    remaining={usageLimits.wardrobeUpload?.remaining ?? 0}
+                    limit={usageLimits.wardrobeUpload?.limit ?? 20}
+                    resetAt={usageLimits.wardrobeUpload?.resetAt}
+                    className="rounded-md"
+                  />
+                </div>
+              </div>
             </motion.div>
             )}
           </header>
@@ -2019,6 +2102,7 @@ function WardrobePageContent() {
                 if (userId) {
                   fetchWardrobeItems(userId);
                 }
+                fetchUsageLimits(userId);
               }}
             />
           </Suspense>

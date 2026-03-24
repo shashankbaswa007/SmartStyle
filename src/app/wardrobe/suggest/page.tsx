@@ -202,6 +202,10 @@ function WardrobeSuggestPageContent() {
         setExpandedOutfit(0);
       }
 
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'wardrobe-outfit' } }));
+      }
+
       toast({
         title: 'Outfits Generated!',
         description: `${data.outfits.length} outfit combinations created from your wardrobe.`,

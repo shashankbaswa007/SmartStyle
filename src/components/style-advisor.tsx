@@ -1117,6 +1117,10 @@ export function StyleAdvisor() {
       updateStep('finalize', 'complete');
       setLoadingMessage('');
 
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'recommend' } }));
+      }
+
       
       // Show success toast
       toast({

@@ -47,7 +47,7 @@ export function Header() {
             href="/" 
             className="z-10 shrink-0 transition-opacity hover:opacity-95"
           >
-            <AnimatedLogo size={46} className="origin-left scale-[0.82] sm:scale-[0.9]" />
+            <AnimatedLogo size={56} className="origin-left" />
           </Link>
 
           {/* Right side: Navigation + Profile */}

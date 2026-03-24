@@ -1,6 +1,6 @@
-import { getClientIdentifier } from '@/lib/rate-limiter';
 import { AuthError, verifyBearerTokenMatchesUser } from '@/lib/server-auth';
 import { checkServerRateLimit } from '@/lib/server-rate-limiter';
+import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 
 interface RecommendRateLimit {
   allowed: boolean;
@@ -26,11 +26,11 @@ export async function enforceRecommendRateLimit(
   requestedUserId?: string
 ): Promise<{ effectiveUserId: string; rateLimit: RecommendRateLimit }> {
   const effectiveUserId = requestedUserId || 'anonymous';
-  const clientId = getClientIdentifier(request);
-  const rateLimit = await checkServerRateLimit(`${effectiveUserId}:${clientId}`, {
-    scope: 'recommend',
-    windowMs: 60 * 60 * 1000,
-    maxRequests: 20,
+  const subject = requestedUserId && requestedUserId !== 'anonymous' ? requestedUserId : `anon:${request.headers.get('x-forwarded-for') || 'unknown'}`;
+  const rateLimit = await checkServerRateLimit(subject, {
+    scope: RATE_LIMIT_SCOPES.recommend,
+    windowMs: DAILY_WINDOW_MS,
+    maxRequests: USAGE_LIMITS.recommend,
   });
 
   return { effectiveUserId, rateLimit };
