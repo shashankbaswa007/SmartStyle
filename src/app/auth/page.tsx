@@ -384,7 +384,7 @@ export default function AuthPage() {
                         duration: duration(0.7, 'primary'),
                         ease: MOTION_EASING.graceful,
                       }}
-                      className="mt-5 font-serif text-[2.15rem] font-light leading-[1.07] tracking-[-0.02em] text-white sm:text-[2.7rem] lg:text-[3rem]"
+                      className="mt-5 font-headline text-[2.1rem] font-medium leading-[1.06] tracking-[-0.018em] text-white sm:text-[2.6rem] lg:text-[2.95rem]"
                     >
                       Dress with clarity, not guesswork.
                     </motion.h1>
@@ -501,7 +501,7 @@ export default function AuthPage() {
                   }}
                   className="text-center"
                 >
-                  <BrandedLogo animatedRings={false} showWordmark showTagline />
+                  <BrandedLogo animatedRings={true} showWordmark showTagline className="justify-center scale-[1.06] sm:scale-[1.1]" />
                 </motion.div>
 
                 <motion.div

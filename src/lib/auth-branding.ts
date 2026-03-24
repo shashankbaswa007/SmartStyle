@@ -8,35 +8,40 @@
  */
 
 export const AUTH_LOGO_LOCKUP = {
-  markRoot: 'relative h-12 w-12',
-  outerRing: 'absolute inset-0 rounded-2xl border border-cyan-200/35',
-  innerRing: 'absolute inset-[4px] rounded-xl border border-indigo-200/30',
+  markRoot: 'relative h-12 w-12 overflow-visible',
+  outerRing:
+    'absolute inset-[-10px] rounded-full border-2 border-cyan-200/90 border-r-transparent border-b-cyan-100/18 shadow-[0_0_0_1px_rgba(56,189,248,0.22),0_0_24px_rgba(56,189,248,0.38)]',
+  middleRing:
+    'absolute inset-[-5px] rounded-full border-[1.5px] border-sky-200/85 border-t-transparent border-l-sky-100/22 shadow-[0_0_18px_rgba(56,189,248,0.32)]',
+  innerRing:
+    'absolute inset-[-1px] rounded-full border-[1.5px] border-indigo-200/88 border-l-transparent border-t-indigo-100/25 shadow-[0_0_16px_rgba(99,102,241,0.34)]',
   center:
-    'absolute inset-[7px] flex items-center justify-center rounded-lg border border-white/20 bg-gradient-to-br from-cyan-300/20 via-sky-300/14 to-indigo-500/20 shadow-[0_0_20px_rgba(56,189,248,0.3)]',
-  glyph: 'relative text-[13px] font-serif font-semibold italic tracking-[0.12em] text-white',
-  glyphEcho: 'pointer-events-none absolute -inset-x-1 top-[1px] opacity-40 blur-[0.6px]',
-  wordmark: 'font-serif text-[1.6rem] leading-none tracking-[-0.03em] text-white',
-  tagline: 'mt-1 text-[10px] uppercase tracking-[0.2em] text-cyan-100/68',
-  gap: 'gap-3.5',
+    'absolute inset-[7px] z-10 flex items-center justify-center rounded-full border border-white/30 bg-gradient-to-br from-cyan-300/36 via-sky-300/24 to-indigo-500/34 shadow-[0_0_28px_rgba(56,189,248,0.38)]',
+  glyph: 'relative font-headline text-[14px] font-semibold leading-none tracking-[0.08em] text-slate-50',
+  glyphEcho: 'pointer-events-none absolute -inset-x-[1px] top-[1px] opacity-0 blur-[0.45px]',
+  wordmark: 'font-headline text-[1.42rem] font-semibold leading-none tracking-[-0.02em] text-slate-50',
+  tagline: 'mt-[2px] font-body text-[10px] uppercase tracking-[0.16em] text-cyan-100/72',
+  gap: 'gap-2.5',
 };
 
 export const AUTH_LOGO_MOTION = {
-  outerDuration: 12,
-  innerDuration: 10,
+  outerDuration: 14,
+  middleDuration: 9,
+  innerDuration: 11,
 };
 
 export const AUTH_LOGO_CONFIG = {
   glyph: {
-    font: 'font-serif',
+    font: 'font-headline',
     weight: 'font-semibold',
-    style: 'italic',
+    style: '',
     letter: 'SS',
-    glyphOpacity: 'opacity-40',
-    glyphBlur: 'blur-[0.6px]',
+    glyphOpacity: 'opacity-25',
+    glyphBlur: 'blur-[0.45px]',
   },
   wordmark: {
-    font: 'font-serif',
-    weight: 'font-normal',
+    font: 'font-headline',
+    weight: 'font-semibold',
     text: 'SmartStyle',
   },
   taglines: {

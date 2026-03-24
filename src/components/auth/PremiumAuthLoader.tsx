@@ -38,7 +38,7 @@ export function PremiumAuthLoader({ statusText = 'Composing your style atmospher
 
         <div className="relative z-10 flex min-h-screen items-center justify-center px-6">
           <div className="w-full max-w-sm rounded-[1.9rem] border border-white/14 bg-slate-950/60 p-8 shadow-[0_30px_70px_rgba(5,10,26,0.58)] backdrop-blur-2xl">
-            <BrandedLogo animatedRings={false} showWordmark showTagline />
+            <BrandedLogo animatedRings={true} showWordmark showTagline />
             <p className="mt-6 text-center text-[11px] uppercase tracking-[0.15em] text-slate-300/72">{statusText}</p>
           </div>
         </div>
@@ -143,7 +143,7 @@ export function PremiumAuthLoader({ statusText = 'Composing your style atmospher
                 },
               }}
             >
-              <BrandedLogo animatedRings={false} showMark showWordmark showTagline className="justify-center" />
+              <BrandedLogo animatedRings={true} showMark showWordmark showTagline className="justify-center" />
             </motion.div>
           </div>
 

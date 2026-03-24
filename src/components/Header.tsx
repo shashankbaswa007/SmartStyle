@@ -47,7 +47,7 @@ export function Header() {
             href="/" 
             className="z-10 shrink-0 transition-opacity hover:opacity-95"
           >
-            <BrandedLogo animatedRings={false} showWordmark showTagline className="origin-left scale-[0.7] sm:scale-[0.78]" />
+            <BrandedLogo animatedRings={true} showWordmark showTagline className="origin-left scale-[0.82] sm:scale-[0.9]" />
           </Link>
 
           {/* Right side: Navigation + Profile */}

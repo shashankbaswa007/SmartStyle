@@ -16,14 +16,14 @@ interface BrandedLogoProps {
  * BrandedLogo - Single logo lockup shared across auth contexts.
  */
 export function BrandedLogo({
-  animatedRings = false,
+  animatedRings = true,
   showMark = true,
   showWordmark = true,
   showTagline = false,
   className = '',
 }: BrandedLogoProps) {
-  const { prefersReducedMotion } = useMotionSettings();
-  const shouldAnimate = animatedRings && !prefersReducedMotion;
+  useMotionSettings();
+  const shouldAnimate = animatedRings;
 
   return (
     <div className={`mx-auto inline-flex items-center ${AUTH_LOGO_LOCKUP.gap} ${className}`}>
@@ -43,8 +43,19 @@ export function BrandedLogo({
           {shouldAnimate ? (
             <motion.div
               aria-hidden="true"
-              className={AUTH_LOGO_LOCKUP.innerRing}
+              className={AUTH_LOGO_LOCKUP.middleRing}
               animate={{ rotate: [360, 0] }}
+              transition={{ duration: AUTH_LOGO_MOTION.middleDuration, repeat: Infinity, ease: 'linear' }}
+            />
+          ) : (
+            <div aria-hidden="true" className={AUTH_LOGO_LOCKUP.middleRing} />
+          )}
+
+          {shouldAnimate ? (
+            <motion.div
+              aria-hidden="true"
+              className={AUTH_LOGO_LOCKUP.innerRing}
+              animate={{ rotate: [0, 360] }}
               transition={{ duration: AUTH_LOGO_MOTION.innerDuration, repeat: Infinity, ease: 'linear' }}
             />
           ) : (
@@ -54,9 +65,6 @@ export function BrandedLogo({
           <div className={AUTH_LOGO_LOCKUP.center}>
             <span className={AUTH_LOGO_LOCKUP.glyph}>
               {AUTH_LOGO_CONFIG.glyph.letter}
-              <span className={AUTH_LOGO_LOCKUP.glyphEcho} aria-hidden="true">
-                {AUTH_LOGO_CONFIG.glyph.letter}
-              </span>
             </span>
           </div>
         </div>
