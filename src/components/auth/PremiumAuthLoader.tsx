@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import DarkVeil from '@/components/DarkVeil';
-import { BrandedLogo } from '@/components/auth/BrandedLogo';
+import AnimatedLogo from '@/components/AnimatedLogo';
 import { AUTH_ANIMATION_CONFIG } from '@/lib/auth-branding';
 import { MOTION_EASING } from '@/lib/premium-motion';
 import { useMotionSettings } from '@/components/MotionProvider';
@@ -38,7 +38,9 @@ export function PremiumAuthLoader({ statusText = 'Composing your style atmospher
 
         <div className="relative z-10 flex min-h-screen items-center justify-center px-6">
           <div className="w-full max-w-sm rounded-[1.9rem] border border-white/14 bg-slate-950/60 p-8 shadow-[0_30px_70px_rgba(5,10,26,0.58)] backdrop-blur-2xl">
-            <BrandedLogo animatedRings={true} showWordmark showTagline />
+            <div className="flex justify-center">
+              <AnimatedLogo size={58} />
+            </div>
             <p className="mt-6 text-center text-[11px] uppercase tracking-[0.15em] text-slate-300/72">{statusText}</p>
           </div>
         </div>
@@ -143,7 +145,9 @@ export function PremiumAuthLoader({ statusText = 'Composing your style atmospher
                 },
               }}
             >
-              <BrandedLogo animatedRings={true} showMark showWordmark showTagline className="justify-center" />
+              <div className="flex justify-center">
+                <AnimatedLogo size={58} />
+              </div>
             </motion.div>
           </div>
 

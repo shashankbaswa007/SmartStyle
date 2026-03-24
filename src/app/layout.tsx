@@ -7,7 +7,7 @@ import { Header } from '@/components/Header';
 import { InstallPWA } from '@/components/InstallPWA';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 import { ErrorBoundary } from '@/components/error-boundary';
-import { LogoIntro } from '@/components/branding/LogoIntro';
+import { LoadingScreen } from '@/components/LoadingScreen';
 import { MotionProvider } from '@/components/MotionProvider';
 import { BRAND } from '@/lib/branding';
 import Script from 'next/script';
@@ -97,7 +97,7 @@ export default function RootLayout({
           <MotionProvider>
             <AuthProvider>
               <ServiceWorkerRegister />
-              <LogoIntro />
+              <LoadingScreen />
               <Header />
               <main className="pt-20 page-enter-animation">
                 {children}

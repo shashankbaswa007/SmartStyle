@@ -498,6 +498,22 @@
   }
 }
 
+/* ============================================================================
+   NOISE OVERLAY FILTER - Adds subtle texture depth to backgrounds
+   ============================================================================ */
+svg[id="noiseFilterSvg"] {
+  display: none;
+}
+
+.noise-overlay {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' result='noise' /%3E%3CfeColorMatrix in='noise' type='saturate' values='0' /%3E%3C/filter%3E%3Crect width='300' height='300' fill='rgba(255,255,255,0.03)' filter='url(%23noiseFilter)' /%3E%3C/svg%3E");
+  background-size: 300px 300px;
+  background-repeat: repeat;
+  opacity: 0.03;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}
+
 .count-up {
   animation: count-up 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }

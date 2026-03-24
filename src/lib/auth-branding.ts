@@ -25,9 +25,9 @@ export const AUTH_LOGO_LOCKUP = {
 };
 
 export const AUTH_LOGO_MOTION = {
-  outerDuration: 14,
-  middleDuration: 9,
-  innerDuration: 11,
+  outerDuration: 3,
+  middleDuration: 5,
+  innerDuration: 8,
 };
 
 export const AUTH_LOGO_CONFIG = {
