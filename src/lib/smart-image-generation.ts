@@ -32,7 +32,7 @@ import { generateWithReplicate, isReplicateAvailable } from './replicate-image';
 let activeRequests = 0;
 const MAX_CONCURRENT = 3;
 const inflightRequests = new Map<string, Promise<string>>();
-const TOTAL_TIMEOUT = 12_000; // 12 s — klein model averages 3.5s, 12s is plenty for full chain
+const TOTAL_TIMEOUT = 18_000; // 18 s — improves success rate during transient provider latency
 
 // ─── Session Circuit Breakers ──────────────────────────────────────────
 let replicateDisabledUntil = 0; // Epoch ms — skip Replicate until this time
@@ -129,7 +129,7 @@ async function _generateWithChain(
       onLifecycle({ provider: 'pollinations', status: 'initiated', timestamp: Date.now() });
       const url = await withBudget(
         generateOutfitImageWithFallback(prompt, colors, onLifecycle, pollinationsController.signal),
-        Math.min(budgetLeft(), 10_000), // 10 s — Pollinations is primary, needs 5-10s
+        Math.min(budgetLeft(), 12_000), // 12 s — allow extra headroom for occasional provider slowness
         pollinationsController,
       );
       if (url) {

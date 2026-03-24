@@ -122,6 +122,45 @@
   animation: gradientFlow 4s ease infinite;
 }
 
+@keyframes atelier-dot-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.24);
+    opacity: 1;
+  }
+}
+
+.atelier-dot-breathe {
+  animation: atelier-dot-breathe 3s ease-in-out infinite;
+}
+
+@keyframes atelier-light-sweep {
+  0% {
+    transform: translateX(-120%) rotate(130deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 0.05;
+  }
+  40% {
+    transform: translateX(220%) rotate(130deg);
+    opacity: 0.05;
+  }
+  57%,
+  100% {
+    transform: translateX(220%) rotate(130deg);
+    opacity: 0;
+  }
+}
+
+.atelier-light-sweep {
+  animation: atelier-light-sweep 14s ease-in-out infinite;
+}
+
 /* Shimmer Animation for Skeleton Loaders - GPU Accelerated */
 @keyframes shimmer {
   0% {

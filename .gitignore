@@ -137,3 +137,7 @@ VERIFICATION_*.md
 # ❌ Any files with "private-key" in the name
 # ❌ Any files with actual API tokens/secrets
 *.tsbuildinfo
+
+# Test/report artifacts
+/playwright-report/
+/test-results/

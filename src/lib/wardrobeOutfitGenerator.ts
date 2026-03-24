@@ -27,6 +27,170 @@ export interface OutfitSuggestionResult {
   missingPieces?: string[];
 }
 
+function getMissingPieces(itemsByType: Record<string, WardrobeItemData[]>): string[] {
+  const missing: string[] = [];
+
+  if (itemsByType.top.length === 0 && itemsByType.dress.length === 0) {
+    missing.push('A versatile top in a neutral color');
+  }
+
+  if (itemsByType.bottom.length === 0 && itemsByType.dress.length === 0) {
+    missing.push('A well-fitted bottom (jeans or tailored trousers)');
+  }
+
+  if (itemsByType.shoes.length === 0) {
+    missing.push('Comfortable all-purpose shoes');
+  }
+
+  if (itemsByType.outerwear.length === 0) {
+    missing.push('A lightweight jacket or outer layer');
+  }
+
+  if (itemsByType.accessory.length === 0) {
+    missing.push('One versatile accessory to complete looks');
+  }
+
+  return missing.slice(0, 3);
+}
+
+function createRuleBasedOutfits(
+  activeItems: WardrobeItemData[],
+  occasion: string,
+  weather?: { temp: number; condition: string; location?: string }
+): OutfitSuggestionResult {
+  const itemsByType: Record<string, WardrobeItemData[]> = {
+    top: [],
+    bottom: [],
+    dress: [],
+    shoes: [],
+    accessory: [],
+    outerwear: [],
+  };
+
+  activeItems.forEach((item) => {
+    if (itemsByType[item.itemType]) {
+      itemsByType[item.itemType].push(item);
+    }
+  });
+
+  const wardrobeStats = {
+    totalItems: activeItems.length,
+    itemsByType: {
+      top: itemsByType.top.length,
+      bottom: itemsByType.bottom.length,
+      dress: itemsByType.dress.length,
+      shoes: itemsByType.shoes.length,
+      accessory: itemsByType.accessory.length,
+      outerwear: itemsByType.outerwear.length,
+    },
+  };
+
+  const shouldAddOuterwear = weather ? weather.temp < 18 || /rain|snow|wind/i.test(weather.condition) : false;
+
+  const outfitCandidates: OutfitCombination[] = [];
+
+  // Outfit strategy 1: dress-based looks
+  itemsByType.dress.forEach((dress, idx) => {
+    const items: OutfitCombination['items'] = [
+      { itemId: dress.id || `dress-${idx}`, description: dress.description, type: dress.itemType },
+    ];
+
+    const shoes = itemsByType.shoes[idx % Math.max(1, itemsByType.shoes.length)];
+    const accessory = itemsByType.accessory[idx % Math.max(1, itemsByType.accessory.length)];
+    const outerwear = itemsByType.outerwear[idx % Math.max(1, itemsByType.outerwear.length)];
+
+    if (shoes) {
+      items.push({ itemId: shoes.id || `shoes-${idx}`, description: shoes.description, type: shoes.itemType });
+    }
+    if (accessory) {
+      items.push({ itemId: accessory.id || `accessory-${idx}`, description: accessory.description, type: accessory.itemType });
+    }
+    if (shouldAddOuterwear && outerwear) {
+      items.push({ itemId: outerwear.id || `outerwear-${idx}`, description: outerwear.description, type: outerwear.itemType });
+    }
+
+    outfitCandidates.push({
+      name: `Refined ${occasion} Look ${idx + 1}`,
+      items,
+      reasoning: shouldAddOuterwear
+        ? 'This dress-centered outfit is balanced with practical layering for the forecast while keeping the look occasion-ready.'
+        : 'This dress-centered combination creates a polished silhouette and works well for the selected occasion.',
+      confidence: 82,
+      occasion,
+    });
+  });
+
+  // Outfit strategy 2: top + bottom combinations
+  if (itemsByType.top.length > 0 && itemsByType.bottom.length > 0) {
+    const pairCount = Math.min(3, itemsByType.top.length, itemsByType.bottom.length);
+    for (let i = 0; i < pairCount; i++) {
+      const top = itemsByType.top[i % itemsByType.top.length];
+      const bottom = itemsByType.bottom[(i + 1) % itemsByType.bottom.length];
+      const shoes = itemsByType.shoes[i % Math.max(1, itemsByType.shoes.length)];
+      const accessory = itemsByType.accessory[(i + 1) % Math.max(1, itemsByType.accessory.length)];
+      const outerwear = itemsByType.outerwear[i % Math.max(1, itemsByType.outerwear.length)];
+
+      const items: OutfitCombination['items'] = [
+        { itemId: top.id || `top-${i}`, description: top.description, type: top.itemType },
+        { itemId: bottom.id || `bottom-${i}`, description: bottom.description, type: bottom.itemType },
+      ];
+
+      if (shoes) {
+        items.push({ itemId: shoes.id || `shoes-${i}`, description: shoes.description, type: shoes.itemType });
+      }
+      if (shouldAddOuterwear && outerwear) {
+        items.push({ itemId: outerwear.id || `outerwear-${i}`, description: outerwear.description, type: outerwear.itemType });
+      }
+      if (accessory) {
+        items.push({ itemId: accessory.id || `accessory-${i}`, description: accessory.description, type: accessory.itemType });
+      }
+
+      outfitCandidates.push({
+        name: `Curated ${occasion} Combination ${i + 1}`,
+        items,
+        reasoning: shouldAddOuterwear
+          ? 'This layered combination uses your existing separates and adds weather-appropriate coverage without sacrificing style.'
+          : 'This top-and-bottom pairing offers a reliable and stylish balance suitable for the selected occasion.',
+        confidence: 78,
+        occasion,
+      });
+    }
+  }
+
+  // Last-resort fallback: ensure we always return at least one usable outfit.
+  if (outfitCandidates.length === 0) {
+    const fallbackItems = activeItems.slice(0, Math.min(3, activeItems.length)).map((item, index) => ({
+      itemId: item.id || `item-${index}`,
+      description: item.description,
+      type: item.itemType,
+    }));
+
+    outfitCandidates.push({
+      name: `Essential ${occasion} Outfit`,
+      items: fallbackItems,
+      reasoning: 'This fallback outfit uses your most versatile available pieces and can be refined as you add more wardrobe variety.',
+      confidence: 70,
+      occasion,
+    });
+  }
+
+  const uniqueOutfits: OutfitCombination[] = [];
+  const seen = new Set<string>();
+  for (const outfit of outfitCandidates) {
+    const key = outfit.items.map((i) => i.itemId).sort().join('|');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueOutfits.push(outfit);
+    if (uniqueOutfits.length >= 3) break;
+  }
+
+  return {
+    outfits: uniqueOutfits,
+    wardrobeStats,
+    missingPieces: getMissingPieces(itemsByType),
+  };
+}
+
 /**
  * Generate outfit combinations from user's wardrobe using AI
  * @param wardrobeItems - Array of wardrobe items from client
@@ -54,8 +218,9 @@ export async function generateWardrobeOutfits(
     if (activeItems.length < 3) {
       throw new Error('Not enough items in wardrobe. Please add at least 3 items to generate outfit suggestions.');
     }
-    
-    if (activeItems.length < 5) {
+
+    if (!process.env.GROQ_API_KEY) {
+      return createRuleBasedOutfits(activeItems, occasion, weather);
     }
 
     // Fetch user preferences
@@ -94,29 +259,33 @@ export async function generateWardrobeOutfits(
     const prompt = buildOutfitPrompt(itemsByType, occasion, weather, userPreferences);
 
 
-    // Call Groq AI
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: 'system',
-          content: `You are a professional personal stylist. You help users create outfit combinations from their existing wardrobe. You provide practical, stylish suggestions that match their preferences and the occasion. Always respond in valid JSON format.`,
-        },
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-      model: 'llama-3.3-70b-versatile',
-      temperature: 0.8,
-      max_tokens: 1500,
-      stream: false,
-      response_format: { type: 'json_object' },
-    });
+    let aiResponse: any;
 
-    const responseText = completion.choices[0]?.message?.content || '{}';
+    try {
+      // Call Groq AI
+      const completion = await groq.chat.completions.create({
+        messages: [
+          {
+            role: 'system',
+            content: `You are a professional personal stylist. You help users create outfit combinations from their existing wardrobe. You provide practical, stylish suggestions that match their preferences and the occasion. Always respond in valid JSON format.`,
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        model: 'llama-3.3-70b-versatile',
+        temperature: 0.8,
+        max_tokens: 1500,
+        stream: false,
+        response_format: { type: 'json_object' },
+      });
 
-    // Parse AI response
-    const aiResponse = JSON.parse(responseText);
+      const responseText = completion.choices[0]?.message?.content || '{}';
+      aiResponse = JSON.parse(responseText);
+    } catch {
+      return createRuleBasedOutfits(activeItems, occasion, weather);
+    }
 
     if (!aiResponse.outfits || !Array.isArray(aiResponse.outfits)) {
       throw new Error('Invalid response from AI - no outfits generated');
@@ -134,13 +303,13 @@ export async function generateWardrobeOutfits(
         
         // Strategy 1: Exact ID match
         if (itemRef.itemId) {
-          wardrobeItem = wardrobeItems.find(item => item.id === itemRef.itemId);
+            wardrobeItem = activeItems.find(item => item.id === itemRef.itemId);
         }
         
         // Strategy 2: Fuzzy description match
         if (!wardrobeItem && itemRef.description) {
           const searchTerms: string[] = itemRef.description.toLowerCase().split(' ');
-          wardrobeItem = wardrobeItems.find(item => {
+          wardrobeItem = activeItems.find(item => {
             const itemDesc = item.description.toLowerCase();
             // Item matches if description contains at least 2 search terms
             const matchCount = searchTerms.filter(term => 
@@ -152,7 +321,7 @@ export async function generateWardrobeOutfits(
         
         // Strategy 3: Type and color match as fallback
         if (!wardrobeItem && itemRef.type) {
-          wardrobeItem = wardrobeItems.find(item => 
+          wardrobeItem = activeItems.find(item => 
             item.itemType === itemRef.type && 
             (!itemRef.description || item.description.includes(itemRef.description.split(' ')[0]))
           );
@@ -185,7 +354,7 @@ export async function generateWardrobeOutfits(
     }
 
     if (validatedOutfits.length === 0) {
-      throw new Error('Could not generate valid outfit combinations. Try adding more items to your wardrobe.');
+      return createRuleBasedOutfits(activeItems, occasion, weather);
     }
 
 

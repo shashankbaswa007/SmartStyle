@@ -12,8 +12,10 @@
     }
     
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
-      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+      background: radial-gradient(circle at 12% 18%, rgba(20, 184, 166, 0.14), transparent 32%),
+        radial-gradient(circle at 85% 80%, rgba(79, 70, 229, 0.22), transparent 42%),
+        linear-gradient(140deg, #050813 0%, #0b1020 60%, #0f172a 100%);
       color: #ffffff;
       min-height: 100vh;
       display: flex;
@@ -24,24 +26,45 @@
     
     .container {
       text-align: center;
-      max-width: 500px;
+      max-width: 540px;
+      width: 100%;
+      padding: 28px;
+      border-radius: 26px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(2, 6, 23, 0.62);
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.46);
+      backdrop-filter: blur(16px);
     }
     
-    .icon {
-      font-size: 80px;
-      margin-bottom: 20px;
-      animation: pulse 2s ease-in-out infinite;
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+      font-size: 28px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
     }
     
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      animation: pulse 2.2s ease-in-out infinite;
+    }
+
+    .brand-name span {
+      color: #5eead4;
+    }
+
     @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.04); opacity: 0.84; }
     }
     
     h1 {
-      font-size: 32px;
-      margin-bottom: 16px;
-      background: linear-gradient(135deg, #7B68EE 0%, #9B8CF5 100%);
+      font-size: 30px;
+      margin-bottom: 14px;
+      background: linear-gradient(135deg, #f8fafc 0%, #c7d2fe 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -49,48 +72,64 @@
     
     p {
       font-size: 16px;
-      color: #a0a0a0;
+      color: rgba(226, 232, 240, 0.8);
       line-height: 1.6;
-      margin-bottom: 32px;
+      margin-bottom: 26px;
     }
     
     .button {
       display: inline-block;
-      padding: 12px 32px;
-      background: linear-gradient(135deg, #7B68EE 0%, #9B8CF5 100%);
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #4F46E5 0%, #14B8A6 100%);
       color: white;
       text-decoration: none;
-      border-radius: 8px;
+      border-radius: 12px;
       font-weight: 600;
-      transition: transform 0.2s, box-shadow 0.2s;
-      box-shadow: 0 4px 12px rgba(123, 104, 238, 0.4);
+      transition: transform 0.2s, box-shadow 0.2s, filter 0.2s;
+      box-shadow: 0 8px 22px rgba(79, 70, 229, 0.38);
     }
     
     .button:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(123, 104, 238, 0.6);
+      box-shadow: 0 12px 28px rgba(20, 184, 166, 0.32);
+      filter: brightness(1.04);
     }
     
     .status {
-      margin-top: 32px;
-      padding: 12px 20px;
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 8px;
-      border-left: 4px solid #ff6b6b;
+      margin-top: 28px;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 10px;
+      border-left: 3px solid #f97316;
+      color: rgba(226, 232, 240, 0.88);
     }
     
     .status.online {
-      border-left-color: #51cf66;
+      border-left-color: #10b981;
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="icon">📡</div>
-    <h1>You're Offline</h1>
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs>
+          <linearGradient id="offlineBrandGradient" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#7C3AED" />
+            <stop offset="0.5" stop-color="#4F46E5" />
+            <stop offset="1" stop-color="#14B8A6" />
+          </linearGradient>
+        </defs>
+        <rect x="4" y="4" width="56" height="56" rx="18" fill="url(#offlineBrandGradient)" />
+        <rect x="4" y="4" width="56" height="56" rx="18" fill="rgba(3,7,18,0.16)" />
+        <path d="M43 16.8 31.3 35.8a2.5 2.5 0 0 1-3.9.2l-5.1-6.5a2.2 2.2 0 1 0-3.4 2.8l7.1 8.9a6.6 6.6 0 0 0 10.8-.6l10-16.8a2.2 2.2 0 0 0-3.8-2.4Z" fill="rgba(8,12,28,0.68)" />
+        <path d="M39.9 11.7 54.1 10a1.5 1.5 0 0 1 1.6 2.2L48.8 26a1.5 1.5 0 0 1-2.8-.3l-1.7-6a1.5 1.5 0 0 0-1.1-1.1l-5.8-1.6a1.5 1.5 0 0 1-.3-2.9Z" fill="rgba(226,232,240,0.95)" />
+      </svg>
+      <div class="brand-name">Smart<span>Style</span></div>
+    </div>
+    <h1>Connection Lost</h1>
     <p>
-      It looks like you've lost your internet connection. 
-      Don't worry, some features are still available offline!
+      Your network appears to be offline. SmartStyle will automatically reconnect and refresh as soon as internet access returns.
     </p>
     
     <a href="/" class="button" onclick="window.location.reload(); return false;">
@@ -98,7 +137,7 @@
     </a>
     
     <div class="status" id="status">
-      <strong>Connection Status:</strong> <span id="connection">Checking...</span>
+      <strong>Network Status:</strong> <span id="connection">Checking...</span>
     </div>
   </div>
   

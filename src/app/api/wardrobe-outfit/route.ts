@@ -124,6 +124,12 @@ export async function POST(request: NextRequest) {
       // Cache the result for future requests
       cacheRecommendation(userId, requestHash, wardrobeHash, result);
     } catch (generationError) {
+      console.error('[wardrobe-outfit] Generation failed', {
+        userId,
+        occasion,
+        itemCount: Array.isArray(wardrobeItems) ? wardrobeItems.length : 0,
+        error: generationError instanceof Error ? generationError.message : generationError,
+      });
       
       // Handle specific errors
       if (generationError instanceof Error) {
@@ -131,6 +137,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json(
             { 
               error: 'Empty wardrobe',
+              code: 'WARDROBE_EMPTY',
               message: 'You need to add items to your wardrobe before we can generate outfit suggestions.'
             },
             { status: 400 }
@@ -140,6 +147,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json(
             { 
               error: 'Insufficient items',
+              code: 'WARDROBE_TOO_SMALL',
               message: 'You need at least a few items in your wardrobe to create outfit combinations.'
             },
             { status: 400 }
@@ -148,7 +156,11 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json(
-        { error: 'Failed to generate outfit suggestions. Please try again.' },
+        {
+          error: 'Failed to generate outfit suggestions. Please try again.',
+          code: 'OUTFIT_GENERATION_FAILED',
+          message: 'The recommendation service is temporarily unavailable. Please retry in a moment.',
+        },
         { status: 500 }
       );
     }
@@ -166,13 +178,21 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof AuthError) {
       return NextResponse.json(
-        { error: error.message },
+        {
+          error: error.message,
+          code: error.status === 403 ? 'FORBIDDEN' : 'UNAUTHORIZED',
+        },
         { status: error.status }
       );
     }
 
+    console.error('[wardrobe-outfit] Unhandled error', error);
+
     return NextResponse.json(
-      { error: 'Internal server error' },
+      {
+        error: 'Internal server error',
+        code: 'INTERNAL_SERVER_ERROR',
+      },
       { status: 500 }
     );
   }

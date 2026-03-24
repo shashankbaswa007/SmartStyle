@@ -185,7 +185,9 @@ function WardrobeSuggestPageContent() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
-        throw new Error(errorData?.error || 'Failed to generate outfit suggestions');
+        const apiError = errorData?.message || errorData?.error;
+        const code = errorData?.code ? ` [${errorData.code}]` : '';
+        throw new Error(`${apiError || 'Failed to generate outfit suggestions'}${code}`);
       }
 
       const data = await response.json();
@@ -213,6 +215,12 @@ function WardrobeSuggestPageContent() {
         toastDescription = 'Add items to your wardrobe first, then come back for outfit suggestions!';
       } else if (errorMessage.includes('Insufficient items') || errorMessage.includes('at least')) {
         toastDescription = 'Add a few more items to your wardrobe to create better outfit combinations.';
+      } else if (errorMessage.includes('Rate limit exceeded') || errorMessage.includes('[OUTFIT_GENERATION_FAILED]')) {
+        toastDescription = 'The outfit service is busy right now. Please wait a bit and try again.';
+      } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('[UNAUTHORIZED]')) {
+        toastDescription = 'Your session expired. Please sign in again and retry.';
+      } else if (errorMessage.includes('[INTERNAL_SERVER_ERROR]')) {
+        toastDescription = 'We hit a server issue while building suggestions. Please retry shortly.';
       }
 
       toast({

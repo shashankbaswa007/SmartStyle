@@ -450,7 +450,7 @@ export async function POST(req: Request) {
     // Second: generate images IN PARALLEL — all outfits fire simultaneously
     // Pollinations is the primary/only provider, so parallel is safe and much faster
     // Total time = slowest single image (~8s) instead of sum of all (~25s)
-    const IMAGE_BUDGET = 12_000; // 12 s — klein model: 3.5s avg, all 3 parallel within this window
+    const IMAGE_BUDGET = 16_000; // 16 s — reduces placeholder fallbacks during transient provider latency
     const imageStart = Date.now();
 
     logger.log(`🎨 [IMAGES] Starting PARALLEL image generation for ${enrichedOutfits.length} outfits (${IMAGE_BUDGET / 1000}s budget)...`);

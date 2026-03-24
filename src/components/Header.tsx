@@ -18,7 +18,9 @@ import { Wand2, Heart, Palette, Shirt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import dynamic from 'next/dynamic';
+import { BrandedLogo } from '@/components/auth/BrandedLogo';
 const StarBorder = dynamic(() => import('@/components/StarBorder'), { ssr: false });
+
 
 export function Header() {
   const { user } = useAuth();
@@ -43,10 +45,9 @@ export function Header() {
           {/* Logo */}
           <Link 
             href="/" 
-            className="flex items-center gap-1.5 sm:gap-2 text-lg sm:text-2xl font-bold font-headline text-foreground transition-colors hover:text-accent z-10 shrink-0"
+            className="z-10 shrink-0 transition-opacity hover:opacity-95"
           >
-            <Wand2 className="w-5 h-5 sm:w-6 sm:h-6 text-accent" />
-            SmartStyle
+            <BrandedLogo animatedRings={false} showWordmark showTagline className="origin-left scale-[0.7] sm:scale-[0.78]" />
           </Link>
 
           {/* Right side: Navigation + Profile */}
@@ -57,12 +58,10 @@ export function Header() {
                 <StarBorder
                   as={Link}
                   href="/style-check"
-                  // 1. Changed to 'rounded-full' to match your other nav pills
-                  // 2. Removed the heavy drop-shadows to keep the header clean
-                  className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
-                  color="#a855f7"
-                  speed="4s" // Calmed the animation speed down slightly
-                  thickness={10} // Thinned the border for a more elegant, premium look
+                  className="group cursor-pointer rounded-full px-4 py-1.5 transition-all duration-300 hover:bg-white/3"
+                  color="#8b5cf6"
+                  speed="8s"
+                  thickness={1}
                 >
                   <div className="flex flex-row items-center justify-center gap-2">
                     <svg
@@ -73,18 +72,13 @@ export function Header() {
                       strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="h-4 w-4 text-purple-400 transition-all duration-500 group-hover:rotate-90 group-hover:scale-110 group-hover:text-purple-300"
+                      className="h-4 w-4 text-purple-400/80 transition-all duration-400 group-hover:scale-105 group-hover:text-purple-300/95"
                     >
                       <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
                     </svg>
-                    {/* THE TEXT: Removed the heavy gradient. Uses a clean, slightly muted white that brightens on hover */}
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
                       Style Check
                     </span>
-                    
-                    {/* THE SYMBOL: Kept the sparkle, but removed the complex custom SVG gradient. 
-                        Uses standard Tailwind text colors for a cleaner render. */}
-                    
 
                   </div>
                 </StarBorder>
@@ -92,45 +86,32 @@ export function Header() {
                 <StarBorder
                   as={Link}
                   href="/color-match"
-                  // 1. Moved 'group' here. Changed to rounded-full. Removed the heavy shadows/scaling.
-                  className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
-                  color="#7c3aed"
-                  speed="4s"
-                  thickness={10}
+                  className="group cursor-pointer rounded-full px-4 py-1.5 transition-all duration-300 hover:bg-white/3"
+                  color="#8b5cf6"
+                  speed="8s"
+                  thickness={1}
                 >
-                  {/* 2. Inner wrapper enforcing the layout */}
                   <div className="flex flex-row items-center justify-center gap-2">
-                    
-                    {/* THE SYMBOL: Using your Lucide icon, but styled with Tailwind for hover effects */}
                     <Palette 
-                      className="h-4 w-4 text-violet-400 transition-all duration-500 ease-out will-change-transform group-hover:rotate-12 group-hover:scale-110 group-hover:text-violet-300" 
+                      className="h-4 w-4 text-violet-400/80 transition-all duration-400 ease-out will-change-transform group-hover:scale-105 group-hover:text-violet-300/95" 
                     />
-                    
-                    {/* THE TEXT: Muted white that turns pure white on hover */}
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
                       Color Match
                     </span>
-                    
                   </div>
                 </StarBorder>
                 
                 <StarBorder
                   as={Link}
                   href="/likes"
-                  className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
-                  color="#8B5CF6"
-                  speed="4s"
-                  thickness={2} 
+                  className="group cursor-pointer rounded-full px-4 py-1.5 transition-all duration-300 hover:bg-white/3"
+                  color="#8b5cf6"
+                  speed="8s"
+                  thickness={1}
                 >
                   <div className="flex flex-row items-center justify-center gap-2">
-                    
-                    {/* THE SYMBOL: 
-                        1. Swapped pinkish colors for true 'red-500'.
-                        2. Changed duration to '1000' (1 second) for a slow, satisfying fill.
-                        3. Used 'fill-transparent' to ensure a smooth transition.
-                    */}
                     <Heart 
-                      className="h-4 w-4 text-violet-400 fill-transparent transition-all duration-400 ease-in-out will-change-transform group-hover:scale-110 group-hover:fill-violet-400" 
+                      className="h-4 w-4 text-violet-400/80 fill-transparent transition-all duration-400 ease-in-out will-change-transform group-hover:scale-105 group-hover:fill-violet-400/70" 
                     />
                     
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
@@ -143,20 +124,15 @@ export function Header() {
                 <StarBorder
                   as={Link}
                   href="/wardrobe"
-                  className="group cursor-pointer rounded-full px-5 py-2 transition-all duration-300 hover:bg-white/5"
-                  color="#6D28D9"
-                  speed="4s"
-                  thickness={10}
+                  className="group cursor-pointer rounded-full px-4 py-1.5 transition-all duration-300 hover:bg-white/3"
+                  color="#8b5cf6"
+                  speed="8s"
+                  thickness={1}
                 >
-                  {/* Inner wrapper enforcing the layout */}
                   <div className="flex flex-row items-center justify-center gap-2">
-                    
-                    {/* THE SYMBOL: Removed inline CSS. Uses Tailwind text colors and adds a subtle fill on hover */}
                     <Shirt 
-                      className="h-4 w-4 text-purple-400 fill-none transition-all duration-500 ease-out will-change-transform group-hover:scale-110 group-hover:text-purple-300 group-hover:fill-purple-500/30" 
+                      className="h-4 w-4 text-purple-400/80 fill-none transition-all duration-500 ease-out will-change-transform group-hover:scale-105 group-hover:text-purple-300/95 group-hover:fill-purple-500/20" 
                     />
-                    
-                    {/* THE TEXT: Muted white that turns pure white on hover */}
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
                       Wardrobe
                     </span>
@@ -169,9 +145,9 @@ export function Header() {
                 <Button
                   variant="outline"
                   onClick={() => router.push('/auth')}
-                  className="border-accent/30 hover:border-accent hover:bg-accent/10"
+                  className="h-10 rounded-full border border-white/18 bg-slate-950/55 px-5 text-[12px] uppercase tracking-[0.14em] text-slate-100/90 shadow-[0_10px_24px_rgba(2,6,23,0.32)] backdrop-blur-md transition-all duration-300 hover:-translate-y-[1px] hover:border-teal-300/55 hover:bg-slate-900/70 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 >
-                  Sign In to Access Features
+                  Enter Studio
                 </Button>
               </div>
             )}
@@ -229,9 +205,9 @@ export function Header() {
                   size="sm"
                   variant="outline"
                   onClick={() => router.push('/auth')}
-                  className="border-accent/30 hover:border-accent hover:bg-accent/10"
+                  className="rounded-full border border-white/18 bg-slate-950/55 px-3 text-[11px] uppercase tracking-[0.12em] text-slate-100/90 backdrop-blur-md transition-all duration-300 hover:border-teal-300/55 hover:bg-slate-900/70 hover:text-white"
                 >
-                  Sign In
+                  Enter
                 </Button>
               </div>
             )}

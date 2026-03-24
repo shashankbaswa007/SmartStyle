@@ -7,6 +7,9 @@ import { Header } from '@/components/Header';
 import { InstallPWA } from '@/components/InstallPWA';
 import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 import { ErrorBoundary } from '@/components/error-boundary';
+import { LogoIntro } from '@/components/branding/LogoIntro';
+import { MotionProvider } from '@/components/MotionProvider';
+import { BRAND } from '@/lib/branding';
 import Script from 'next/script';
 
 const inter = Inter({
@@ -21,8 +24,8 @@ const playfairDisplay = Playfair_Display({
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://smartstyle.app'),
-  title: 'SmartStyle - AI Fashion Advisor',
-  description: 'Get AI-powered style feedback, color analysis, and personalized outfit recommendations. Analyze your wardrobe, discover perfect color matches, and elevate your style with smart fashion insights.',
+  title: `${BRAND.name} | AI Style Studio`,
+  description: 'Instant style feedback, color intelligence, and wardrobe-driven outfit recommendations with a premium first-run experience.',
   keywords: ['fashion', 'style', 'AI', 'color analysis', 'outfit recommendations', 'wardrobe', 'personal stylist'],
   authors: [{ name: 'SmartStyle Team' }],
   manifest: '/manifest.json',
@@ -44,8 +47,8 @@ export const metadata: Metadata = {
     type: 'website',
     locale: 'en_US',
     url: 'https://smartstyle.app',
-    title: 'SmartStyle - AI Fashion Advisor',
-    description: 'Get AI-powered style feedback and personalized outfit recommendations',
+    title: `${BRAND.name} | AI Style Studio`,
+    description: 'Instant style feedback and wardrobe-aware recommendations',
     siteName: 'SmartStyle',
     images: [
       {
@@ -58,8 +61,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'SmartStyle - AI Fashion Advisor',
-    description: 'Get AI-powered style feedback and personalized outfit recommendations',
+    title: `${BRAND.name} | AI Style Studio`,
+    description: 'Instant style feedback and wardrobe-aware recommendations',
     images: ['/icons/icon-512x512.png'],
   },
 };
@@ -69,7 +72,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
-  themeColor: '#7B68EE',
+  themeColor: BRAND.themeColor,
 };
 
 export default function RootLayout({
@@ -91,15 +94,18 @@ export default function RootLayout({
       </head>
       <body className={`${inter.variable} ${playfairDisplay.variable} font-body antialiased bg-background`}>
         <ErrorBoundary>
-          <AuthProvider>
-            <ServiceWorkerRegister />
-            <Header />
-            <main className="pt-20 page-enter-animation">
-              {children}
-            </main>
-            <Toaster />
-            <InstallPWA />
-          </AuthProvider>
+          <MotionProvider>
+            <AuthProvider>
+              <ServiceWorkerRegister />
+              <LogoIntro />
+              <Header />
+              <main className="pt-20 page-enter-animation">
+                {children}
+              </main>
+              <Toaster />
+              <InstallPWA />
+            </AuthProvider>
+          </MotionProvider>
         </ErrorBoundary>
         
         {/* Recover from stale-deployment chunk 404s before React hydrates */}
