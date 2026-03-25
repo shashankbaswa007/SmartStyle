@@ -7,7 +7,11 @@ export function ServiceWorkerRegister() {
   const { toast } = useToast();
 
   useEffect(() => {
-    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+    const isLocalHost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+
+    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production' && !isLocalHost) {
       let refreshing = false;
 
       // Register service worker
