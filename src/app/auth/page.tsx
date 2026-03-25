@@ -116,13 +116,13 @@ export default function AuthPage() {
   }
 
   return (
-    <div ref={sceneRef} className="relative h-screen flex flex-col md:flex-row overflow-hidden bg-[#050813]">
+    <div ref={sceneRef} className="relative min-h-[100dvh] md:min-h-screen flex flex-col md:flex-row overflow-x-hidden overflow-y-auto md:overflow-hidden bg-[#050813]">
       {/* LEFT PANEL (55% on desktop, full on mobile) */}
       <motion.section
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={cardTransition}
-        className="relative w-full md:w-[55%] flex items-center justify-center px-6 py-12 md:py-0 order-2 md:order-1"
+        className="relative w-full md:w-[55%] flex items-center justify-center px-4 sm:px-6 py-10 sm:py-12 md:py-0 order-1"
       >
         {/* Background layers */}
         <div className="absolute inset-0 z-0">
@@ -191,7 +191,7 @@ export default function AuthPage() {
             }}
             className="flex flex-col items-center gap-2 mb-8"
           >
-            <AnimatedLogo size={64} />
+            <AnimatedLogo size={64} className="scale-90 sm:scale-100" />
             <p className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/72">Your Personal Style Assistant</p>
           </motion.div>
 
@@ -204,7 +204,7 @@ export default function AuthPage() {
               delay: prefersReducedMotion ? 0 : 0.3,
               ease: MOTION_EASING.graceful,
             }}
-            className="font-headline text-4xl md:text-5xl xl:text-6xl font-medium leading-[1.06] tracking-[-0.02em] text-white text-center mb-4"
+            className="font-headline text-3xl sm:text-4xl md:text-5xl xl:text-6xl font-medium leading-[1.08] tracking-[-0.02em] text-white text-center mb-4"
           >
             Dress with clarity, not guesswork.
           </motion.h1>
@@ -218,7 +218,7 @@ export default function AuthPage() {
               delay: prefersReducedMotion ? 0 : 0.45,
               ease: MOTION_EASING.graceful,
             }}
-            className="text-center text-base md:text-lg text-slate-200/74 mb-8 leading-relaxed"
+            className="text-center text-sm sm:text-base md:text-lg text-slate-200/74 mb-8 leading-relaxed"
           >
             Build a sharper wardrobe identity with AI guidance tuned for tone, silhouette, and daily confidence.
           </motion.p>
@@ -232,7 +232,7 @@ export default function AuthPage() {
               delay: prefersReducedMotion ? 0 : 0.6,
               ease: MOTION_EASING.graceful,
             }}
-            className="grid grid-cols-1 md:grid-cols-2 gap-4"
+            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4"
           >
             {/* Badge 1: Color Intelligence */}
             <div className="rounded-xl border-l-4 border-purple-600 bg-gradient-to-r from-purple-600/8 via-transparent to-transparent px-4 py-3 backdrop-blur-sm">
@@ -275,10 +275,10 @@ export default function AuthPage() {
           ...cardTransition,
           delay: prefersReducedMotion ? 0 : 0.4,
         }}
-        className="relative w-full md:w-[45%] flex items-center justify-center px-6 py-12 md:py-0 order-1 md:order-2 bg-[#0a0a0f]"
+        className="relative w-full md:w-[45%] flex items-center justify-center px-4 sm:px-6 py-10 sm:py-12 md:py-0 order-2 md:order-2 bg-[#0a0a0f]"
       >
         {/* Auth Card */}
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-md sm:max-w-sm">
           {/* Logo at top */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -288,9 +288,9 @@ export default function AuthPage() {
               delay: prefersReducedMotion ? 0 : 0.5,
               ease: MOTION_EASING.graceful,
             }}
-            className="flex justify-center mb-6"
+            className="flex justify-center mb-5 sm:mb-6"
           >
-            <AnimatedLogo size={72} />
+            <AnimatedLogo size={72} className="scale-90 sm:scale-100" />
           </motion.div>
 
           {/* Title and subtitle */}
@@ -302,7 +302,7 @@ export default function AuthPage() {
               delay: prefersReducedMotion ? 0 : 0.55,
               ease: MOTION_EASING.graceful,
             }}
-            className="text-center mb-10"
+            className="text-center mb-8 sm:mb-10"
           >
             <h2 className="font-headline text-2xl font-semibold tracking-wide text-white">SmartStyle</h2>
             <p className="text-xs tracking-widest text-gray-500 uppercase mt-1.5">Your Personal Style Assistant</p>
@@ -385,7 +385,11 @@ export default function AuthPage() {
       </motion.section>
 
       {/* Footer branding */}
-      <div className="absolute bottom-4 left-0 right-0 text-center text-[11px] uppercase tracking-[0.22em] text-slate-400/56 z-10">
+      <div className="hidden md:block absolute bottom-4 left-0 right-0 text-center text-[11px] uppercase tracking-[0.22em] text-slate-400/56 z-10">
+        {BRAND.name} • AI Fashion Intelligence
+      </div>
+
+      <div className="md:hidden px-4 pb-6 text-center text-[10px] uppercase tracking-[0.18em] text-slate-400/56">
         {BRAND.name} • AI Fashion Intelligence
       </div>
     </div>

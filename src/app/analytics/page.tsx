@@ -227,7 +227,7 @@ function ActivitySparkline({ data }: { data: { label: string; count: number }[] 
 
   return (
     <div className="w-full overflow-x-auto">
-      <div className="min-w-[280px]">
+      <div className="min-w-[220px] sm:min-w-[280px]">
         <svg viewBox={`0 0 ${Math.max(280, data.length * (barWidth + 3) + padding * 2)} ${height}`} className="w-full h-28">
           {data.map((item, i) => {
             const barH = Math.max(2, (item.count / maxCount) * usableH);

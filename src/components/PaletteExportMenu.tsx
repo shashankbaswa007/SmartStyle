@@ -332,7 +332,7 @@ export function PaletteExportMenu({ palette, onClose }: PaletteExportMenuProps) 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[60] flex items-center justify-center p-3 sm:p-4"
             onClick={() => setShowPreview(false)}
           >
             <motion.div
@@ -340,11 +340,11 @@ export function PaletteExportMenu({ palette, onClose }: PaletteExportMenuProps) 
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden"
+              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
             >
-              <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+              <div className="p-4 border-b border-gray-200 dark:border-gray-800 flex flex-wrap items-center justify-between gap-2">
                 <h3 className="font-semibold text-lg">Palette Preview</h3>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                   <Button
                     variant="outline"
                     size="sm"
@@ -362,7 +362,7 @@ export function PaletteExportMenu({ palette, onClose }: PaletteExportMenuProps) 
                   </button>
                 </div>
               </div>
-              <div className="p-6 bg-gray-50 dark:bg-gray-900/50">
+              <div className="p-4 sm:p-6 bg-gray-50 dark:bg-gray-900/50 overflow-auto max-h-[calc(90vh-76px)]">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={previewURL}

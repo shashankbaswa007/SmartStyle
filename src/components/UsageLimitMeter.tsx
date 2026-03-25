@@ -100,7 +100,7 @@ export default function UsageLimitMeter({
           {safeRemaining}/{safeLimit} available today
         </span>
         {resetText ? (
-          <span className={`inline-flex items-center gap-1 whitespace-nowrap ${isStyle ? 'text-purple-500' : 'text-violet-500'}`}>
+          <span className={`inline-flex items-center gap-1 ${isStyle ? 'text-purple-500' : 'text-violet-500'}`}>
             <Clock3 className="h-3.5 w-3.5 flex-shrink-0" />
             resets {resetText}
           </span>

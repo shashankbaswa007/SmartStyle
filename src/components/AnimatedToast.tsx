@@ -48,7 +48,7 @@ export const AnimatedToast: React.FC<AnimatedToastProps> = ({
       className={cn(
         'fixed top-4 left-1/2 -translate-x-1/2 z-50',
         'bg-card border border-border rounded-lg shadow-lg',
-        'px-4 py-3 min-w-[300px] max-w-md',
+        'px-4 py-3 w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] sm:w-auto sm:min-w-[300px] sm:max-w-md',
         'flex items-center gap-3'
       )}
       variants={toastVariants}

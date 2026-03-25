@@ -99,7 +99,7 @@ export default function RootLayout({
               <ServiceWorkerRegister />
               <LoadingScreen />
               <Header />
-              <main className="pt-20 page-enter-animation">
+              <main className="pt-16 sm:pt-20 page-enter-animation">
                 {children}
               </main>
               <Toaster />

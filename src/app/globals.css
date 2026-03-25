@@ -66,6 +66,7 @@
   /* Smooth scrolling for the entire document */
   html {
     scroll-behavior: smooth;
+    overflow-x: clip;
   }
   
   body {
@@ -75,6 +76,25 @@
     -moz-osx-font-smoothing: grayscale;
     /* Prevent layout shifts from scrollbar */
     overflow-y: scroll;
+    overflow-x: clip;
+  }
+
+  img,
+  video,
+  canvas,
+  svg {
+    max-width: 100%;
+  }
+
+  p,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  span {
+    overflow-wrap: anywhere;
   }
   
   /* Font display swap to prevent layout shifts */

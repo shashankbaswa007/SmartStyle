@@ -41,13 +41,13 @@ export function Header() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-b border-border/40">
       <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+        <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4">
           {/* Logo */}
           <Link 
             href="/" 
             className="z-10 shrink-0 transition-opacity hover:opacity-95"
           >
-            <AnimatedLogo size={56} className="origin-left" />
+            <AnimatedLogo size={56} className="origin-left scale-[0.84] sm:scale-100" />
           </Link>
 
           {/* Right side: Navigation + Profile */}
@@ -159,7 +159,7 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 hover:bg-accent/10 transition-colors"
+                  className="h-9 w-9 hover:bg-accent/10 transition-colors"
                 >
                   <Link href="/style-check" title="Style Check">
                     <Wand2 className="w-4 h-4 text-accent" />
@@ -170,7 +170,7 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 hover:bg-purple-500/10 transition-colors"
+                  className="h-9 w-9 hover:bg-purple-500/10 transition-colors"
                 >
                   <Link href="/color-match" title="Color Match">
                     <Palette className="w-4 h-4 text-purple-500" />
@@ -181,7 +181,7 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 hover:bg-violet-500/10 transition-colors"
+                  className="h-9 w-9 hover:bg-violet-500/10 transition-colors"
                 >
                   <Link href="/likes" title="Your Likes">
                     <Heart className="w-4 h-4 text-violet-500" />
@@ -192,7 +192,7 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 hover:bg-purple-500/10 transition-colors"
+                  className="h-9 w-9 hover:bg-purple-500/10 transition-colors"
                 >
                   <Link href="/wardrobe" title="Your Wardrobe">
                     <Shirt className="w-4 h-4 text-purple-500" />
