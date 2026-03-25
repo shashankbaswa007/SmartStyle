@@ -32,6 +32,13 @@ export interface RateLimitResult {
   resetTime: number;
 }
 
+export interface RateLimitStatus {
+  limit: number;
+  used: number;
+  remaining: number;
+  resetTime: number;
+}
+
 /**
  * Check if a request should be rate limited
  * Uses atomic operations to prevent race conditions
@@ -82,6 +89,34 @@ export function checkRateLimit(
     success: true,
     limit: config.maxRequests,
     remaining: config.maxRequests - newEntry.count,
+    resetTime: entry.resetTime,
+  };
+}
+
+/**
+ * Read current in-memory rate limit status without consuming a request.
+ */
+export function getRateLimitStatus(
+  identifier: string,
+  config: RateLimitConfig
+): RateLimitStatus {
+  const now = Date.now();
+  const entry = rateLimitMap.get(identifier);
+
+  if (!entry || entry.resetTime < now) {
+    return {
+      limit: config.maxRequests,
+      used: 0,
+      remaining: config.maxRequests,
+      resetTime: now + config.windowMs,
+    };
+  }
+
+  const used = Math.max(0, Math.min(entry.count, config.maxRequests));
+  return {
+    limit: config.maxRequests,
+    used,
+    remaining: Math.max(0, config.maxRequests - used),
     resetTime: entry.resetTime,
   };
 }

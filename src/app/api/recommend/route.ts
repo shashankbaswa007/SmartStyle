@@ -23,11 +23,13 @@ import { FirestoreCache } from '@/lib/firestore-cache';
 import { checkDuplicateImage, generateImageHash } from '@/lib/image-deduplication';
 import { generateImageWithRetry, createFallbackPlaceholder } from '@/lib/smart-image-generation';
 import { getCachedImage, cacheImage } from '@/lib/image-cache';
+import { checkRateLimit } from '@/lib/rate-limiter';
 import {
   enforceRecommendAuth,
   enforceRecommendRateLimit,
   AuthError,
 } from '@/lib/recommend/request-guard';
+import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 
 /**
  * Sanitize error messages to prevent XSS
@@ -193,17 +195,12 @@ export async function POST(req: Request) {
     }
 
     // 🚀 OPTIMIZATION 1: Firestore-backed rate limiting (10 req/day per user)
-    // If limiter backend is unavailable in local/dev (e.g. missing ADC), fail open.
     let effectiveUserId = userId || 'anonymous';
     let rateLimitCheck: {
       allowed: boolean;
       remaining: number;
       resetAt: Date;
       message?: string;
-    } = {
-      allowed: true,
-      remaining: 9,
-      resetAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     };
 
     try {
@@ -213,9 +210,31 @@ export async function POST(req: Request) {
     } catch (rateLimitError) {
       reqLogger.warn('recommend.request.rate_limit_fallback', {
         userId: effectiveUserId,
-        reason: 'rate_limiter_backend_unavailable',
+        reason: 'rate_limiter_verification_failed_falling_back_to_memory',
         error: rateLimitError,
       });
+
+      const fallbackSubject = userId && userId !== 'anonymous'
+        ? userId
+        : `anon:${req.headers.get('x-forwarded-for') || 'unknown'}`;
+      const fallback = checkRateLimit(`${RATE_LIMIT_SCOPES.recommend}:${fallbackSubject}`, {
+        windowMs: DAILY_WINDOW_MS,
+        maxRequests: USAGE_LIMITS.recommend,
+      });
+
+      rateLimitCheck = {
+        allowed: fallback.success,
+        remaining: fallback.remaining,
+        resetAt: new Date(fallback.resetTime),
+        ...(fallback.success
+          ? {}
+          : {
+              message: `Rate limit exceeded. Try again in ${Math.max(
+                1,
+                Math.ceil((fallback.resetTime - Date.now()) / 1000)
+              )} seconds.`,
+            }),
+      };
     }
     
     if (!rateLimitCheck.allowed) {

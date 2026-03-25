@@ -52,6 +52,10 @@ const formSchema = z.object({
 
 type AnalysisRequest = Omit<AnalyzeImageAndProvideRecommendationsInput, 'previousRecommendation'>;
 
+interface StyleAdvisorProps {
+  isLimitReached?: boolean;
+}
+
 // Convert RGB to HSV for better color analysis
 function rgbToHsv(r: number, g: number, b: number): { h: number; s: number; v: number } {
   r /= 255;
@@ -150,7 +154,7 @@ function getColorName(r: number, g: number, b: number): string {
  * Image preloading is now handled per-card in StyleAdvisorResults.
  */
 
-export function StyleAdvisor() {
+export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   const { toast } = useToast();
   const [weather, setWeather] = React.useState<string | null>(null);
   const [isFetchingWeather, setIsFetchingWeather] = React.useState(true);
@@ -1011,20 +1015,31 @@ export function StyleAdvisor() {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      let effectiveUserId = request.userId;
-      if (auth.currentUser) {
-        try {
-          const idToken = await auth.currentUser.getIdToken();
-          headers['Authorization'] = `Bearer ${idToken}`;
-        } catch {
-          // If token refresh fails, send request as anonymous to avoid auth mismatch failures.
-          effectiveUserId = undefined;
-        }
+      if (!auth.currentUser) {
+        toast({
+          variant: 'destructive',
+          title: 'Sign in required',
+          description: 'Please sign in again to continue with style analysis.',
+        });
+        return;
       }
+
+      let idToken: string;
+      try {
+        idToken = await auth.currentUser.getIdToken();
+      } catch {
+        toast({
+          variant: 'destructive',
+          title: 'Authentication required',
+          description: 'Your session expired. Please sign in again to continue.',
+        });
+        return;
+      }
+      headers['Authorization'] = `Bearer ${idToken}`;
 
       const apiRequest = {
         ...request,
-        userId: effectiveUserId,
+        userId: auth.currentUser.uid,
       };
 
       const response = await fetch('/api/recommend', {
@@ -1186,6 +1201,15 @@ export function StyleAdvisor() {
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (isLimitReached) {
+      toast({
+        variant: "destructive",
+        title: "Daily limit reached",
+        description: "You have used all style analyses for today. Try again after reset.",
+      });
+      return;
+    }
+
     if (isLoading) {
       toast({
         title: "Analysis in progress",
@@ -1258,6 +1282,15 @@ export function StyleAdvisor() {
   };
 
   const handleGetAnotherRecommendation = async () => {
+    if (isLimitReached) {
+      toast({
+        variant: "destructive",
+        title: "Daily limit reached",
+        description: "You have used all style analyses for today. Try again after reset.",
+      });
+      return;
+    }
+
     if (!lastAnalysisRequest || !analysisResult) return;
 
     await performAnalysis({
@@ -1510,7 +1543,7 @@ export function StyleAdvisor() {
                   type="submit" 
                   size="lg" 
                   className="w-full text-lg font-bold bg-gradient-to-r from-accent to-primary text-primary-foreground hover:shadow-lg hover:shadow-accent/30 transition-all duration-300 hover:scale-105" 
-                  disabled={isLoading || isFetchingWeather || isValidatingImage || !!imageValidationError}
+                  disabled={isLimitReached || isLoading || isFetchingWeather || isValidatingImage || !!imageValidationError}
                 >
                   {isLoading ? (
                     <>
@@ -1527,6 +1560,8 @@ export function StyleAdvisor() {
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       Fetching Weather...
                     </>
+                  ) : isLimitReached ? (
+                    "Daily Limit Reached"
                   ) : (
                     "Get Style Advice"
                   )}
@@ -1575,7 +1610,7 @@ export function StyleAdvisor() {
                 />
               </CardContent>
               <CardFooter className="flex flex-col md:flex-row gap-4 p-6 bg-primary/20">
-                <Button onClick={handleGetAnotherRecommendation} variant="outline" className="w-full text-base">
+                <Button onClick={handleGetAnotherRecommendation} variant="outline" className="w-full text-base" disabled={isLimitReached}>
                   <RefreshCw className="mr-2 h-4 w-4" />
                   Get Another Recommendation
                 </Button>

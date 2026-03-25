@@ -1,9 +1,9 @@
-const CACHE_NAME = 'smartstyle-v5';
-const STATIC_CACHE = 'smartstyle-static-v5';
-const DYNAMIC_CACHE = 'smartstyle-dynamic-v5';
-const IMAGE_CACHE = 'smartstyle-images-v5';
-const WARDROBE_CACHE = 'smartstyle-wardrobe-v5';
-const API_CACHE = 'smartstyle-api-v5';
+const CACHE_NAME = 'smartstyle-v7';
+const STATIC_CACHE = 'smartstyle-static-v7';
+const DYNAMIC_CACHE = 'smartstyle-dynamic-v7';
+const IMAGE_CACHE = 'smartstyle-images-v7';
+const WARDROBE_CACHE = 'smartstyle-wardrobe-v7';
+const API_CACHE = 'smartstyle-api-v7';
 
 // Cache duration in milliseconds
 const CACHE_DURATION = {
@@ -81,6 +81,11 @@ self.addEventListener('fetch', (event) => {
 
   // Skip Next.js internal assets — they are versioned per build and must NOT be cached by the SW
   if (url.pathname.startsWith('/_next/')) {
+    return;
+  }
+
+  // Always bypass SW for live quota status to avoid stale/cached responses
+  if (url.pathname === '/api/usage-status') {
     return;
   }
 
@@ -199,11 +204,12 @@ async function handleAPIRequest(request) {
     // Cache successful API responses
     if (networkResponse && networkResponse.status === 200) {
       const cache = await caches.open(API_CACHE);
-      const responseWithTimestamp = new Response(networkResponse.body, {
+      const networkResponseClone = networkResponse.clone();
+      const responseWithTimestamp = new Response(networkResponseClone.body, {
         status: networkResponse.status,
         statusText: networkResponse.statusText,
         headers: new Headers({
-          ...Object.fromEntries(networkResponse.headers),
+          ...Object.fromEntries(networkResponseClone.headers),
           'sw-cache-time': Date.now().toString(),
         }),
       });
@@ -258,11 +264,12 @@ async function handleWardrobeAPIRequest(request) {
     // Cache successful GET responses
     if (networkResponse && networkResponse.status === 200 && request.method === 'GET') {
       const cache = await caches.open(WARDROBE_CACHE);
-      const responseWithTimestamp = new Response(networkResponse.body, {
+      const networkResponseClone = networkResponse.clone();
+      const responseWithTimestamp = new Response(networkResponseClone.body, {
         status: networkResponse.status,
         statusText: networkResponse.statusText,
         headers: new Headers({
-          ...Object.fromEntries(networkResponse.headers),
+          ...Object.fromEntries(networkResponseClone.headers),
           'sw-cache-time': Date.now().toString(),
         }),
       });
@@ -277,14 +284,7 @@ async function handleWardrobeAPIRequest(request) {
     // For offline mode, return cached data
     const cachedResponse = await caches.match(request);
     if (cachedResponse) {
-      return new Response(cachedResponse.body, {
-        status: 200,
-        statusText: 'OK (Offline)',
-        headers: new Headers({
-          ...Object.fromEntries(cachedResponse.headers),
-          'X-Offline-Mode': 'true',
-        }),
-      });
+      return cachedResponse;
     }
     
     // Return empty array for wardrobe items when offline
@@ -307,11 +307,12 @@ async function fetchAndUpdateWardrobeCache(request) {
     const networkResponse = await fetch(request);
     if (networkResponse && networkResponse.status === 200) {
       const cache = await caches.open(WARDROBE_CACHE);
-      const responseWithTimestamp = new Response(networkResponse.body, {
+      const networkResponseClone = networkResponse.clone();
+      const responseWithTimestamp = new Response(networkResponseClone.body, {
         status: networkResponse.status,
         statusText: networkResponse.statusText,
         headers: new Headers({
-          ...Object.fromEntries(networkResponse.headers),
+          ...Object.fromEntries(networkResponseClone.headers),
           'sw-cache-time': Date.now().toString(),
         }),
       });

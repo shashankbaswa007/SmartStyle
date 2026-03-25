@@ -5,12 +5,13 @@ import { Clock3, Gauge, Sparkles, Zap } from 'lucide-react';
 interface UsageLimitMeterProps {
   title: string;
   subtitle: string;
-  remaining: number;
-  limit: number;
+  remaining?: number;
+  limit?: number;
   resetAt?: string;
   variant?: 'styleCheck' | 'wardrobe';
   className?: string;
   showIcon?: boolean;
+  isLoading?: boolean;
 }
 
 function getStatusTone(remaining: number, limit: number) {
@@ -30,12 +31,19 @@ export default function UsageLimitMeter({
   variant = 'styleCheck',
   className = '',
   showIcon = true,
+  isLoading = false,
 }: UsageLimitMeterProps) {
-  const safeLimit = Math.max(1, limit);
-  const safeRemaining = Math.max(0, Math.min(limit, remaining));
+  const hasUsageData = typeof remaining === 'number';
+  const isUnavailable = !isLoading && !hasUsageData;
+  const resolvedLimit = limit ?? 0;
+  const resolvedRemaining = hasUsageData ? remaining : resolvedLimit;
+  const safeLimit = Math.max(1, resolvedLimit);
+  const safeRemaining = hasUsageData
+    ? Math.max(0, Math.min(resolvedLimit, resolvedRemaining))
+    : safeLimit;
   const used = Math.max(0, safeLimit - safeRemaining);
-  const usedPercent = Math.min(100, Math.round((used / safeLimit) * 100));
-  const tone = getStatusTone(safeRemaining, safeLimit);
+  const usedPercent = hasUsageData ? Math.min(100, Math.round((used / safeLimit) * 100)) : 0;
+  const tone = hasUsageData ? getStatusTone(safeRemaining, safeLimit) : 'healthy';
 
   const isStyle = variant === 'styleCheck';
   
@@ -45,7 +53,9 @@ export default function UsageLimitMeter({
     : 'border border-violet-200 bg-gradient-to-br from-violet-50 to-purple-50/30 hover:border-violet-300 transition-all duration-300 shadow-sm';
 
   const toneClass =
-    tone === 'danger'
+    isUnavailable
+      ? 'text-slate-700 bg-slate-50 border border-slate-200'
+      : tone === 'danger'
       ? 'text-rose-700 bg-rose-50 border border-rose-200'
       : tone === 'warning'
       ? 'text-amber-700 bg-amber-50 border border-amber-200'
@@ -58,7 +68,9 @@ export default function UsageLimitMeter({
     : 'bg-gradient-to-r from-violet-100 to-purple-100';
     
   const progressFillClass =
-    tone === 'danger'
+    isUnavailable
+      ? 'bg-gradient-to-r from-slate-400 to-slate-500'
+      : tone === 'danger'
       ? 'bg-gradient-to-r from-rose-500 to-red-500 shadow-lg shadow-red-500/30'
       : tone === 'warning'
       ? 'bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg shadow-amber-500/30'
@@ -69,6 +81,13 @@ export default function UsageLimitMeter({
   const resetText = resetAt
     ? new Date(resetAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     : null;
+
+  const valueText = isLoading ? 'Checking...' : isUnavailable ? '--' : `${safeRemaining}/${safeLimit}`;
+  const availabilityText = isLoading
+    ? 'Checking daily usage...'
+    : isUnavailable
+    ? 'Usage status unavailable'
+    : `${safeRemaining}/${safeLimit} available today`;
 
   return (
     <div className={`rounded-xl border p-4 ${shellClass} ${className}`}>
@@ -83,7 +102,7 @@ export default function UsageLimitMeter({
         </div>
         <div className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold whitespace-nowrap ${toneClass}`}>
           <Gauge className="h-3.5 w-3.5 flex-shrink-0" />
-          {safeRemaining}/{safeLimit}
+          {valueText}
         </div>
       </div>
 
@@ -97,9 +116,9 @@ export default function UsageLimitMeter({
       <div className="mt-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-[11px]">
         <span className={`inline-flex items-center gap-1 ${isStyle ? 'text-purple-600' : 'text-violet-600'}`}>
           <Sparkles className="h-3.5 w-3.5 flex-shrink-0" />
-          {safeRemaining}/{safeLimit} available today
+          {availabilityText}
         </span>
-        {resetText ? (
+        {!isLoading && resetText ? (
           <span className={`inline-flex items-center gap-1 ${isStyle ? 'text-purple-500' : 'text-violet-500'}`}>
             <Clock3 className="h-3.5 w-3.5 flex-shrink-0" />
             resets {resetText}

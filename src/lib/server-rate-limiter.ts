@@ -1,5 +1,5 @@
 import admin from '@/lib/firebase-admin';
-import { checkRateLimit } from '@/lib/rate-limiter';
+import { checkRateLimit, getRateLimitStatus } from '@/lib/rate-limiter';
 
 export interface ServerRateLimitConfig {
   windowMs: number;
@@ -187,11 +187,16 @@ export async function getServerRateLimitStatus(
       resetAt,
     };
   } catch {
+    const fallback = getRateLimitStatus(`${config.scope}:${subject}`, {
+      windowMs: config.windowMs,
+      maxRequests: config.maxRequests,
+    });
+
     return {
-      limit: config.maxRequests,
-      used: 0,
-      remaining: config.maxRequests,
-      resetAt,
+      limit: fallback.limit,
+      used: fallback.used,
+      remaining: fallback.remaining,
+      resetAt: new Date(fallback.resetTime),
     };
   }
 }

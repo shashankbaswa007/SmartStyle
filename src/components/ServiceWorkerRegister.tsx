@@ -11,7 +11,24 @@ export function ServiceWorkerRegister() {
       window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1';
 
-    if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production' && !isLocalHost) {
+    const shouldDisableServiceWorker = process.env.NODE_ENV !== 'production' || isLocalHost;
+
+    if ('serviceWorker' in navigator && shouldDisableServiceWorker) {
+      // In local/dev, ensure no stale SW keeps intercepting requests.
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+        .catch(() => {});
+
+      if ('caches' in window) {
+        caches
+          .keys()
+          .then((keys) => Promise.all(keys.filter((key) => key.startsWith('smartstyle-')).map((key) => caches.delete(key))))
+          .catch(() => {});
+      }
+    }
+
+    if ('serviceWorker' in navigator && !shouldDisableServiceWorker) {
       let refreshing = false;
 
       // Register service worker

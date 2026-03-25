@@ -18,6 +18,7 @@ import UsageLimitMeter from '@/components/UsageLimitMeter';
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { getWardrobeItems, deleteWardrobeItem, markItemAsWorn, WardrobeItemData } from '@/lib/wardrobeService';
+import { USAGE_LIMITS } from '@/lib/usage-limits';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -153,6 +154,7 @@ function WardrobePageContent() {
     wardrobeOutfit?: { remaining: number; limit: number; resetAt?: string };
     wardrobeUpload?: { remaining: number; limit: number; resetAt?: string };
   }>({});
+  const [usageLoading, setUsageLoading] = useState(true);
   
   // Scale awareness for large wardrobes
   const LARGE_WARDROBE_THRESHOLD = 100;
@@ -354,17 +356,32 @@ function WardrobePageContent() {
 
   const fetchUsageLimits = useCallback(async (uid?: string | null) => {
     const activeUser = uid || auth.currentUser?.uid;
-    if (!activeUser || !auth.currentUser) return;
+    if (!activeUser || !auth.currentUser) {
+      setUsageLimits({});
+      setUsageLoading(false);
+      return;
+    }
 
     try {
-      const idToken = await auth.currentUser.getIdToken();
-      const response = await fetch('/api/usage-status', {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
-      });
+      setUsageLoading(true);
+      const fetchUsageStatus = async (forceRefreshToken = false) => {
+        const idToken = await auth.currentUser!.getIdToken(forceRefreshToken);
+        return fetch('/api/usage-status', {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        });
+      };
 
-      if (!response.ok) return;
+      let response = await fetchUsageStatus(false);
+      if (response.status === 401) {
+        response = await fetchUsageStatus(true);
+      }
+
+      if (!response.ok) {
+        setUsageLimits({});
+        return;
+      }
       const data = await response.json();
 
       setUsageLimits({
@@ -385,8 +402,14 @@ function WardrobePageContent() {
       });
     } catch {
       // Non-blocking for wardrobe browsing.
+      setUsageLimits({});
+    } finally {
+      setUsageLoading(false);
     }
   }, []);
+
+  const isOutfitLimitReached = !usageLoading && !!usageLimits.wardrobeOutfit && usageLimits.wardrobeOutfit.remaining <= 0;
+  const isUploadLimitReached = !usageLoading && !!usageLimits.wardrobeUpload && usageLimits.wardrobeUpload.remaining <= 0;
 
   useEffect(() => {
     if (!userId) return;
@@ -1099,20 +1122,32 @@ function WardrobePageContent() {
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-3 justify-center mt-6 sm:mt-8 px-4 sm:px-0">
               <Tooltip>
                 <TooltipTrigger asChild>
-                    <Button 
-                      asChild
-                      size="lg" 
-                      className="w-full sm:w-auto bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 gap-2 h-12 sm:h-11 text-base sm:text-sm touch-manipulation active:scale-95"
-                      aria-label="Get AI-powered outfit suggestions"
-                    >
-                      <Link href={`/wardrobe/suggest${contextMode !== 'all' ? `?context=${contextMode}` : ''}`}>
+                    {isOutfitLimitReached ? (
+                      <Button
+                        size="lg"
+                        disabled
+                        className="w-full sm:w-auto bg-gradient-to-r from-violet-600 to-purple-600 text-white shadow-lg gap-2 h-12 sm:h-11 text-base sm:text-sm"
+                        aria-label="Daily outfit suggestion limit reached"
+                      >
                         <Sparkles className="h-5 w-5" aria-hidden="true" />
-                        <span className="truncate">{contextMode !== 'all' ? `${contextMode.charAt(0).toUpperCase() + contextMode.slice(1)} Outfits` : 'Get Outfit Suggestions'}</span>
-                      </Link>
-                    </Button>
+                        <span className="truncate">Daily Limit Reached</span>
+                      </Button>
+                    ) : (
+                      <Button
+                        asChild
+                        size="lg"
+                        className="w-full sm:w-auto bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transition-all duration-300 gap-2 h-12 sm:h-11 text-base sm:text-sm touch-manipulation active:scale-95"
+                        aria-label="Get AI-powered outfit suggestions"
+                      >
+                        <Link href={`/wardrobe/suggest${contextMode !== 'all' ? `?context=${contextMode}` : ''}`}>
+                          <Sparkles className="h-5 w-5" aria-hidden="true" />
+                          <span className="truncate">{contextMode !== 'all' ? `${contextMode.charAt(0).toUpperCase() + contextMode.slice(1)} Outfits` : 'Get Outfit Suggestions'}</span>
+                        </Link>
+                      </Button>
+                    )}
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="bg-violet-900 text-white border-violet-700 max-w-xs hidden sm:block">
-                  <p>AI creates {contextMode !== 'all' ? `${contextMode} ` : ''}outfits from your wardrobe</p>
+                    <p>{isOutfitLimitReached ? 'Daily outfit suggestion limit reached' : `AI creates ${contextMode !== 'all' ? `${contextMode} ` : ''}outfits from your wardrobe`}</p>
                   <p className="text-xs opacity-80 mt-1">Works best with 10+ items</p>
                   <div className="flex items-center gap-1 mt-2 pt-2 border-t border-violet-700">
                     <Shield className="h-3 w-3" aria-hidden="true" />
@@ -1127,15 +1162,26 @@ function WardrobePageContent() {
                     size="lg" 
                     variant="outline"
                     className="w-full sm:w-auto border-2 border-violet-600 text-violet-600 hover:bg-violet-50 shadow-md gap-2 h-12 sm:h-11 text-base sm:text-sm focus:ring-2 focus:ring-violet-500 focus:ring-offset-2 touch-manipulation active:scale-95"
-                    onClick={() => setShowUploadModal(true)}
+                    onClick={() => {
+                      if (isUploadLimitReached) {
+                        toast({
+                          variant: 'destructive',
+                          title: 'Daily limit reached',
+                          description: 'You have used all wardrobe uploads for today. Try again after reset.',
+                        });
+                        return;
+                      }
+                      setShowUploadModal(true);
+                    }}
+                    disabled={isUploadLimitReached}
                     aria-label="Add a new clothing item to your wardrobe"
                   >
                     <Plus className="h-5 w-5" aria-hidden="true" />
-                    Add Item
+                    {isUploadLimitReached ? 'Upload Limit Reached' : 'Add Item'}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="bg-violet-900 text-white border-violet-700 hidden sm:block">
-                  <p>Upload a photo of your clothing item</p>
+                  <p>{isUploadLimitReached ? 'Daily upload limit reached' : 'Upload a photo of your clothing item'}</p>
                 </TooltipContent>
               </Tooltip>
 
@@ -1226,10 +1272,11 @@ function WardrobePageContent() {
                     variant="wardrobe"
                     title="AI Outfit Suggestions"
                     subtitle="Daily generation limit"
-                    remaining={usageLimits.wardrobeOutfit?.remaining ?? 0}
-                    limit={usageLimits.wardrobeOutfit?.limit ?? 10}
+                    remaining={usageLimits.wardrobeOutfit?.remaining}
+                    limit={usageLimits.wardrobeOutfit?.limit ?? USAGE_LIMITS.wardrobeOutfit}
                     resetAt={usageLimits.wardrobeOutfit?.resetAt}
                     className="rounded-md"
+                    isLoading={usageLoading}
                   />
                 </div>
                 <div className="rounded-lg p-1 bg-gradient-to-r from-violet-500/15 to-indigo-500/15 border border-violet-200/40">
@@ -1237,10 +1284,11 @@ function WardrobePageContent() {
                     variant="wardrobe"
                     title="Daily Wardrobe Uploads"
                     subtitle="New items you can add"
-                    remaining={usageLimits.wardrobeUpload?.remaining ?? 0}
-                    limit={usageLimits.wardrobeUpload?.limit ?? 20}
+                    remaining={usageLimits.wardrobeUpload?.remaining}
+                    limit={usageLimits.wardrobeUpload?.limit ?? USAGE_LIMITS.wardrobeUpload}
                     resetAt={usageLimits.wardrobeUpload?.resetAt}
                     className="rounded-md"
+                    isLoading={usageLoading}
                   />
                 </div>
               </div>

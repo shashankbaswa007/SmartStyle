@@ -2,10 +2,12 @@
 'use client';
 
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { auth } from '@/lib/firebase';
 import UsageLimitMeter from '@/components/UsageLimitMeter';
+import { USAGE_LIMITS } from '@/lib/usage-limits';
 
 // Lazy load heavy components for better performance
 const StyleAdvisor = lazy(() => import('@/components/style-advisor').then(mod => ({ default: mod.StyleAdvisor })));
@@ -17,20 +19,36 @@ const Particles = lazy(() => import('@/components/Particles'));
 export default function StyleCheckPage() {
   const isMounted = useMounted();
   const [usage, setUsage] = useState<{ remaining: number; limit: number; resetAt?: string } | null>(null);
+  const [usageLoading, setUsageLoading] = useState(true);
 
   const fetchUsage = useCallback(async () => {
     const user = auth.currentUser;
-    if (!user) return;
+    if (!user) {
+      setUsage(null);
+      setUsageLoading(false);
+      return;
+    }
 
     try {
-      const idToken = await user.getIdToken();
-      const response = await fetch('/api/usage-status', {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
-      });
+      setUsageLoading(true);
+      const fetchUsageStatus = async (forceRefreshToken = false) => {
+        const idToken = await user.getIdToken(forceRefreshToken);
+        return fetch('/api/usage-status', {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        });
+      };
 
-      if (!response.ok) return;
+      let response = await fetchUsageStatus(false);
+      if (response.status === 401) {
+        response = await fetchUsageStatus(true);
+      }
+
+      if (!response.ok) {
+        setUsage(null);
+        return;
+      }
       const data = await response.json();
       const recommendUsage = data?.usage?.recommend;
       if (recommendUsage) {
@@ -39,14 +57,27 @@ export default function StyleCheckPage() {
           limit: recommendUsage.limit,
           resetAt: recommendUsage.resetAt,
         });
+      } else {
+        setUsage(null);
       }
     } catch {
-      // Fail silently; style-check flow remains usable.
+      setUsage(null);
+    } finally {
+      setUsageLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchUsage();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        setUsage(null);
+        setUsageLoading(false);
+        return;
+      }
+      void fetchUsage();
+    });
+
+    return () => unsubscribe();
   }, [fetchUsage]);
 
   useEffect(() => {
@@ -60,6 +91,8 @@ export default function StyleCheckPage() {
     window.addEventListener('usage:consumed', onUsageConsumed as EventListener);
     return () => window.removeEventListener('usage:consumed', onUsageConsumed as EventListener);
   }, [fetchUsage]);
+
+  const isStyleCheckLimitReached = !usageLoading && !!usage && usage.remaining <= 0;
 
   return (
     <ProtectedRoute>
@@ -115,17 +148,18 @@ export default function StyleCheckPage() {
                 variant="styleCheck"
                 title="Daily Analysis Limit"
                 subtitle="Analyses remaining today"
-                remaining={usage?.remaining ?? 0}
-                limit={usage?.limit ?? 10}
+                remaining={usage?.remaining}
+                limit={usage?.limit ?? USAGE_LIMITS.recommend}
                 resetAt={usage?.resetAt}
                 className="rounded-lg"
+                isLoading={usageLoading}
               />
             </div>
           </div>
         </header>
 
         <Suspense fallback={<div className="flex justify-center items-center min-h-[400px]"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div><p className="text-muted-foreground">Loading style advisor...</p></div></div>}>
-          <StyleAdvisor />
+          <StyleAdvisor isLimitReached={isStyleCheckLimitReached} />
         </Suspense>
       </div>
     </div>
