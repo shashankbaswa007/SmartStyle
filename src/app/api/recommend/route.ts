@@ -46,6 +46,26 @@ function sanitizeErrorMessage(message: string): string {
     .substring(0, 200); // Limit length to prevent log flooding
 }
 
+function buildErrorResponse(
+  status: number,
+  code: string,
+  message: string,
+  details?: string,
+  extra: Record<string, unknown> = {}
+) {
+  return NextResponse.json(
+    {
+      success: false,
+      error: message,
+      message,
+      code,
+      ...(details ? { details } : {}),
+      ...extra,
+    },
+    { status }
+  );
+}
+
 function createFallbackAnalysis(params: {
   occasion?: string;
   genre?: string;
@@ -143,10 +163,7 @@ export async function POST(req: Request) {
       body = await req.json();
     } catch (parseError) {
       reqLogger.error('recommend.request.parse_failed', parseError);
-      return NextResponse.json(
-        { error: 'Invalid JSON in request body' },
-        { status: 400 }
-      );
+      return buildErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
     }
 
     // Validate request body against schema
@@ -172,13 +189,10 @@ export async function POST(req: Request) {
         userId = await enforceRecommendAuth(req, userId);
       } catch (error) {
         if (error instanceof AuthError) {
-          return NextResponse.json({ error: error.message }, { status: error.status });
+          return buildErrorResponse(error.status, 'AUTH_ERROR', error.message);
         }
 
-        return NextResponse.json(
-          { error: 'Unauthorized - Invalid authentication token' },
-          { status: 401 }
-        );
+        return buildErrorResponse(401, 'UNAUTHORIZED', 'Unauthorized - Invalid authentication token');
       }
     }
 
@@ -188,10 +202,7 @@ export async function POST(req: Request) {
       reqLogger.warn('recommend.request.image_validation_failed', {
         reason: imageValidation.error,
       });
-      return NextResponse.json(
-        { error: imageValidation.error },
-        { status: 400 }
-      );
+      return buildErrorResponse(400, 'INVALID_IMAGE', imageValidation.error || 'Invalid image payload');
     }
 
     // 🚀 OPTIMIZATION 1: Firestore-backed rate limiting (10 req/day per user)
@@ -243,12 +254,15 @@ export async function POST(req: Request) {
         reason: 'firestore_rate_limit',
       });
       return NextResponse.json(
-        { 
-          error: rateLimitCheck.message,
+        {
+          success: false,
+          code: 'RATE_LIMIT_EXCEEDED',
+          error: rateLimitCheck.message || 'Rate limit exceeded',
+          message: rateLimitCheck.message || 'Rate limit exceeded',
           remaining: 0,
           resetAt: rateLimitCheck.resetAt,
         },
-        { 
+        {
           status: 429,
           headers: {
             'X-RateLimit-Remaining': '0',
@@ -278,13 +292,18 @@ export async function POST(req: Request) {
     if (userId && userId !== 'anonymous') {
       const duplicateResult = await checkDuplicateImage(userId, imageHash);
       if (duplicateResult) {
+        const duplicatePayload = (duplicateResult as any)?.payload ?? duplicateResult;
         reqLogger.info('recommend.cache.hit', {
           cacheSource: '24h-history',
           userId,
           reason: 'duplicate_image',
         });
         return NextResponse.json({
-          ...duplicateResult,
+          success: true,
+          payload: duplicatePayload,
+          recommendationId: (duplicateResult as any)?.recommendationId,
+          cached: true,
+          cacheSource: '24h-history',
           message: 'You recently uploaded this photo. Here are your previous recommendations.',
           performance: {
             cached: true,
@@ -306,6 +325,7 @@ export async function POST(req: Request) {
     
     const cachedResult = await firestoreCache.get(cacheParams);
     if (cachedResult) {
+      const cachedPayload = (cachedResult as any)?.payload ?? cachedResult;
       const totalTime = Date.now() - startTime;
       reqLogger.info('recommend.cache.hit', {
         cacheSource: 'firestore',
@@ -318,7 +338,9 @@ export async function POST(req: Request) {
       });
       
       return NextResponse.json({
-        ...cachedResult,
+        success: true,
+        payload: cachedPayload,
+        recommendationId: (cachedResult as any)?.recommendationId,
         cached: true,
         cacheSource: 'firestore',
         performanceMs: totalTime,
@@ -694,9 +716,11 @@ export async function POST(req: Request) {
       });
     }
 
-    return NextResponse.json({ 
-      error: sanitizeErrorMessage(err?.message || 'Failed to generate recommendations. Please try again.'),
-      details: 'An unexpected error occurred while processing your request.'
-    }, { status: 500 });
+    return buildErrorResponse(
+      500,
+      'RECOMMEND_FAILED',
+      sanitizeErrorMessage(err?.message || 'Failed to generate recommendations. Please try again.'),
+      'An unexpected error occurred while processing your request.'
+    );
   }
 }

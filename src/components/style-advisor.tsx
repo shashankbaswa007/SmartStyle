@@ -961,6 +961,45 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     analysisAbortRef.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), 70000);
 
+    const requestWithRetry = async (url: string, init: RequestInit, maxRetries = 2) => {
+      let lastError: Error | null = null;
+
+      for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        const attemptController = new AbortController();
+        const onAbort = () => attemptController.abort();
+        controller.signal.addEventListener('abort', onAbort, { once: true });
+        const attemptTimeout = window.setTimeout(() => attemptController.abort(), 15000);
+
+        try {
+          const response = await fetch(url, {
+            ...init,
+            signal: attemptController.signal,
+          });
+
+          if (response.status >= 500 && attempt < maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+            continue;
+          }
+
+          return response;
+        } catch (error) {
+          const err = error instanceof Error ? error : new Error('Network request failed');
+          lastError = err;
+
+          if (controller.signal.aborted || attempt >= maxRetries) {
+            throw err;
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+        } finally {
+          window.clearTimeout(attemptTimeout);
+          controller.signal.removeEventListener('abort', onAbort);
+        }
+      }
+
+      throw lastError || new Error('Request failed after retries');
+    };
+
     setIsLoading(true);
     setAllContentReady(false);
     setShowResults(false); // Hide previous results immediately
@@ -1042,27 +1081,31 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         userId: auth.currentUser.uid,
       };
 
-      const response = await fetch('/api/recommend', {
+      const response = await requestWithRetry('/api/recommend', {
         method: 'POST',
         headers,
         body: JSON.stringify(apiRequest),
-        signal: controller.signal,
       });
 
       if (isStale()) return;
 
       if (!response.ok) {
-        let errorData: { error?: string } = { error: 'Unknown error' };
+        let errorData: { error?: string; message?: string; code?: string } = { error: 'Unknown error' };
         try {
           errorData = await response.json();
-        } catch (jsonError) {
+        } catch {
           // Use status text as fallback
-          errorData = { error: response.statusText || 'API request failed' };
+          errorData = { error: response.statusText || 'API request failed', code: 'HTTP_ERROR' };
         }
-        throw new Error(errorData.error || `API request failed with status ${response.status}`);
+        throw new Error(errorData.error || errorData.message || `API request failed with status ${response.status}`);
       }
 
-      const data = await response.json();
+      let data: any;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error('Received an invalid server response. Please try again.');
+      }
       if (isStale()) return;
 
       
@@ -1073,6 +1116,10 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       }
 
       const result = data.payload.analysis;
+      if (!result || !Array.isArray(result.outfitRecommendations)) {
+        throw new Error('Server response was incomplete. Please try again.');
+      }
+
       const enrichedOutfits = result.outfitRecommendations;
       
       // ✅ VALIDATION: Ensure all outfits have complete data
@@ -1176,9 +1223,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       } else if (errorMessage.includes('schema validation')) {
         title = "AI Response Error";
         description = "The AI response was incomplete. Please try again.";
-      } else if (errorMessage.includes('network') || errorMessage.includes('fetch')) {
+      } else if (errorMessage.includes('network') || errorMessage.includes('fetch') || errorMessage.includes('Failed to fetch')) {
         title = "Connection Error";
         description = "🌐 Network connection issue. Please check your internet and try again.";
+      } else if (errorMessage.includes('invalid server response')) {
+        title = "Server Response Error";
+        description = "The server returned an invalid response. Please retry.";
       } else {
         description = errorMessage.length > 100 
           ? "An error occurred. Please try again or contact support if it persists."
@@ -1193,7 +1243,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       });
     } finally {
       window.clearTimeout(timeoutId);
-      if (!isStale()) {
+      if (isMountedRef.current && requestId === activeRequestIdRef.current) {
         setIsLoading(false);
       }
       // Don't set allContentReady on error - it should only be true when everything is ready

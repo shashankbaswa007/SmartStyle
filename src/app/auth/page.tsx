@@ -58,7 +58,7 @@ export default function AuthPage() {
     setGoogleLoading(true);
 
     try {
-      const { user, error } = await signInWithGoogle();
+      const { user, error, redirecting } = await signInWithGoogle();
 
       if (error) {
         toast({
@@ -67,6 +67,14 @@ export default function AuthPage() {
           description: error,
         });
         setGoogleLoading(false);
+        return;
+      }
+
+      if (redirecting) {
+        toast({
+          title: 'Redirecting to Google',
+          description: 'Complete sign-in and you will return automatically.',
+        });
         return;
       }
 
@@ -97,6 +105,8 @@ export default function AuthPage() {
 
         router.push(nextPath);
       }
+
+      setGoogleLoading(false);
     } catch (_error: unknown) {
       toast({
         variant: 'destructive',

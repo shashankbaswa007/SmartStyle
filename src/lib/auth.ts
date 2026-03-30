@@ -9,6 +9,7 @@
 
 import {
   signInWithPopup,
+  signInWithRedirect,
   signOut as firebaseSignOut,
   GoogleAuthProvider,
   User,
@@ -28,7 +29,7 @@ import { logger } from './logger';
  * Sign in with Google using popup
  * @returns Promise with user credential or error
  */
-export async function signInWithGoogle(): Promise<{ user: User | null; error?: string }> {
+export async function signInWithGoogle(): Promise<{ user: User | null; error?: string; redirecting?: boolean }> {
   try {
     // Enable persistence so users stay logged in after page refresh
     await setPersistence(auth, browserLocalPersistence);
@@ -44,9 +45,14 @@ export async function signInWithGoogle(): Promise<{ user: User | null; error?: s
       prompt: 'select_account', // Forces account selection even if user is already signed in
     });
 
-    const result: UserCredential = await signInWithPopup(auth, provider);
+    const isProduction = process.env.NODE_ENV === 'production';
+    if (isProduction) {
+      await signInWithRedirect(auth, provider);
+      return { user: null, redirecting: true };
+    }
 
-    return { user: result.user };
+    const result: UserCredential = await signInWithPopup(auth, provider);
+    return { user: result.user, redirecting: false };
   } catch (error: any) {
     logger.error('Google sign-in error:', error);
     
@@ -60,7 +66,7 @@ export async function signInWithGoogle(): Promise<{ user: User | null; error?: s
       errorMessage = 'Popup was blocked by browser';
     }
     
-    return { user: null, error: errorMessage };
+    return { user: null, error: errorMessage, redirecting: false };
   }
 }
 

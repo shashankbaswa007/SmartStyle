@@ -27,6 +27,19 @@ export interface LikedOutfitData {
   recommendationId: string;
 }
 
+const LIKED_OUTFIT_PLACEHOLDER_IMAGE = 'https://via.placeholder.com/800x1000/6366f1/ffffff?text=Outfit+Preview';
+
+function normalizeLikedOutfitImageUrl(imageUrl?: string): string {
+  if (!imageUrl) return LIKED_OUTFIT_PLACEHOLDER_IMAGE;
+  if (imageUrl.startsWith('data:')) return imageUrl;
+  try {
+    const parsed = new URL(imageUrl);
+    return parsed.toString();
+  } catch {
+    return LIKED_OUTFIT_PLACEHOLDER_IMAGE;
+  }
+}
+
 /**
  * Save a liked outfit to Firebase with duplicate prevention
  * @param userId - The user's ID
@@ -236,9 +249,10 @@ export async function getLikedOutfits(userId: string): Promise<LikedOutfitData[]
       try {
         const data = doc.data() as LikedOutfitData;
         // Validate essential fields before adding
-        if (data && data.title && data.imageUrl) {
+        if (data && data.title) {
           outfits.push({
             ...data,
+            imageUrl: normalizeLikedOutfitImageUrl(data.imageUrl),
             id: doc.id, // Include the document ID
           });
         }

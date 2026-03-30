@@ -46,12 +46,18 @@ export function InstallPWA() {
     // Already dismissed in this session
     if (sessionStorage.getItem('pwa-install-session-dismissed')) return;
 
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    let promptTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const handler = (event: Event) => {
+      const installEvent = event as BeforeInstallPromptEvent;
+      if (typeof installEvent.prompt !== 'function') return;
+
+      // We intentionally defer browser UI and trigger prompt() only on explicit user action.
+      installEvent.preventDefault();
+      setDeferredPrompt(installEvent);
 
       // Show prompt after 30 seconds of usage
-      setTimeout(() => {
+      promptTimer = setTimeout(() => {
         // Re-check count in case it changed while waiting
         const current = localStorage.getItem('pwa-install-prompts');
         let currentData: { date: string; count: number } = { date: today, count: 0 };
@@ -71,33 +77,46 @@ export function InstallPWA() {
       }, 30000);
     };
 
-    window.addEventListener('beforeinstallprompt', handler);
-
-    window.addEventListener('appinstalled', () => {
+    const appInstalledHandler = () => {
       setIsInstalled(true);
       setShowInstallPrompt(false);
       setDeferredPrompt(null);
-    });
+      if (promptTimer) {
+        clearTimeout(promptTimer);
+        promptTimer = null;
+      }
+    };
+
+    window.addEventListener('beforeinstallprompt', handler);
+    window.addEventListener('appinstalled', appInstalledHandler);
 
     return () => {
+      if (promptTimer) {
+        clearTimeout(promptTimer);
+      }
       window.removeEventListener('beforeinstallprompt', handler);
+      window.removeEventListener('appinstalled', appInstalledHandler);
     };
   }, []);
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
 
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    try {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
 
-    if (outcome === 'accepted') {
-    } else {
-      // Dismissed via native prompt — mark session so it doesn't pop up again
+      if (outcome !== 'accepted') {
+        // Dismissed via native prompt — mark session so it doesn't pop up again
+        sessionStorage.setItem('pwa-install-session-dismissed', '1');
+      }
+    } catch {
+      // If the native prompt fails, avoid repeatedly surfacing a broken install CTA.
       sessionStorage.setItem('pwa-install-session-dismissed', '1');
+    } finally {
+      setDeferredPrompt(null);
+      setShowInstallPrompt(false);
     }
-
-    setDeferredPrompt(null);
-    setShowInstallPrompt(false);
   };
 
   const handleDismiss = () => {

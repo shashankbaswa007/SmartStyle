@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { motion } from 'framer-motion';
-import { Heart, ShoppingCart, Sparkles, Trash2, Shirt } from 'lucide-react';
+import { AlertCircle, Heart, Loader2, ShoppingCart, Sparkles, Trash2, Shirt } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -78,6 +78,21 @@ export default function LikesPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [markingWornId, setMarkingWornId] = useState<string | null>(null);
+  const [imageStates, setImageStates] = useState<Map<string, 'loading' | 'loaded' | 'error' | 'placeholder'>>(new Map());
+  const [imageRetryCount, setImageRetryCount] = useState<Map<string, number>>(new Map());
+
+  const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/800x1000/6366f1/ffffff?text=Outfit+Preview';
+
+  const getSafeImageUrl = (url: string | undefined): string => {
+    if (!url) return PLACEHOLDER_IMAGE;
+    if (url.startsWith('data:')) return url;
+    try {
+      const parsed = new URL(url);
+      return parsed.toString();
+    } catch {
+      return PLACEHOLDER_IMAGE;
+    }
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -94,6 +109,80 @@ export default function LikesPage() {
 
     return () => unsubscribe();
   }, []);
+
+  useEffect(() => {
+    const states = new Map<string, 'loading' | 'loaded' | 'error' | 'placeholder'>();
+    likedOutfits.forEach((outfit) => {
+      const safeUrl = getSafeImageUrl(outfit.imageUrl);
+      if (safeUrl === PLACEHOLDER_IMAGE) {
+        states.set(outfit.id, 'placeholder');
+      } else if (safeUrl.startsWith('data:')) {
+        states.set(outfit.id, 'loaded');
+      } else {
+        states.set(outfit.id, 'loading');
+      }
+    });
+    setImageStates(states);
+    setImageRetryCount(new Map());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [likedOutfits]);
+
+  useEffect(() => {
+    const hasLoadingImages = Array.from(imageStates.values()).some((state) => state === 'loading');
+    if (!hasLoadingImages) return;
+
+    const timeoutId = setTimeout(() => {
+      setImageStates((prev) => {
+        let changed = false;
+        const next = new Map(prev);
+        prev.forEach((state, outfitId) => {
+          if (state === 'loading') {
+            next.set(outfitId, 'error');
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    }, 15000);
+
+    return () => clearTimeout(timeoutId);
+  }, [imageStates]);
+
+  const markImageLoaded = (outfitId: string) => {
+    setImageStates((prev) => {
+      const next = new Map(prev);
+      next.set(outfitId, 'loaded');
+      return next;
+    });
+  };
+
+  const markImageError = (outfitId: string) => {
+    setImageStates((prev) => {
+      const next = new Map(prev);
+      next.set(outfitId, 'error');
+      return next;
+    });
+  };
+
+  const retryImageLoad = (outfitId: string) => {
+    const currentRetries = imageRetryCount.get(outfitId) || 0;
+    if (currentRetries >= 1) {
+      markImageError(outfitId);
+      return;
+    }
+
+    setImageRetryCount((prev) => {
+      const next = new Map(prev);
+      next.set(outfitId, currentRetries + 1);
+      return next;
+    });
+
+    setImageStates((prev) => {
+      const next = new Map(prev);
+      next.set(outfitId, 'loading');
+      return next;
+    });
+  };
 
   const handleRefresh = () => {
     if (userId) {
@@ -386,12 +475,46 @@ export default function LikesPage() {
                 <Card className="overflow-hidden bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20 shadow-lg hover:shadow-xl transition-shadow duration-300">
                   {/* Outfit Image */}
                   <div className="relative aspect-square">
+                    {imageStates.get(outfit.id) === 'loading' && (
+                      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
+                        <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
+                        <p className="text-xs text-muted-foreground">Loading image...</p>
+                      </div>
+                    )}
+
+                    {imageStates.get(outfit.id) === 'error' && (
+                      <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm p-4 text-center">
+                        <AlertCircle className="h-8 w-8 text-muted-foreground" />
+                        <p className="text-xs text-muted-foreground">Image failed to load</p>
+                        {(imageRetryCount.get(outfit.id) || 0) < 1 ? (
+                          <Button size="sm" variant="outline" onClick={() => retryImageLoad(outfit.id)}>
+                            Retry
+                          </Button>
+                        ) : null}
+                      </div>
+                    )}
+
                     <Image
-                      src={outfit.imageUrl}
+                      key={`${outfit.id}-${imageRetryCount.get(outfit.id) || 0}`}
+                      src={getSafeImageUrl(outfit.imageUrl)}
                       alt={outfit.title}
                       fill
-                      className="object-cover"
+                      className={`object-cover transition-opacity duration-300 ${
+                        imageStates.get(outfit.id) === 'loaded' || imageStates.get(outfit.id) === 'placeholder'
+                          ? 'opacity-100'
+                          : 'opacity-0'
+                      }`}
                       sizes="(max-width: 768px) 100vw, 33vw"
+                      loading="lazy"
+                      unoptimized={getSafeImageUrl(outfit.imageUrl).startsWith('data:')}
+                      onLoad={() => markImageLoaded(outfit.id)}
+                      onError={() => {
+                        if ((imageRetryCount.get(outfit.id) || 0) < 1) {
+                          retryImageLoad(outfit.id);
+                        } else {
+                          markImageError(outfit.id);
+                        }
+                      }}
                     />
                     {/* Like indicator and Remove button */}
                     <div className="absolute top-3 right-3 flex gap-2">

@@ -13,6 +13,9 @@ export function ServiceWorkerRegister() {
 
     const shouldDisableServiceWorker = process.env.NODE_ENV !== 'production' || isLocalHost;
 
+    let unregisterControllerChange: (() => void) | null = null;
+    let unregisterMessage: (() => void) | null = null;
+
     if ('serviceWorker' in navigator && shouldDisableServiceWorker) {
       // In local/dev, ensure no stale SW keeps intercepting requests.
       navigator.serviceWorker
@@ -30,20 +33,47 @@ export function ServiceWorkerRegister() {
 
     if ('serviceWorker' in navigator && !shouldDisableServiceWorker) {
       let refreshing = false;
+      let isMounted = true;
+      let unregisterUpdateFound: (() => void) | null = null;
+      let unregisterWorkerStateChange: (() => void) | null = null;
 
-      // Register service worker
+      const handleControllerChange = () => {
+        if (refreshing) return;
+        refreshing = true;
+        window.location.reload();
+      };
+
+      const handleSwMessage = (event: MessageEvent) => {
+        if (event.data && event.data.type === 'CACHE_UPDATED') {
+          // Intentionally no-op in production UI flow.
+        }
+      };
+
+      unregisterControllerChange = () => {
+        navigator.serviceWorker.removeEventListener('controllerchange', handleControllerChange);
+      };
+
+      unregisterMessage = () => {
+        navigator.serviceWorker.removeEventListener('message', handleSwMessage);
+      };
+
+      navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
+      navigator.serviceWorker.addEventListener('message', handleSwMessage);
+
       navigator.serviceWorker
-        .register('/sw.js')
+        .getRegistration('/sw.js')
+        .then((existing) => existing || navigator.serviceWorker.register('/sw.js'))
         .then((registration) => {
+          if (!isMounted) return;
+
           // Check for a newer SW script on every page load in production.
           registration.update().catch(() => {});
 
-          // Check for updates
-          registration.addEventListener('updatefound', () => {
+          const handleUpdateFound = () => {
             const newWorker = registration.installing;
             if (!newWorker) return;
 
-            newWorker.addEventListener('statechange', () => {
+            const handleWorkerStateChange = () => {
               if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
                 // Activate update immediately to avoid stale route/chunk manifests.
                 newWorker.postMessage({ type: 'SKIP_WAITING' });
@@ -63,24 +93,29 @@ export function ServiceWorkerRegister() {
                   duration: 10000,
                 });
               }
-            });
-          });
+            };
+
+            unregisterWorkerStateChange?.();
+            newWorker.addEventListener('statechange', handleWorkerStateChange);
+            unregisterWorkerStateChange = () => {
+              newWorker.removeEventListener('statechange', handleWorkerStateChange);
+            };
+          };
+
+          registration.addEventListener('updatefound', handleUpdateFound);
+          unregisterUpdateFound = () => {
+            registration.removeEventListener('updatefound', handleUpdateFound);
+          };
         })
-        .catch((error) => {
-        });
+        .catch(() => {});
 
-      // Handle controller change
-      navigator.serviceWorker.addEventListener('controllerchange', () => {
-        if (refreshing) return;
-        refreshing = true;
-        window.location.reload();
-      });
-
-      // Listen for messages from service worker
-      navigator.serviceWorker.addEventListener('message', (event) => {
-        if (event.data && event.data.type === 'CACHE_UPDATED') {
-        }
-      });
+      return () => {
+        isMounted = false;
+        unregisterUpdateFound?.();
+        unregisterWorkerStateChange?.();
+        unregisterControllerChange?.();
+        unregisterMessage?.();
+      };
     }
 
     // Handle online/offline status

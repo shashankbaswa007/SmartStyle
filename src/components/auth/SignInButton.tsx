@@ -22,7 +22,7 @@ export function SignInButton() {
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
-    const { user, error } = await signInWithGoogle();
+    const { user, error, redirecting } = await signInWithGoogle();
     setGoogleLoading(false);
 
     if (error) {
@@ -30,6 +30,11 @@ export function SignInButton() {
         variant: 'destructive',
         title: 'Sign-in failed',
         description: error,
+      });
+    } else if (redirecting) {
+      toast({
+        title: 'Redirecting to Google',
+        description: 'Complete sign-in and you will return automatically.',
       });
     } else if (user) {
       toast({

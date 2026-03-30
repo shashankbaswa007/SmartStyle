@@ -75,6 +75,7 @@ export async function middleware(request: NextRequest) {
     'camera=(self), microphone=(), geolocation=(self), interest-cohort=()'
   );
   response.headers.set('X-DNS-Prefetch-Control', 'on');
+  response.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
 
   // Content-Security-Policy — restrict resource loading
   const isProduction = process.env.NODE_ENV === 'production';
