@@ -2,6 +2,9 @@
  * Weather Service - Fetches weather data from OpenWeather API
  */
 
+import { executeWithTimeoutAndRetry } from '@/lib/external-request';
+import { featureFlags } from '@/lib/feature-flags';
+
 interface WeatherData {
   temp: number;
   condition: string;
@@ -28,6 +31,31 @@ export async function fetchWeatherForecast(
       return null;
     }
 
+    const fetchWeatherJson = async (url: string) => {
+      if (!featureFlags.externalRetryWrapper) {
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        return response.json();
+      }
+
+      return executeWithTimeoutAndRetry(
+        async (signal) => {
+          const response = await fetch(url, { signal });
+          if (!response.ok) {
+            const error = new Error(`OpenWeather request failed: ${response.status}`) as Error & { status?: number };
+            error.status = response.status;
+            throw error;
+          }
+          return response.json();
+        },
+        {
+          timeoutMs: 4000,
+          retries: 1,
+          operationName: 'openweather',
+        }
+      );
+    };
+
     // Use provided coordinates or default to a generic location (e.g., Hyderabad, India)
     const lat = latitude || 17.385044;
     const lon = longitude || 78.486671;
@@ -38,15 +66,10 @@ export async function fetchWeatherForecast(
 
     // If the date is today or in the past, get current weather
     if (daysFromNow <= 0) {
-      const response = await fetch(
+      const data = await fetchWeatherJson(
         `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`
       );
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const data = await response.json();
+      if (!data) return null;
 
       return {
         temp: Math.round(data.main.temp),
@@ -58,15 +81,10 @@ export async function fetchWeatherForecast(
 
     // For future dates within 5 days, use the 5-day forecast
     if (daysFromNow <= 5) {
-      const response = await fetch(
+      const data = await fetchWeatherJson(
         `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`
       );
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const data = await response.json();
+      if (!data) return null;
 
       // Find the forecast closest to noon on the target date
       const targetDate = new Date(date);

@@ -61,6 +61,8 @@
     "@radix-ui/react-toast": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.1.8",
     "@react-three/fiber": "^8.16.8",
+    "@sentry/nextjs": "^10.46.0",
+    "@upstash/redis": "^1.37.0",
     "@use-gesture/react": "^10.3.1",
     "canvas": "^3.2.1",
     "chroma-js": "^3.1.2",

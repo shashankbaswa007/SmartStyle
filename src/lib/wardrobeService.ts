@@ -1,5 +1,5 @@
 import { db, auth } from './firebase';
-import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, updateDoc, serverTimestamp, increment, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, updateDoc, serverTimestamp, increment, onSnapshot, limit } from 'firebase/firestore';
 import { logDeletion } from './audit-log';
 import type { OptimizedImages } from './image-optimization';
 import { invalidateUserCache } from './recommendations-cache';
@@ -39,6 +39,9 @@ export interface WardrobeOutfitData {
   lastUsedDate?: number;
   userRating?: number; // 1-5 stars
 }
+
+const DEFAULT_WARDROBE_QUERY_LIMIT = 200;
+const DEFAULT_OUTFIT_QUERY_LIMIT = 100;
 
 /**
  * Add a wardrobe item to user's collection
@@ -140,10 +143,21 @@ export async function getWardrobeItems(
     const itemsRef = collection(db, 'users', userId, 'wardrobeItems');
     
     // Build query with filters
-    let q = query(itemsRef, where('isActive', '==', filters?.isActive ?? true), orderBy('addedDate', 'desc'));
+    let q = query(
+      itemsRef,
+      where('isActive', '==', filters?.isActive ?? true),
+      orderBy('addedDate', 'desc'),
+      limit(DEFAULT_WARDROBE_QUERY_LIMIT)
+    );
     
     if (filters?.itemType) {
-      q = query(itemsRef, where('itemType', '==', filters.itemType), where('isActive', '==', true), orderBy('addedDate', 'desc'));
+      q = query(
+        itemsRef,
+        where('itemType', '==', filters.itemType),
+        where('isActive', '==', true),
+        orderBy('addedDate', 'desc'),
+        limit(DEFAULT_WARDROBE_QUERY_LIMIT)
+      );
     }
 
     const snapshot = await getDocs(q);
@@ -206,10 +220,21 @@ export function subscribeToWardrobeItems(
   }
 
   const itemsRef = collection(db, 'users', userId, 'wardrobeItems');
-  let q = query(itemsRef, where('isActive', '==', filters?.isActive ?? true), orderBy('addedDate', 'desc'));
+  let q = query(
+    itemsRef,
+    where('isActive', '==', filters?.isActive ?? true),
+    orderBy('addedDate', 'desc'),
+    limit(DEFAULT_WARDROBE_QUERY_LIMIT)
+  );
 
   if (filters?.itemType) {
-    q = query(itemsRef, where('itemType', '==', filters.itemType), where('isActive', '==', true), orderBy('addedDate', 'desc'));
+    q = query(
+      itemsRef,
+      where('itemType', '==', filters.itemType),
+      where('isActive', '==', true),
+      orderBy('addedDate', 'desc'),
+      limit(DEFAULT_WARDROBE_QUERY_LIMIT)
+    );
   }
 
   const unsubscribe = onSnapshot(
@@ -434,7 +459,7 @@ export async function getWardrobeOutfits(userId: string): Promise<WardrobeOutfit
     }
 
     const outfitsRef = collection(db, 'users', userId, 'wardrobeOutfits');
-    const q = query(outfitsRef, orderBy('createdDate', 'desc'));
+    const q = query(outfitsRef, orderBy('createdDate', 'desc'), limit(DEFAULT_OUTFIT_QUERY_LIMIT));
     const snapshot = await getDocs(q);
     
     const outfits: WardrobeOutfitData[] = [];

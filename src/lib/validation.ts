@@ -89,6 +89,10 @@ export const recommendRequestSchema = z.object({
   userId: z.string()
     .optional()
     .describe('User ID for personalized recommendations'),
+
+  uxVariant: z.enum(['A', 'B'])
+    .optional()
+    .describe('Optional UX experiment variant for messaging and trust cues'),
 });
 
 export type RecommendRequest = z.infer<typeof recommendRequestSchema>;

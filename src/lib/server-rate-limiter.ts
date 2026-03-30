@@ -1,5 +1,6 @@
 import admin from '@/lib/firebase-admin';
 import { checkRateLimit, getRateLimitStatus } from '@/lib/rate-limiter';
+import { checkDistributedRateLimit, getDistributedRateLimitStatus } from '@/lib/distributed-rate-limiter';
 
 export interface ServerRateLimitConfig {
   windowMs: number;
@@ -40,6 +41,16 @@ export async function checkServerRateLimit(
   config: ServerRateLimitConfig
 ): Promise<ServerRateLimitResult> {
   const { now, windowStartMs, resetAt } = getCurrentWindow(config);
+
+  const distributedResult = await checkDistributedRateLimit(subject, {
+    scope: config.scope,
+    windowMs: config.windowMs,
+    maxRequests: config.maxRequests,
+  });
+  if (distributedResult) {
+    return distributedResult;
+  }
+
   try {
     const db = admin.firestore();
     const docId = `${config.scope}:${subject}`;
@@ -127,6 +138,15 @@ export async function getServerRateLimitStatus(
   config: ServerRateLimitConfig
 ): Promise<ServerRateLimitStatus> {
   const { windowStartMs, resetAt } = getCurrentWindow(config);
+
+  const distributedStatus = await getDistributedRateLimitStatus(subject, {
+    scope: config.scope,
+    windowMs: config.windowMs,
+    maxRequests: config.maxRequests,
+  });
+  if (distributedStatus) {
+    return distributedStatus;
+  }
 
   try {
     const db = admin.firestore();

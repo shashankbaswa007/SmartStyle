@@ -367,8 +367,10 @@ function WardrobePageContent() {
       const fetchUsageStatus = async (forceRefreshToken = false) => {
         const idToken = await auth.currentUser!.getIdToken(forceRefreshToken);
         return fetch('/api/usage-status', {
+          cache: 'no-store',
           headers: {
             Authorization: `Bearer ${idToken}`,
+            'Cache-Control': 'no-cache',
           },
         });
       };

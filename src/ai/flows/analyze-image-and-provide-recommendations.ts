@@ -15,6 +15,9 @@ import { generateRecommendationsWithGroq, isGroqConfigured } from '@/lib/groq-cl
 import crypto from 'crypto';
 import { getComprehensivePreferences } from '@/lib/preference-engine';
 import { getBlocklists } from '@/lib/blocklist-manager';
+import { getDistributedJson, setDistributedJson, waitForDistributedJson } from '@/lib/distributed-cache';
+import { acquireDistributedLock, releaseDistributedLock, type DistributedLock } from '@/lib/distributed-lock';
+import { featureFlags } from '@/lib/feature-flags';
 
 // ============================================
 // AI RESPONSE CACHE (10-minute TTL)
@@ -27,6 +30,7 @@ interface CachedAIResponse {
 
 const aiResponseCache = new Map<string, CachedAIResponse>();
 const AI_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const REDIS_AI_CACHE_TTL_SECONDS = 2 * 60 * 60; // 2 hours
 
 function generateCacheKey(input: AnalyzeImageAndProvideRecommendationsInput): string {
   // Generate cache key from image hash + context (not full personalization to allow sharing)
@@ -120,14 +124,54 @@ export async function analyzeImageAndProvideRecommendations(input: AnalyzeImageA
   if (cached) {
     return cached;
   }
+
+  const redisResultKey = `aiflow:result:${cacheKey}`;
+  const redisLockKey = `aiflow:lock:${cacheKey}`;
+
+  if (featureFlags.redisCache) {
+    const redisCached = await getDistributedJson<AnalyzeImageAndProvideRecommendationsOutput>(redisResultKey);
+    if (redisCached) {
+      setCachedAIResponse(cacheKey, redisCached, input.userId);
+      return redisCached;
+    }
+  }
+
+  let distributedLock: DistributedLock | null = null;
+  if (featureFlags.redisDedupLock) {
+    distributedLock = await acquireDistributedLock(redisLockKey, 15);
+    if (!distributedLock) {
+      const waited = await waitForDistributedJson<AnalyzeImageAndProvideRecommendationsOutput>(redisResultKey, {
+        maxWaitMs: 2200,
+        pollIntervalMs: 250,
+      });
+      if (waited) {
+        setCachedAIResponse(cacheKey, waited, input.userId);
+        return waited;
+      }
+    }
+  }
   
-  // Generate new response
-  const result = await analyzeImageAndProvideRecommendationsFlow(input);
-  
-  // Cache for future use
-  setCachedAIResponse(cacheKey, result, input.userId);
-  
-  return result;
+  try {
+    // Generate new response
+    const result = await analyzeImageAndProvideRecommendationsFlow(input);
+
+    // Cache for future use
+    setCachedAIResponse(cacheKey, result, input.userId);
+    await setDistributedJson(redisResultKey, result, REDIS_AI_CACHE_TTL_SECONDS);
+
+    return result;
+  } catch (error) {
+    const fallbackCached = await getDistributedJson<AnalyzeImageAndProvideRecommendationsOutput>(redisResultKey);
+    if (fallbackCached) {
+      setCachedAIResponse(cacheKey, fallbackCached, input.userId);
+      return fallbackCached;
+    }
+    throw error;
+  } finally {
+    if (distributedLock) {
+      await releaseDistributedLock(distributedLock);
+    }
+  }
 }
 
 const prompt = ai.definePrompt({

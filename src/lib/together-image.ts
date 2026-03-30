@@ -9,9 +9,12 @@
  * Get a free key at https://api.together.xyz
  */
 
+import { executeWithTimeoutAndRetry } from './external-request';
+import { featureFlags } from './feature-flags';
+
 const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
 const TOGETHER_API_URL = 'https://api.together.xyz/v1/images/generations';
-const REQUEST_TIMEOUT = 5000; // 5 seconds — must fit within 8s per-outfit budget
+const REQUEST_TIMEOUT = 8000; // bounded to avoid indefinite waits
 
 interface TogetherImageResponse {
   data: Array<{
@@ -50,28 +53,42 @@ export async function generateWithTogether(
       .filter(Boolean)
       .join(', ');
 
-    const response = await fetch(TOGETHER_API_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${TOGETHER_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'black-forest-labs/FLUX.1-schnell-Free',
-        prompt: enhancedPrompt,
-        width: 768,
-        height: 1024,
-        steps: 4,
-        n: 1,
-        response_format: 'url',
-      }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT),
-    });
+    const request = async (signal?: AbortSignal): Promise<Response> => {
+      const response = await fetch(TOGETHER_API_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${TOGETHER_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'black-forest-labs/FLUX.1-schnell-Free',
+          prompt: enhancedPrompt,
+          width: 768,
+          height: 1024,
+          steps: 4,
+          n: 1,
+          response_format: 'url',
+        }),
+        signal,
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'unknown');
-      return null;
-    }
+      if (!response.ok) {
+        const error = new Error(`Together API error: ${response.status}`) as Error & { status?: number };
+        error.status = response.status;
+        throw error;
+      }
+
+      return response;
+    };
+
+    const response = featureFlags.externalRetryWrapper
+      ? await executeWithTimeoutAndRetry(request, {
+          timeoutMs: REQUEST_TIMEOUT,
+          retries: 1,
+          baseDelayMs: 350,
+          operationName: 'together.generateImage',
+        })
+      : await request(AbortSignal.timeout(REQUEST_TIMEOUT));
 
     const data: TogetherImageResponse = await response.json();
 

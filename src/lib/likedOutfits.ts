@@ -1,5 +1,5 @@
 import { db, auth } from './firebase';
-import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, setDoc, updateDoc } from 'firebase/firestore';
+import { collection, addDoc, query, where, getDocs, orderBy, deleteDoc, doc, setDoc, updateDoc, limit } from 'firebase/firestore';
 import { logDeletion } from './audit-log';
 
 export interface LikedOutfitData {
@@ -240,7 +240,7 @@ export async function getLikedOutfits(userId: string): Promise<LikedOutfitData[]
     const likesRef = collection(db, 'users', userId, 'likedOutfits');
     
     // Query with orderBy to sort by most recent first
-    const q = query(likesRef, orderBy('likedAt', 'desc'));
+    const q = query(likesRef, orderBy('likedAt', 'desc'), limit(200));
     const snapshot = await getDocs(q);
     
     

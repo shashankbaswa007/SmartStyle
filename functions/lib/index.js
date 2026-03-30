@@ -41,9 +41,10 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cleanupOldDeletedItems = exports.archiveOldAuditLogs = exports.archiveOldRecommendations = exports.cleanupOrphanedImages = void 0;
+exports.snapshotRecommendExperimentMetricsDaily = exports.cleanupOldDeletedItems = exports.archiveOldAuditLogs = exports.archiveOldRecommendations = exports.cleanupOrphanedImages = void 0;
 const functions = __importStar(require("firebase-functions"));
 const admin = __importStar(require("firebase-admin"));
+const https = __importStar(require("https"));
 // Initialize Firebase Admin
 admin.initializeApp();
 const db = admin.firestore();
@@ -421,5 +422,76 @@ exports.cleanupOldDeletedItems = functions
         console.error('❌ Cleanup failed:', error);
         throw error;
     }
+});
+// ============================================
+// DAILY RECOMMEND EXPERIMENT SNAPSHOT
+// ============================================
+function postJson(endpoint, headers, body) {
+    return new Promise((resolve, reject) => {
+        const url = new URL(endpoint);
+        const req = https.request({
+            protocol: url.protocol,
+            hostname: url.hostname,
+            port: url.port || undefined,
+            path: `${url.pathname}${url.search}`,
+            method: 'POST',
+            headers: {
+                ...headers,
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body),
+            },
+        }, (res) => {
+            let chunks = '';
+            res.on('data', (chunk) => {
+                chunks += chunk.toString();
+            });
+            res.on('end', () => {
+                resolve({
+                    statusCode: res.statusCode || 0,
+                    responseBody: chunks,
+                });
+            });
+        });
+        req.on('error', reject);
+        req.write(body);
+        req.end();
+    });
+}
+/**
+ * Runs daily at 06:15 AM UTC
+ * Persists recommendation A/B metrics snapshots to Firestore via app API route.
+ */
+exports.snapshotRecommendExperimentMetricsDaily = functions
+    .runWith({
+    timeoutSeconds: 120,
+    memory: '256MB',
+})
+    .pubsub.schedule('15 6 * * *') // Daily at 06:15 AM UTC
+    .timeZone('UTC')
+    .onRun(async () => {
+    const endpoint = process.env.RECOMMEND_METRICS_SNAPSHOT_URL;
+    const secret = process.env.RECOMMEND_METRICS_SNAPSHOT_SECRET;
+    if (!endpoint || !secret) {
+        throw new Error('Missing RECOMMEND_METRICS_SNAPSHOT_URL or RECOMMEND_METRICS_SNAPSHOT_SECRET');
+    }
+    console.log('📈 Running daily recommend experiment metrics snapshot...');
+    const startedAt = Date.now();
+    const response = await postJson(endpoint, {
+        'x-cron-secret': secret,
+    }, JSON.stringify({ trigger: 'firebase-scheduler' }));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw new Error(`Snapshot endpoint failed: ${response.statusCode} ${response.responseBody}`);
+    }
+    await db.collection('cleanupJobs').add({
+        jobId: `recommend_metrics_snapshot_${Date.now()}`,
+        jobType: 'recommend_experiment_metrics',
+        startedAt: admin.firestore.Timestamp.fromMillis(startedAt),
+        completedAt: admin.firestore.Timestamp.now(),
+        status: 'success',
+        endpoint,
+        responseStatusCode: response.statusCode,
+    });
+    console.log('✅ Daily recommend experiment metrics snapshot completed');
+    return { success: true, statusCode: response.statusCode };
 });
 //# sourceMappingURL=index.js.map

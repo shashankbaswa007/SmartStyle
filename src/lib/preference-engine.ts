@@ -461,10 +461,12 @@ export async function analyzeSeasonalPreferences(userId: string): Promise<Season
 
   try {
     const likedRef = collection(db, 'users', userId, 'likedOutfits');
-    const likedSnapshot = await getDocs(likedRef);
+    const likedQuery = query(likedRef, orderBy('likedAt', 'desc'), firestoreLimit(200));
+    const likedSnapshot = await getDocs(likedQuery);
 
     const wornRef = collection(db, 'users', userId, 'outfitUsage');
-    const wornSnapshot = await getDocs(wornRef);
+    const wornQuery = query(wornRef, orderBy('usedAt', 'desc'), firestoreLimit(200));
+    const wornSnapshot = await getDocs(wornQuery);
 
     const seasonalData = {
       summer: { colors: new Map<string, number>(), fabrics: new Map<string, number>(), styles: new Map<string, number>() },

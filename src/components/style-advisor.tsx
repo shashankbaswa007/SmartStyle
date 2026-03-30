@@ -52,6 +52,104 @@ const formSchema = z.object({
 
 type AnalysisRequest = Omit<AnalyzeImageAndProvideRecommendationsInput, 'previousRecommendation'>;
 
+type PreviewStage = 'queued' | 'palette' | 'outfit_text' | 'images' | 'finalizing';
+
+interface StagedPreviewOutfit {
+  title: string;
+  description: string;
+  colorPalette: string[];
+  imageUrl?: string | null;
+}
+
+interface StagedPreview {
+  stage: PreviewStage;
+  queueWaitMs?: number;
+  imagesReady: number;
+  totalImages: number;
+  analysis: {
+    feedback: string;
+    highlights: string[];
+    colorSuggestions: Array<{ name: string; hex: string; reason?: string }>;
+    outfitRecommendations: StagedPreviewOutfit[];
+    notes: string;
+    imagePrompt: string;
+    provider?: 'gemini' | 'groq';
+  };
+}
+
+const TRUST_CUES = [
+  'Based on your preferences',
+  'Optimized for your occasion',
+  'Balanced for color harmony',
+];
+const TRUST_CUES_BY_VARIANT: Record<'A' | 'B', string[]> = {
+  A: TRUST_CUES,
+  B: [
+    'Tailored to your current style direction',
+    'Matched to your occasion context',
+    'Calibrated for balanced color flow',
+  ],
+};
+
+const UX_VARIANT_STORAGE_PREFIX = 'smartstyle:ux-variant:';
+
+function resolveUxVariant(userId?: string): 'A' | 'B' {
+  if (typeof window === 'undefined') return 'A';
+  const key = `${UX_VARIANT_STORAGE_PREFIX}${userId || 'anonymous'}`;
+  const existing = window.localStorage.getItem(key);
+  if (existing === 'A' || existing === 'B') return existing;
+
+  const assigned: 'A' | 'B' = Math.random() < 0.5 ? 'A' : 'B';
+  window.localStorage.setItem(key, assigned);
+  return assigned;
+}
+
+function getFriendlyStageMessage(stageRaw?: string, imagesReady = 0, totalImages = 3, variant: 'A' | 'B' = 'A'): string {
+  const stage = String(stageRaw || '').toLowerCase();
+  if (variant === 'B') {
+    if (stage === 'palette') return 'Reading your style signals...';
+    if (stage === 'outfit_text') return 'Shaping your best outfit combinations...';
+    if (stage === 'images') return `Rendering your look previews... (${imagesReady}/${totalImages})`;
+    if (stage === 'finalizing') return 'Polishing your recommendations...';
+    return 'Setting up your personalized style guidance...';
+  }
+
+  if (stage === 'palette') return 'Analyzing your style...';
+  if (stage === 'outfit_text') return 'Refining outfit combinations...';
+  if (stage === 'images') return `Generating visuals... (${imagesReady}/${totalImages})`;
+  if (stage === 'finalizing') return 'Putting the final touches on your recommendations...';
+  return 'Preparing your personalized recommendations...';
+}
+
+function getFallbackFriendlyMessage(
+  fallbackSource?: string,
+  cacheSource?: string,
+  variant: 'A' | 'B' = 'A'
+): string | null {
+  const isVariantB = variant === 'B';
+  if (fallbackSource === 'cache' || cacheSource === 'exact-cache-recovery') {
+    return isVariantB
+      ? 'Showing an instant preview while we fine-tune your updated recommendations.'
+      : 'Showing a quick preview while we refine your results.';
+  }
+  if (fallbackSource === 'similar' || cacheSource === 'similar-recovery') {
+    return isVariantB
+      ? 'Using your recent style direction to keep recommendations consistent.'
+      : 'Using a similar style from your recent looks.';
+  }
+  if (fallbackSource === 'simplified' || cacheSource === 'fallback' || cacheSource === 'timeout-fallback') {
+    return isVariantB
+      ? 'Showing a fast style draft now while we continue refining in the background.'
+      : 'Showing a quick preview while we refine your results.';
+  }
+  return null;
+}
+
+interface ResultMeta {
+  isFresh: boolean;
+  usedFallback: boolean;
+}
+
 interface StyleAdvisorProps {
   isLimitReached?: boolean;
 }
@@ -175,6 +273,11 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   const [isValidatingImage, setIsValidatingImage] = React.useState(false);
   const [imageValidationError, setImageValidationError] = React.useState<string | null>(null);
   const [progressStage, setProgressStage] = React.useState(0);
+  const [stagedPreview, setStagedPreview] = React.useState<StagedPreview | null>(null);
+  const [fallbackMessage, setFallbackMessage] = React.useState<string | null>(null);
+  const [completionGlow, setCompletionGlow] = React.useState(false);
+  const [uxVariant, setUxVariant] = React.useState<'A' | 'B'>('A');
+  const [resultMeta, setResultMeta] = React.useState<ResultMeta | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
@@ -259,6 +362,11 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     );
   }, [toast]);
 
+  React.useEffect(() => {
+    const uid = auth.currentUser?.uid || 'anonymous';
+    setUxVariant(resolveUxVariant(uid));
+  }, []);
+
   // Cleanup camera and in-flight analysis on unmount
   React.useEffect(() => {
     return () => {
@@ -267,6 +375,18 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       stopCamera();
     };
   }, []);
+
+  React.useEffect(() => {
+    if (!showResults || !analysisResult || !allContentReady) return;
+
+    void fetch('/api/recommend/interaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ variant: uxVariant, event: 'results_visible' }),
+    }).catch(() => {
+      // Interaction telemetry is best effort.
+    });
+  }, [showResults, analysisResult, allContentReady, uxVariant]);
 
   const stopCamera = () => {
     if (streamRef.current) {
@@ -490,12 +610,16 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     form.reset();
     setPreviewImage(null);
     setAnalysisResult(null);
+    setStagedPreview(null);
     setAllContentReady(false);
     setShowResults(false);
     setProcessingSteps([]);
     setLastAnalysisRequest(null);
     setGeneratedImageUrls([]);
     setImageSources([]);
+    setFallbackMessage(null);
+    setCompletionGlow(false);
+    setResultMeta(null);
   };
 
   const extractColorsFromCanvas = (): { skinTone: string; dressColors: string; colorPalette?: string[] } => {
@@ -1000,12 +1124,80 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       throw lastError || new Error('Request failed after retries');
     };
 
+    const toStagedPreview = (statusData: any): StagedPreview | null => {
+      const partialAnalysis = statusData?.partialPayload?.analysis;
+      if (!partialAnalysis) return null;
+
+      const stageRaw = String(statusData?.progress?.stage || 'queued').toLowerCase();
+      const mappedStage: PreviewStage = stageRaw === 'palette'
+        ? 'palette'
+        : stageRaw === 'outfit_text'
+          ? 'outfit_text'
+          : stageRaw === 'images'
+            ? 'images'
+            : stageRaw === 'finalizing'
+              ? 'finalizing'
+              : 'queued';
+
+      const outfits: StagedPreviewOutfit[] = Array.isArray(partialAnalysis.outfitRecommendations)
+        ? partialAnalysis.outfitRecommendations.map((outfit: any) => ({
+          title: outfit?.title || 'Outfit recommendation',
+          description: outfit?.description || '',
+          colorPalette: Array.isArray(outfit?.colorPalette)
+            ? outfit.colorPalette.map((color: any) => {
+              if (typeof color === 'string') return color;
+              return color?.hex || '#000000';
+            })
+            : [],
+          imageUrl: typeof outfit?.imageUrl === 'string' ? outfit.imageUrl : null,
+        }))
+        : [];
+
+      return {
+        stage: mappedStage,
+        queueWaitMs: typeof statusData?.progress?.queueWaitMs === 'number' ? statusData.progress.queueWaitMs : undefined,
+        imagesReady: typeof statusData?.progress?.imagesReady === 'number' ? statusData.progress.imagesReady : 0,
+        totalImages: typeof statusData?.progress?.totalImages === 'number' ? statusData.progress.totalImages : Math.max(outfits.length, 3),
+        analysis: {
+          feedback: partialAnalysis.feedback || '',
+          highlights: Array.isArray(partialAnalysis.highlights) ? partialAnalysis.highlights : [],
+          colorSuggestions: Array.isArray(partialAnalysis.colorSuggestions) ? partialAnalysis.colorSuggestions : [],
+          outfitRecommendations: outfits,
+          notes: partialAnalysis.notes || '',
+          imagePrompt: partialAnalysis.imagePrompt || '',
+          provider: partialAnalysis.provider,
+        },
+      };
+    };
+
     setIsLoading(true);
     setAllContentReady(false);
     setShowResults(false); // Hide previous results immediately
     setAnalysisResult(null);
     setGeneratedImageUrls([]);
     setImageSources([]);
+    setFallbackMessage(null);
+    setCompletionGlow(false);
+    setStagedPreview({
+      stage: 'queued',
+      queueWaitMs: 0,
+      imagesReady: 0,
+      totalImages: 3,
+      analysis: {
+        feedback: '',
+        highlights: [],
+        colorSuggestions: (extractedData?.colorPalette || []).slice(0, 6).map((hex) => ({
+          name: hex,
+          hex,
+          reason: 'Detected from your uploaded image.',
+        })),
+        outfitRecommendations: [],
+        notes: '',
+        imagePrompt: '',
+        provider: 'gemini',
+      },
+    });
+    setResultMeta(null);
     
     // Initialize processing steps
     initializeProcessingSteps();
@@ -1079,6 +1271,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       const apiRequest = {
         ...request,
         userId: auth.currentUser.uid,
+        uxVariant,
       };
 
       const response = await requestWithRetry('/api/recommend', {
@@ -1097,6 +1290,11 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           // Use status text as fallback
           errorData = { error: response.statusText || 'API request failed', code: 'HTTP_ERROR' };
         }
+
+        if (response.status === 429 && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'recommend' } }));
+        }
+
         throw new Error(errorData.error || errorData.message || `API request failed with status ${response.status}`);
       }
 
@@ -1108,8 +1306,96 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       }
       if (isStale()) return;
 
+      if (data?.status === 'queued') {
+        const jobId = data?.jobId;
+        if (!jobId || typeof jobId !== 'string') {
+          throw new Error('Queued response is missing a valid job id.');
+        }
+
+        setLoadingMessage('Preparing your personalized recommendations...');
+
+        const pollTimeoutMs = 65_000;
+        const pollIntervalMs = 1_500;
+        const pollStart = Date.now();
+        let finalStatusData: any = null;
+
+        while (Date.now() - pollStart < pollTimeoutMs) {
+          if (controller.signal.aborted) {
+            throw new Error('Request cancelled');
+          }
+
+          await new Promise((resolve) => window.setTimeout(resolve, pollIntervalMs));
+          if (isStale()) return;
+
+          const statusResponse = await requestWithRetry(
+            `/api/recommend/status?jobId=${encodeURIComponent(jobId)}&userId=${encodeURIComponent(auth.currentUser.uid)}`,
+            {
+              method: 'GET',
+              headers,
+            },
+            1
+          );
+
+          if (!statusResponse.ok) {
+            let statusError: { error?: string; message?: string } = { error: 'Unable to check recommendation status' };
+            try {
+              statusError = await statusResponse.json();
+            } catch {
+              statusError = { error: statusResponse.statusText || 'Status check failed' };
+            }
+            throw new Error(statusError.error || statusError.message || 'Status check failed');
+          }
+
+          let statusData: any;
+          try {
+            statusData = await statusResponse.json();
+          } catch {
+            throw new Error('Received an invalid status response. Please try again.');
+          }
+
+          const previewFromStatus = toStagedPreview(statusData);
+          if (previewFromStatus && !isStale()) {
+            setStagedPreview(previewFromStatus);
+          }
+
+          if (statusData?.status === 'queued' || statusData?.status === 'processing') {
+            const stage = String(statusData?.progress?.stage || '').toLowerCase();
+            const ready = Number(statusData?.progress?.imagesReady || 0);
+            const total = Number(statusData?.progress?.totalImages || 3);
+            setLoadingMessage(getFriendlyStageMessage(stage, ready, total, uxVariant));
+
+            if (stage === 'outfit_text' || stage === 'images' || stage === 'finalizing') {
+              setProgressStage(2);
+            } else {
+              setProgressStage(1);
+            }
+            continue;
+          }
+
+          if (statusData?.status === 'completed' || statusData?.status === 'failed') {
+            finalStatusData = statusData;
+            break;
+          }
+        }
+
+        if (!finalStatusData) {
+          throw new Error('Analysis timed out. Please try again.');
+        }
+
+        data = finalStatusData;
+      }
+
       
-      setLoadingMessage("API complete! Now loading all images for best experience...");
+  setLoadingMessage('Finalizing your recommendations...');
+      setStagedPreview(null);
+
+      const userFacingFallbackMessage = getFallbackFriendlyMessage(data?.fallbackSource, data?.cacheSource, uxVariant);
+  setFallbackMessage(userFacingFallbackMessage);
+
+      const completedAt = typeof data?.completedAt === 'number' ? data.completedAt : Date.now();
+      const isFresh = Date.now() - completedAt <= 2 * 60 * 1000;
+      const usedFallback = Boolean(data?.fallbackSource) || ['fallback', 'timeout-fallback', 'exact-cache-recovery', 'similar-recovery'].includes(String(data?.cacheSource || ''));
+      setResultMeta({ isFresh, usedFallback });
 
       if (!data.success || !data.payload) {
         throw new Error('Invalid API response structure');
@@ -1176,6 +1462,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       setAnalysisResult(result);
       setAllContentReady(true);
       setShowResults(true);
+      setCompletionGlow(true);
+      window.setTimeout(() => {
+        if (isMountedRef.current && requestId === activeRequestIdRef.current) {
+          setCompletionGlow(false);
+        }
+      }, 1600);
       updateStep('finalize', 'complete');
       setLoadingMessage('');
 
@@ -1342,6 +1634,14 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     }
 
     if (!lastAnalysisRequest || !analysisResult) return;
+
+    void fetch('/api/recommend/interaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ variant: uxVariant, event: 'another_recommendation' }),
+    }).catch(() => {
+      // Interaction telemetry is best effort.
+    });
 
     await performAnalysis({
       ...lastAnalysisRequest,
@@ -1628,14 +1928,157 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           <Card className="w-full shadow-lg animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
             <CardContent className="p-4 sm:p-6 md:p-8">
               <RecommendationProgress currentStage={progressStage} />
+              <motion.p
+                key={loadingMessage}
+                initial={{ opacity: 0, y: 4 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25 }}
+                className="text-sm text-muted-foreground text-center mt-4"
+              >
+                {loadingMessage}
+              </motion.p>
+              <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                {(TRUST_CUES_BY_VARIANT[uxVariant] || TRUST_CUES).map((cue) => (
+                  <span
+                    key={cue}
+                    className="text-[11px] text-muted-foreground px-2.5 py-1 rounded-full border border-border/40 bg-background/50"
+                  >
+                    {cue}
+                  </span>
+                ))}
+              </div>
             </CardContent>
           </Card>
 
-          {/* Outfit Card Skeletons */}
-          <div className="space-y-4">
-            <h3 className="text-2xl font-bold text-center">Preparing your personalized outfits...</h3>
-            <OutfitSkeletonGrid />
-          </div>
+          <Card className="w-full shadow-lg bg-card/60 dark:bg-card/40 backdrop-blur-xl">
+            <CardContent className="p-4 sm:p-6 space-y-6">
+              <AnimatePresence mode="popLayout">
+                {stagedPreview?.analysis.colorSuggestions?.length ? (
+                  <motion.div
+                    key="stage-palette"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-3"
+                  >
+                    <p className="text-sm font-semibold text-muted-foreground">{getFriendlyStageMessage('palette', stagedPreview?.imagesReady || 0, stagedPreview?.totalImages || 3, uxVariant)}</p>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                      {stagedPreview.analysis.colorSuggestions.slice(0, 6).map((color, idx) => (
+                        <div key={`${color.hex}-${idx}`} className="rounded-lg border border-border/30 p-2 bg-background/50">
+                          <div
+                            className="h-8 rounded-md border border-border/20"
+                            style={{ backgroundColor: color.hex || '#808080' }}
+                          />
+                          <p className="mt-1 text-[11px] text-muted-foreground truncate">{color.name || color.hex}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="stage-palette-skeleton"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="space-y-3"
+                  >
+                    <p className="text-sm font-semibold text-muted-foreground">{getFriendlyStageMessage('palette', stagedPreview?.imagesReady || 0, stagedPreview?.totalImages || 3, uxVariant)}</p>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                      {Array.from({ length: 6 }).map((_, idx) => (
+                        <div key={`palette-skeleton-${idx}`} className="h-14 rounded-lg bg-muted animate-pulse" />
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+
+                <motion.div
+                  key="stage-text"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35 }}
+                  className="space-y-3"
+                >
+                  <p className="text-sm font-semibold text-muted-foreground">{getFriendlyStageMessage('outfit_text', stagedPreview?.imagesReady || 0, stagedPreview?.totalImages || 3, uxVariant)}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {(stagedPreview?.analysis.outfitRecommendations?.length
+                      ? stagedPreview.analysis.outfitRecommendations.slice(0, 3)
+                      : Array.from({ length: 3 }).map((_, idx) => ({
+                        title: `Outfit ${idx + 1}`,
+                        description: '',
+                        colorPalette: [],
+                        imageUrl: null,
+                      }))
+                    ).map((outfit, idx) => (
+                      <motion.div
+                        key={`outfit-text-${idx}`}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.25, delay: idx * 0.06 }}
+                        className="rounded-xl border border-border/30 bg-background/40 p-3 min-h-28"
+                      >
+                        <p className="text-sm font-semibold truncate">{outfit.title}</p>
+                        {outfit.description ? (
+                          <p className="text-xs text-muted-foreground mt-2 line-clamp-3">{outfit.description}</p>
+                        ) : (
+                          <div className="space-y-2 mt-2">
+                            <div className="h-2 rounded bg-muted animate-pulse" />
+                            <div className="h-2 rounded bg-muted animate-pulse w-10/12" />
+                            <div className="h-2 rounded bg-muted animate-pulse w-8/12" />
+                          </div>
+                        )}
+                      </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+
+                <motion.div
+                  key="stage-images"
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35 }}
+                  className="space-y-3"
+                >
+                  <p className="text-sm font-semibold text-muted-foreground">
+                    {getFriendlyStageMessage('images', stagedPreview?.imagesReady || 0, stagedPreview?.totalImages || 3, uxVariant)}
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {(stagedPreview?.analysis.outfitRecommendations?.length
+                      ? stagedPreview.analysis.outfitRecommendations.slice(0, 3)
+                      : Array.from({ length: 3 }).map((_, idx) => ({
+                        title: `Outfit ${idx + 1}`,
+                        description: '',
+                        colorPalette: [],
+                        imageUrl: null,
+                      }))
+                    ).map((outfit, idx) => (
+                      <div key={`outfit-image-${idx}`} className="rounded-xl overflow-hidden border border-border/30 bg-background/40">
+                        {outfit.imageUrl ? (
+                          <div className="relative h-44 w-full">
+                            <Image
+                              src={outfit.imageUrl}
+                              alt={outfit.title || `Outfit ${idx + 1}`}
+                              fill
+                              className="object-cover"
+                              sizes="(max-width: 768px) 100vw, 33vw"
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-44 bg-muted animate-pulse" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            </CardContent>
+          </Card>
+
+          {!stagedPreview?.analysis.outfitRecommendations?.length && (
+            <div className="space-y-4">
+              <h3 className="text-2xl font-bold text-center">Preparing your personalized outfits...</h3>
+              <OutfitSkeletonGrid />
+            </div>
+          )}
         </div>
       )}
 
@@ -1643,13 +2086,44 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         {showResults && analysisResult && allContentReady && !isLoading && (
           <motion.div
             key="results"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, y: 20, scale: 0.995 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20 }}
             transition={{ duration: 0.5, ease: "easeOut" }}
           >
-            <Card className="w-full shadow-xl shadow-accent/20 animate-slide-up-fade border-accent/30 bg-card/60 dark:bg-card/40 backdrop-blur-xl">
+            <Card className={cn(
+              "w-full animate-slide-up-fade border-accent/30 bg-card/60 dark:bg-card/40 backdrop-blur-xl transition-all duration-700",
+              completionGlow ? "shadow-2xl shadow-emerald-400/35 ring-1 ring-emerald-300/40" : "shadow-xl shadow-accent/20"
+            )}>
               <CardContent className="p-6 md:p-8">
+                {fallbackMessage && (
+                  <motion.p
+                    initial={{ opacity: 0, y: 4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="mb-4 text-sm text-muted-foreground"
+                  >
+                    {fallbackMessage}
+                  </motion.p>
+                )}
+                {(resultMeta?.isFresh || resultMeta?.usedFallback) && (
+                  <motion.p
+                    initial={{ opacity: 0, y: 2 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="mb-3 text-[11px] text-muted-foreground/90"
+                  >
+                    Updated just now • Refined for your current input
+                  </motion.p>
+                )}
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.35, delay: 0.08 }}
+                  className="mb-4 text-xs text-muted-foreground"
+                >
+                  {(TRUST_CUES_BY_VARIANT[uxVariant] || TRUST_CUES).join(' • ')}
+                </motion.p>
                 <StyleAdvisorResults 
                   analysisResult={analysisResult} 
                   generatedImageUrls={generatedImageUrls}

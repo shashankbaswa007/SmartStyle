@@ -727,6 +727,9 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
           const payload = await response.json().catch(() => ({}));
 
           if (!response.ok) {
+            if (response.status === 429 && typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'wardrobe-upload' } }));
+            }
             throw new Error(payload?.message || payload?.error || 'Failed to save wardrobe item');
           }
 

@@ -1,4 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { executeWithTimeoutAndRetry } from '@/lib/external-request';
+import { featureFlags } from '@/lib/feature-flags';
 // NOTE: node-vibrant is imported dynamically at runtime if available. Do NOT use a static import
 
 // Use GOOGLE_GENAI_API_KEY to match the rest of the codebase
@@ -9,15 +11,19 @@ let _modelDiscoveryCache: { models: string[]; expiresAt: number } | null = null;
 
 // small helper to fetch with timeout
 async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit & { timeoutMs?: number }) {
-  const timeout = init?.timeoutMs ?? 6000; // default 6s
-  const controller = new AbortController();
-  const id = setTimeout(() => controller.abort(), timeout);
-  try {
-    const resp = await fetch(input, { ...(init || {}), signal: controller.signal });
-    return resp;
-  } finally {
-    clearTimeout(id);
+  const timeout = init?.timeoutMs ?? 10000;
+  const request = async (signal?: AbortSignal) => fetch(input, { ...(init || {}), signal });
+
+  if (featureFlags.externalRetryWrapper) {
+    return executeWithTimeoutAndRetry(request, {
+      timeoutMs: timeout,
+      retries: 1,
+      baseDelayMs: 300,
+      operationName: 'analyze-image.fetch',
+    });
   }
+
+  return request(AbortSignal.timeout(timeout));
 }
 
 // Helper: sleep for ms
@@ -27,7 +33,7 @@ const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
  * Attempt Gemini generateContent with retries and exponential backoff.
  * Honors retryDelay from Google error when available.
  */
-async function callGeminiWithRetry(modelName: string, payload: any, maxRetries = 3) {
+async function callGeminiWithRetry(modelName: string, payload: any, maxRetries = 2, timeoutMs = 10000) {
   let attempt = 0;
   let lastError: any = null;
 
@@ -39,7 +45,12 @@ async function callGeminiWithRetry(modelName: string, payload: any, maxRetries =
   while (attempt < maxRetries) {
     try {
       const model = genAI.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent(promptToSend);
+      const result = await Promise.race([
+        model.generateContent(promptToSend),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`${modelName} timeout after ${timeoutMs}ms`)), timeoutMs)
+        ),
+      ]);
       return result;
     } catch (err: any) {
       lastError = err;
@@ -65,20 +76,23 @@ async function callGeminiWithRetry(modelName: string, payload: any, maxRetries =
         retryDelaySec = null;
       }
 
-      // If 429, wait and retry with exponential backoff
+      // Retry on rate limits, timeouts, and transient transport failures
       const isRateLimit = err?.status === 429 || (err?.message && /Too Many Requests/i.test(err.message));
+      const isTimeout = /timeout/i.test(String(err?.message || ''));
+      const isTransientNetwork = !err?.status && /network|fetch|ECONN|ENOTFOUND|ECONNRESET|EAI_AGAIN/i.test(String(err?.message || ''));
+      const shouldRetry = isRateLimit || isTimeout || isTransientNetwork;
 
       attempt += 1;
-      if (attempt >= maxRetries || !isRateLimit) {
+      if (attempt >= maxRetries || !shouldRetry) {
         // No more retries or not rate-limited -> throw
         throw err;
       }
 
   // Use a slightly more conservative minimum backoff when server retryDelay is missing or zero.
   // Cap the backoff to 60s to avoid excessively long waits.
-  const minBackoff = 2000; // 2s
-  const computedBackoff = Math.min(minBackoff * 2 ** Math.max(0, attempt - 1), 60000);
-  const backoffMs = typeof retryDelaySec === 'number' && retryDelaySec > 0 ? Number(retryDelaySec) * 1000 : computedBackoff;
+      const minBackoff = 1000; // 1s
+      const computedBackoff = Math.min(minBackoff * 2 ** Math.max(0, attempt - 1), 4000);
+      const backoffMs = typeof retryDelaySec === 'number' && retryDelaySec > 0 ? Number(retryDelaySec) * 1000 : computedBackoff;
       await sleep(backoffMs);
       continue;
     }
@@ -210,20 +224,17 @@ Analyze the image now and return ONLY the JSON object.`;
         inlineData: {
           data: imageBuffer 
             ? imageBuffer.toString('base64')
-            : await (await fetch(imageUrl)).arrayBuffer().then(b => Buffer.from(b).toString('base64')),
+            : await (await fetchWithTimeout(imageUrl, { timeoutMs: 10000 })).arrayBuffer().then(b => Buffer.from(b).toString('base64')),
           mimeType: 'image/png'
         }
       };
 
-      // 15-second timeout for API call
-      const timeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error(`${modelName} timeout after 15s`)), 15000)
+      const result = await callGeminiWithRetry(
+        modelName,
+        [STRUCTURED_PROMPT, imagePart],
+        2,
+        10000
       );
-
-      const result = await Promise.race([
-        model.generateContent([STRUCTURED_PROMPT, imagePart]),
-        timeoutPromise
-      ]);
 
       const responseText = result.response.text();
 
@@ -308,7 +319,7 @@ RESPONSE FORMAT (JSON only):
     if (_modelDiscoveryCache && _modelDiscoveryCache.expiresAt > Date.now()) {
       tryModels = _modelDiscoveryCache.models;
     } else if (apiKey) {
-      const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`, { timeoutMs: 4000 });
+      const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`, { timeoutMs: 10000 });
       if (res.ok) {
         const json = await res.json();
         const modelsList = Array.isArray(json) ? json : (json?.models || []);
@@ -360,7 +371,7 @@ RESPONSE FORMAT (JSON only):
     if (Vibrant) {
       let buf: Buffer | undefined = imageBuffer;
       if (!buf) {
-        const imageResp = await fetchWithTimeout(imageUrl, { timeoutMs: 5000 });
+        const imageResp = await fetchWithTimeout(imageUrl, { timeoutMs: 10000 });
         if (imageResp.ok) {
           buf = Buffer.from(await imageResp.arrayBuffer());
         } else {
@@ -465,7 +476,7 @@ RESPONSE FORMAT (JSON only):
       // Use provided imageBuffer if available (route persists image and passes buffer). Otherwise fetch image bytes for local extraction (with timeout)
       let buf: Buffer | undefined = imageBuffer;
       if (!buf) {
-        const imageResp = await fetchWithTimeout(imageUrl, { timeoutMs: 5000 });
+        const imageResp = await fetchWithTimeout(imageUrl, { timeoutMs: 10000 });
         if (!imageResp.ok) throw new Error(`Failed to fetch image for local extraction: ${imageResp.status}`);
         buf = Buffer.from(await imageResp.arrayBuffer());
       }

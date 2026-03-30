@@ -2,6 +2,44 @@
 
 import { z } from 'zod';
 import admin from '@/lib/firebase-admin';
+import { executeWithTimeoutAndRetry } from '@/lib/external-request';
+import { featureFlags } from '@/lib/feature-flags';
+
+type ExternalFetchOptions = {
+  operationName: string;
+  timeoutMs?: number;
+  retries?: number;
+};
+
+async function fetchExternal(
+  url: string,
+  init: RequestInit,
+  options: ExternalFetchOptions
+): Promise<Response> {
+  const timeoutMs = options.timeoutMs ?? 10000;
+  const retries = options.retries ?? 1;
+
+  const request = async (signal?: AbortSignal): Promise<Response> => {
+    const response = await fetch(url, { ...init, signal });
+    if ([408, 425, 429, 500, 502, 503, 504].includes(response.status)) {
+      const retryable = new Error(`${options.operationName} retryable status: ${response.status}`) as Error & { status?: number };
+      retryable.status = response.status;
+      throw retryable;
+    }
+    return response;
+  };
+
+  if (featureFlags.externalRetryWrapper) {
+    return executeWithTimeoutAndRetry(request, {
+      timeoutMs,
+      retries,
+      baseDelayMs: 400,
+      operationName: options.operationName,
+    });
+  }
+
+  return request(AbortSignal.timeout(timeoutMs));
+}
 
 /**
  * Verify Firebase ID token and return user ID.
@@ -36,8 +74,11 @@ export async function getWeatherData(coords: z.infer<typeof WeatherSchema>) {
 
   try {
     const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
-    
-    const response = await fetch(url);
+    const response = await fetchExternal(url, { method: 'GET' }, {
+      operationName: 'weather.current',
+      timeoutMs: 10000,
+      retries: 1,
+    });
     
     if (!response.ok) {
       return `Could not fetch weather. Status: ${response.status}`;
@@ -81,7 +122,7 @@ export async function provideFeedback(
     // Save to Firestore using REST API
     const firestoreUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/feedback/${recommendationId}`;
 
-    const firestoreResponse = await fetch(firestoreUrl, {
+    const firestoreResponse = await fetchExternal(firestoreUrl, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -94,6 +135,10 @@ export async function provideFeedback(
           timestamp: { timestampValue: new Date().toISOString() },
         },
       }),
+    }, {
+      operationName: 'feedback.save',
+      timeoutMs: 10000,
+      retries: 1,
     });
 
     if (!firestoreResponse.ok) {
@@ -149,12 +194,16 @@ export async function saveRecommendationUsage(
     // First, check if the recommendation exists using REST API
     const getUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/recommendationHistory/${recommendationId}`;
 
-    const getResponse = await fetch(getUrl, {
+    const getResponse = await fetchExternal(getUrl, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${idToken}`,
       },
+    }, {
+      operationName: 'recommendation.lookup',
+      timeoutMs: 10000,
+      retries: 1,
     });
 
     if (!getResponse.ok) {
@@ -180,7 +229,7 @@ export async function saveRecommendationUsage(
     const usageId = `${recommendationId}_${outfitIndex}`;
     const usageUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/outfitUsage/${usageId}`;
 
-    const usageResponse = await fetch(usageUrl, {
+    const usageResponse = await fetchExternal(usageUrl, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -194,6 +243,10 @@ export async function saveRecommendationUsage(
           timestamp: { timestampValue: new Date().toISOString() },
         },
       }),
+    }, {
+      operationName: 'outfitUsage.save',
+      timeoutMs: 10000,
+      retries: 1,
     });
 
     if (!usageResponse.ok) {
@@ -207,7 +260,7 @@ export async function saveRecommendationUsage(
     // Update recommendation document to track usage
     const updateUrl = `https://firestore.googleapis.com/v1/projects/${projectId}/databases/(default)/documents/users/${userId}/recommendationHistory/${recommendationId}`;
 
-    await fetch(updateUrl, {
+    const updateResponse = await fetchExternal(updateUrl, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -218,7 +271,18 @@ export async function saveRecommendationUsage(
           [`outfitUsage.${outfitIndex}`]: { timestampValue: new Date().toISOString() },
         },
       }),
+    }, {
+      operationName: 'recommendation.usageUpdate',
+      timeoutMs: 10000,
+      retries: 1,
     });
+
+    if (!updateResponse.ok) {
+      return {
+        success: false,
+        error: `Failed to update recommendation usage (status ${updateResponse.status}).`,
+      };
+    }
 
     return { success: true };
   } catch (error) {

@@ -27,12 +27,17 @@ import {
 } from './image-generation';
 import { generateWithTogether, isTogetherAvailable } from './together-image';
 import { generateWithReplicate, isReplicateAvailable } from './replicate-image';
+import crypto from 'crypto';
+import { featureFlags } from './feature-flags';
+import { getDistributedJson, setDistributedJson, waitForDistributedJson } from './distributed-cache';
+import { acquireDistributedLock, releaseDistributedLock, type DistributedLock } from './distributed-lock';
 
 // ─── Throttle / Deduplication State ─────────────────────────────────────────
 let activeRequests = 0;
 const MAX_CONCURRENT = 3;
 const inflightRequests = new Map<string, Promise<string>>();
 const TOTAL_TIMEOUT = 18_000; // 18 s — improves success rate during transient provider latency
+const IMAGE_RESULT_TTL_SECONDS = 6 * 60 * 60;
 
 // ─── Session Circuit Breakers ──────────────────────────────────────────
 let replicateDisabledUntil = 0; // Epoch ms — skip Replicate until this time
@@ -43,6 +48,26 @@ function dedupKey(prompt: string, colors: string[]): string {
   const norm = prompt.toLowerCase().trim().slice(0, 120);
   const colorsKey = colors.slice(0, 4).sort().join(',');
   return `${norm}::${colorsKey}`;
+}
+
+function imageResultCacheKey(prompt: string, colors: string[]): string {
+  const normalizedPrompt = enhancePromptForProfessionalQuality(prompt).toLowerCase().trim();
+  const normalizedColors = [...colors].slice(0, 4).sort().join(',');
+  const hash = crypto
+    .createHash('sha256')
+    .update(`${normalizedPrompt}|${normalizedColors}`)
+    .digest('hex');
+  return `image:result:${hash}`;
+}
+
+function imageLockKey(prompt: string, colors: string[]): string {
+  const normalizedPrompt = enhancePromptForProfessionalQuality(prompt).toLowerCase().trim();
+  const normalizedColors = [...colors].slice(0, 4).sort().join(',');
+  const hash = crypto
+    .createHash('sha256')
+    .update(`${normalizedPrompt}|${normalizedColors}`)
+    .digest('hex');
+  return `image:lock:${hash}`;
 }
 
 // ─── Lifecycle event list (per-request) ─────────────────────────────────────
@@ -61,11 +86,41 @@ export async function generateImageWithRetry(
   colors: string[],
   maxBudgetMs?: number,
 ): Promise<string> {
+  const cacheKey = imageResultCacheKey(prompt, colors);
+  const lockKey = imageLockKey(prompt, colors);
+
+  if (featureFlags.redisCache) {
+    const cached = await getDistributedJson<string>(cacheKey);
+    if (cached) return cached;
+  }
+
+  let distributedLock: DistributedLock | null = null;
+  if (featureFlags.redisDedupLock) {
+    distributedLock = await acquireDistributedLock(lockKey, 15);
+    if (!distributedLock) {
+      const waited = await waitForDistributedJson<string>(cacheKey, {
+        maxWaitMs: 2200,
+        pollIntervalMs: 250,
+      });
+      if (waited) return waited;
+    }
+  }
+
   // ── Deduplication: reuse in-flight request for identical prompt+colors ───
   const key = dedupKey(prompt, colors);
   const existing = inflightRequests.get(key);
   if (existing) {
-    return existing;
+    try {
+      const value = await existing;
+      if (featureFlags.redisCache) {
+        await setDistributedJson(cacheKey, value, IMAGE_RESULT_TTL_SECONDS);
+      }
+      return value;
+    } finally {
+      if (distributedLock) {
+        await releaseDistributedLock(distributedLock);
+      }
+    }
   }
 
   // ── Throttle: wait until a slot opens ─────────────────────────────────────
@@ -102,7 +157,23 @@ export async function generateImageWithRetry(
     inflightRequests.delete(key);
   });
 
-  return promise;
+  try {
+    const value = await promise;
+    if (featureFlags.redisCache) {
+      await setDistributedJson(cacheKey, value, IMAGE_RESULT_TTL_SECONDS);
+    }
+    return value;
+  } catch (error) {
+    const staleCached = await getDistributedJson<string>(cacheKey);
+    if (staleCached) {
+      return staleCached;
+    }
+    return createFallbackPlaceholder(prompt, colors);
+  } finally {
+    if (distributedLock) {
+      await releaseDistributedLock(distributedLock);
+    }
+  }
 }
 
 // ─── Internal: provider chain with total timeout ────────────────────────────

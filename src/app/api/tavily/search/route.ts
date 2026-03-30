@@ -4,6 +4,9 @@ import { z } from 'zod';
 import { getClientIdentifier } from '@/lib/rate-limiter';
 import { checkServerRateLimit } from '@/lib/server-rate-limiter';
 import { verifyBearerToken, AuthError } from '@/lib/server-auth';
+import { executeWithTimeoutAndRetry } from '@/lib/external-request';
+import { featureFlags } from '@/lib/feature-flags';
+import * as Sentry from '@sentry/nextjs';
 
 // Input validation schema
 const tavilyRequestSchema = z.object({
@@ -64,9 +67,22 @@ export async function POST(req: Request) {
     const { query, colors, gender, occasion } = validation.data;
 
     try {
-      const links = await tavilySearch(query, colors || [], gender, occasion);
+      const links = featureFlags.externalRetryWrapper
+        ? await executeWithTimeoutAndRetry(
+            () => tavilySearch(query, colors || [], gender, occasion),
+            {
+              timeoutMs: 6000,
+              retries: 1,
+              operationName: 'tavily-search',
+            }
+          )
+        : await tavilySearch(query, colors || [], gender, occasion);
       return NextResponse.json({ links });
-    } catch {
+    } catch (error) {
+      if (featureFlags.sentry) {
+        Sentry.captureException(error, { tags: { route: '/api/tavily/search' } });
+      }
+
       // Return empty links instead of failing
       return NextResponse.json({ 
         links: { amazon: null, tatacliq: null, myntra: null },
@@ -74,6 +90,10 @@ export async function POST(req: Request) {
       });
     }
   } catch (error) {
+    if (featureFlags.sentry) {
+      Sentry.captureException(error, { tags: { route: '/api/tavily/search' } });
+    }
+
     if (error instanceof AuthError) {
       return NextResponse.json(
         { error: error.message, links: { amazon: null, tatacliq: null, myntra: null } },

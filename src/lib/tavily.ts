@@ -10,6 +10,8 @@ import {
   buildOptimizedQuery,
 } from './shopping-query-optimizer';
 import { logger } from './logger';
+import { executeWithTimeoutAndRetry } from './external-request';
+import { featureFlags } from './feature-flags';
 
 type TavilyResult = {
   amazon?: string | null;
@@ -65,6 +67,36 @@ interface TavilySearchResult {
 
 const TAVILY_API_URL = 'https://api.tavily.com/search';
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
+
+async function postTavilySearch(payload: Record<string, unknown>, timeoutMs: number): Promise<Response> {
+  const request = async (signal?: AbortSignal): Promise<Response> => {
+    const response = await fetch(TAVILY_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal,
+    });
+
+    if (!response.ok) {
+      const error = new Error(`Tavily API error: ${response.status}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
+    }
+
+    return response;
+  };
+
+  if (featureFlags.externalRetryWrapper) {
+    return executeWithTimeoutAndRetry(request, {
+      timeoutMs,
+      retries: 1,
+      baseDelayMs: 250,
+      operationName: 'tavily.search',
+    });
+  }
+
+  return request(AbortSignal.timeout(timeoutMs));
+}
 
 // Generate direct search URLs as fallback using centralized optimizer
 function generateDirectSearchURL(platform: 'amazon' | 'myntra' | 'tatacliq', query: string, gender?: string): string {
@@ -393,23 +425,17 @@ async function searchSinglePlatform(
   item: ClothingItem
 ): Promise<ProductLink[]> {
   try {
-    const response = await fetch(TAVILY_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const response = await postTavilySearch(
+      {
         api_key: TAVILY_API_KEY,
         query,
         search_depth: 'basic',
         include_domains: domains,
         max_results: 10,
         include_answer: false,
-      }),
-      signal: AbortSignal.timeout(5000),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Tavily API error: ${response.status}`);
-    }
+      },
+      5000
+    );
 
     const data = await response.json();
     
@@ -458,24 +484,17 @@ async function searchMultiplePlatforms(
   logger.log(`🔍 Searching platforms ${domains.join(', ')} with query: "${query}"`);
 
   try {
-    const response = await fetch(TAVILY_API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const response = await postTavilySearch(
+      {
         api_key: TAVILY_API_KEY,
         query,
         search_depth: 'basic', // Changed from 'advanced' for speed (2-3s faster)
         include_domains: domains,
         max_results: Math.min(maxResults, 15), // Limit for speed
         include_answer: false,
-      }),
-      signal: AbortSignal.timeout(5000), // Reduced from 10s to 5s
-    });
-
-    if (!response.ok) {
-      logger.error(`[Tavily] API error: ${response.status}`);
-      return { amazon: null, myntra: null, tatacliq: null };
-    }
+      },
+      5000
+    );
 
     const data = await response.json();
     

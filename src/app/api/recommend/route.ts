@@ -1,56 +1,13 @@
 import { NextResponse } from 'next/server';
-import { analyzeImageAndProvideRecommendations } from '@/ai/flows/analyze-image-and-provide-recommendations';
-import type { AnalyzeImageAndProvideRecommendationsOutput } from '@/ai/flows/analyze-image-and-provide-recommendations';
-import { generateShoppingLinks } from '@/lib/shopping-query-optimizer';
-import saveRecommendation from '@/lib/firestoreRecommendations';
-import { withTimeout } from '@/lib/timeout-utils';
-import crypto from 'crypto';
-import { getComprehensivePreferences } from '@/lib/preference-engine';
-import { getBlocklists } from '@/lib/blocklist-manager';
-import { generateSessionId, createInteractionSession } from '@/lib/interaction-tracker';
-import { logger } from '@/lib/logger';
-import { recommendationCache, createCacheKey } from '@/lib/request-cache';
 import { recommendRequestSchema, validateRequest, formatValidationError } from '@/lib/validation';
 import { quickValidateImageDataUri } from '@/lib/server-image-validation';
-import { 
-  calculateOutfitMatchScore, 
-  applyDiversificationRule, 
-  getAntiRepetitionCache, 
-  addToAntiRepetitionCache,
-  detectPatternLock 
-} from '@/lib/recommendation-diversifier';
-import { FirestoreCache } from '@/lib/firestore-cache';
-import { checkDuplicateImage, generateImageHash } from '@/lib/image-deduplication';
-import { generateImageWithRetry, createFallbackPlaceholder } from '@/lib/smart-image-generation';
-import { getCachedImage, cacheImage } from '@/lib/image-cache';
-import { checkRateLimit } from '@/lib/rate-limiter';
-import {
-  enforceRecommendAuth,
-  enforceRecommendRateLimit,
-  AuthError,
-} from '@/lib/recommend/request-guard';
-import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
-
-/**
- * Sanitize error messages to prevent XSS
- */
-function sanitizeErrorMessage(message: string): string {
-  if (!message || typeof message !== 'string') return 'An error occurred';
-  
-  return message
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;')
-    .substring(0, 200); // Limit length to prevent log flooding
-}
+import { enforceRecommendAuth, enforceRecommendRateLimit, AuthError } from '@/lib/recommend/request-guard';
+import { enqueueRecommendJob } from '@/lib/recommend/async-jobs';
 
 function buildErrorResponse(
   status: number,
   code: string,
   message: string,
-  details?: string,
   extra: Record<string, unknown> = {}
 ) {
   return NextResponse.json(
@@ -59,668 +16,94 @@ function buildErrorResponse(
       error: message,
       message,
       code,
-      ...(details ? { details } : {}),
       ...extra,
     },
     { status }
   );
 }
 
-function createFallbackAnalysis(params: {
-  occasion?: string;
-  genre?: string;
-  gender: string;
-  weather?: string;
-  skinTone?: string;
-  dressColors?: string[] | string;
-}): AnalyzeImageAndProvideRecommendationsOutput {
-  const occasion = params.occasion || 'casual outing';
-  const genre = params.genre || 'smart casual';
-  const weather = params.weather || 'moderate weather';
-
-  const colors = Array.isArray(params.dressColors)
-    ? params.dressColors
-    : typeof params.dressColors === 'string' && params.dressColors.length > 0
-      ? params.dressColors.split(',').map((c) => c.trim()).filter(Boolean)
-      : ['#1F2937', '#F3F4F6', '#2563EB'];
-
-  const palette = [
-    { name: 'Midnight Navy', hex: '#1E3A8A', reason: 'Adds structure and polish for versatile looks.' },
-    { name: 'Ivory', hex: '#F8F5F0', reason: 'Balances deeper tones and keeps outfits fresh.' },
-    { name: 'Slate Gray', hex: '#475569', reason: 'Creates a refined neutral anchor.' },
-    { name: 'Forest Green', hex: '#166534', reason: 'Brings depth while remaining wearable.' },
-    { name: 'Terracotta', hex: '#C2410C', reason: 'Adds warmth and visual interest.' },
-    { name: 'Soft Beige', hex: '#D6C7B0', reason: 'Works well as a base for layered outfits.' },
-    { name: 'Burgundy', hex: '#7F1D1D', reason: 'Introduces rich contrast for evening styling.' },
-    { name: 'Charcoal', hex: '#1F2937', reason: 'Reliable grounding shade for any occasion.' },
-  ];
-
-  const outfitBase = [
-    {
-      title: 'Polished Everyday Look',
-      description:
-        'A clean, balanced outfit designed to feel confident and effortless. It combines tailored essentials with comfortable pieces so you can move through the day without sacrificing style. Use one accent color from the palette to keep the look intentional and modern.',
-      colorPalette: [colors[0] || '#1E3A8A', colors[1] || '#F8F5F0', '#475569'],
-      styleType: 'smart-casual',
-      occasion,
-      imagePrompt: `A ${params.gender} ${genre} outfit with layered smart-casual styling for ${occasion}, studio fashion photo`,
-      shoppingLinks: { amazon: null, myntra: null, tatacliq: null },
-      isExistingMatch: true,
-      items: ['structured top', 'straight-fit bottom', 'versatile outer layer'],
-    },
-    {
-      title: 'Elevated Occasion Edit',
-      description:
-        'This recommendation is a refined option when you want to look more dressed up while staying practical. It focuses on clean lines, subtle contrast, and texture layering to add depth. The palette supports both daytime and evening transitions for better outfit reuse.',
-      colorPalette: ['#166534', '#D6C7B0', '#1F2937'],
-      styleType: 'elevated',
-      occasion,
-      imagePrompt: `A ${params.gender} elevated outfit for ${occasion} in ${weather}, editorial fashion composition`,
-      shoppingLinks: { amazon: null, myntra: null, tatacliq: null },
-      isExistingMatch: true,
-      items: ['statement top', 'tailored bottom', 'minimal accessories'],
-    },
-    {
-      title: 'Trend-Forward Variation',
-      description:
-        'A bolder variation that introduces contemporary proportion and stronger color contrast. It is built for visual impact but keeps the base wearable through neutral support tones. This gives you a fashion-forward option without making the outfit difficult to style in real life.',
-      colorPalette: ['#7F1D1D', '#F8F5F0', '#475569'],
-      styleType: 'fashion-forward',
-      occasion,
-      imagePrompt: `A ${params.gender} trend-forward ${genre} outfit with bold styling cues for ${occasion}, clean background`,
-      shoppingLinks: { amazon: null, myntra: null, tatacliq: null },
-      isExistingMatch: false,
-      items: ['accent piece', 'neutral base layer', 'modern footwear'],
-    },
-  ];
-
-  return {
-    feedback:
-      'Your current palette has a strong base and can be elevated with clearer contrast and one intentional accent color. The recommendations below keep the look practical while improving definition and visual balance.',
-    highlights: [
-      'Use one deep tone with one soft neutral to improve outfit contrast.',
-      'Repeat one accent color in a small accessory for cohesion.',
-      'Prioritize fit and clean layering to make the palette look premium.',
-    ],
-    colorSuggestions: palette,
-    outfitRecommendations: outfitBase,
-    notes: 'When in doubt, keep two neutrals and one accent to maintain a polished result.',
-    imagePrompt: `A curated ${params.gender} ${genre} wardrobe board for ${occasion} in ${weather}`,
-    provider: 'gemini',
-  };
-}
-
 export async function POST(req: Request) {
-  const startTime = Date.now();
-  const requestId = req.headers.get('x-request-id') || crypto.randomUUID();
-  const reqLogger = logger.withContext({ requestId, route: '/api/recommend' });
-  reqLogger.info('recommend.request.start', { startedAt: new Date().toISOString() });
-  
+  let body: unknown;
   try {
-    // Parse and validate request body with Zod
-    let body;
+    body = await req.json();
+  } catch {
+    return buildErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
+  }
+
+  const validation = validateRequest(recommendRequestSchema, body);
+  if (!validation.success) {
+    return NextResponse.json(formatValidationError(validation.error), { status: 400 });
+  }
+
+  const input = validation.data;
+
+  const imageValidation = quickValidateImageDataUri(input.photoDataUri);
+  if (!imageValidation.isValid) {
+    return buildErrorResponse(400, 'INVALID_IMAGE', imageValidation.error || 'Invalid image payload');
+  }
+
+  let userId = input.userId || 'anonymous';
+  if (userId !== 'anonymous') {
     try {
-      body = await req.json();
-    } catch (parseError) {
-      reqLogger.error('recommend.request.parse_failed', parseError);
-      return buildErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
-    }
-
-    // Validate request body against schema
-    const validation = validateRequest(recommendRequestSchema, body);
-    if (!validation.success) {
-      reqLogger.warn('recommend.request.validation_failed', {
-        reason: 'schema_validation',
-        details: validation.error,
-      });
-      return NextResponse.json(
-        formatValidationError(validation.error),
-        { status: 400 }
-      );
-    }
-
-    // Use validated data (type-safe!)
-    const { photoDataUri, occasion, genre, gender, weather, skinTone, dressColors, previousRecommendation, userId: requestedUserId } = validation.data;
-
-    // Verify authentication: if a userId is provided, verify it matches the auth token
-    let userId = requestedUserId;
-    if (userId && userId !== 'anonymous') {
-      try {
-        userId = await enforceRecommendAuth(req, userId);
-      } catch (error) {
-        if (error instanceof AuthError) {
-          return buildErrorResponse(error.status, 'AUTH_ERROR', error.message);
-        }
-
-        return buildErrorResponse(401, 'UNAUTHORIZED', 'Unauthorized - Invalid authentication token');
+      userId = (await enforceRecommendAuth(req, userId)) || 'anonymous';
+    } catch (error) {
+      if (error instanceof AuthError) {
+        return buildErrorResponse(error.status, 'AUTH_ERROR', error.message);
       }
+      return buildErrorResponse(401, 'UNAUTHORIZED', 'Unauthorized - invalid authentication token');
     }
+  }
 
-    // Additional server-side security validation for image
-    const imageValidation = quickValidateImageDataUri(photoDataUri);
-    if (!imageValidation.isValid) {
-      reqLogger.warn('recommend.request.image_validation_failed', {
-        reason: imageValidation.error,
-      });
-      return buildErrorResponse(400, 'INVALID_IMAGE', imageValidation.error || 'Invalid image payload');
-    }
-
-    // 🚀 OPTIMIZATION 1: Firestore-backed rate limiting (10 req/day per user)
-    let effectiveUserId = userId || 'anonymous';
-    let rateLimitCheck: {
-      allowed: boolean;
-      remaining: number;
-      resetAt: Date;
-      message?: string;
-    };
-
-    try {
-      const limitResult = await enforceRecommendRateLimit(req, userId);
-      effectiveUserId = limitResult.effectiveUserId;
-      rateLimitCheck = limitResult.rateLimit;
-    } catch (rateLimitError) {
-      reqLogger.warn('recommend.request.rate_limit_fallback', {
-        userId: effectiveUserId,
-        reason: 'rate_limiter_verification_failed_falling_back_to_memory',
-        error: rateLimitError,
-      });
-
-      const fallbackSubject = userId && userId !== 'anonymous'
-        ? userId
-        : `anon:${req.headers.get('x-forwarded-for') || 'unknown'}`;
-      const fallback = checkRateLimit(`${RATE_LIMIT_SCOPES.recommend}:${fallbackSubject}`, {
-        windowMs: DAILY_WINDOW_MS,
-        maxRequests: USAGE_LIMITS.recommend,
-      });
-
-      rateLimitCheck = {
-        allowed: fallback.success,
-        remaining: fallback.remaining,
-        resetAt: new Date(fallback.resetTime),
-        ...(fallback.success
-          ? {}
-          : {
-              message: `Rate limit exceeded. Try again in ${Math.max(
-                1,
-                Math.ceil((fallback.resetTime - Date.now()) / 1000)
-              )} seconds.`,
-            }),
-      };
-    }
-    
-    if (!rateLimitCheck.allowed) {
-      reqLogger.warn('recommend.request.rate_limited', {
-        userId: effectiveUserId,
-        reason: 'firestore_rate_limit',
-      });
+  try {
+    const limitResult = await enforceRecommendRateLimit(req, userId === 'anonymous' ? undefined : userId);
+    if (!limitResult.rateLimit.allowed) {
       return NextResponse.json(
         {
           success: false,
           code: 'RATE_LIMIT_EXCEEDED',
-          error: rateLimitCheck.message || 'Rate limit exceeded',
-          message: rateLimitCheck.message || 'Rate limit exceeded',
+          status: 'rate_limited',
+          error: limitResult.rateLimit.message || 'Rate limit exceeded',
           remaining: 0,
-          resetAt: rateLimitCheck.resetAt,
+          resetAt: limitResult.rateLimit.resetAt,
         },
         {
           status: 429,
           headers: {
             'X-RateLimit-Remaining': '0',
-            'X-RateLimit-Reset': rateLimitCheck.resetAt.toISOString(),
+            'X-RateLimit-Reset': limitResult.rateLimit.resetAt.toISOString(),
           },
         }
       );
     }
-    
-    reqLogger.info('recommend.request.rate_limit_ok', {
-      userId: effectiveUserId,
-      remaining: rateLimitCheck.remaining,
-    });
 
-    reqLogger.info('recommend.flow.start', {
-      hasPhoto: !!photoDataUri,
-      occasion: occasion || 'not specified',
-      gender,
-      hasUserId: !!userId,
-      remaining: rateLimitCheck.remaining,
-    });
-
-    // Generate image hash for caching and deduplication
-    const imageHash = generateImageHash(photoDataUri);
-    
-    // 🚀 OPTIMIZATION 2: Image Deduplication (check last 24h)
-    if (userId && userId !== 'anonymous') {
-      const duplicateResult = await checkDuplicateImage(userId, imageHash);
-      if (duplicateResult) {
-        const duplicatePayload = (duplicateResult as any)?.payload ?? duplicateResult;
-        reqLogger.info('recommend.cache.hit', {
-          cacheSource: '24h-history',
-          userId,
-          reason: 'duplicate_image',
-        });
-        return NextResponse.json({
-          success: true,
-          payload: duplicatePayload,
-          recommendationId: (duplicateResult as any)?.recommendationId,
-          cached: true,
-          cacheSource: '24h-history',
-          message: 'You recently uploaded this photo. Here are your previous recommendations.',
-          performance: {
-            cached: true,
-            source: '24h-history',
-            savedTime: '~10s',
-          }
-        });
-      }
-    }
-    
-    // 🚀 OPTIMIZATION 3: Firestore Cache Check  
-    const firestoreCache = new FirestoreCache();
-    const cacheParams = {
-      imageHash,
-      colors: Array.isArray(dressColors) ? dressColors : (dressColors ? [dressColors] : []),
-      gender,
-      occasion: occasion || 'casual',
-    };
-    
-    const cachedResult = await firestoreCache.get(cacheParams);
-    if (cachedResult) {
-      const cachedPayload = (cachedResult as any)?.payload ?? cachedResult;
-      const totalTime = Date.now() - startTime;
-      reqLogger.info('recommend.cache.hit', {
-        cacheSource: 'firestore',
-        userId,
-        latencyMs: totalTime,
-      });
-      logger.metric('recommend.latency_ms', totalTime, {
-        requestId,
-        cacheSource: 'firestore',
-      });
-      
-      return NextResponse.json({
-        success: true,
-        payload: cachedPayload,
-        recommendationId: (cachedResult as any)?.recommendationId,
-        cached: true,
-        cacheSource: 'firestore',
-        performanceMs: totalTime,
-        message: 'Results from recent similar request (saves your rate limit)',
-      });
-    }
-    
-    reqLogger.info('recommend.cache.miss', {
-      cacheSource: 'none',
-      reason: 'no_recent_cached_result',
-    });
-
-    // ✨ NEW: Fetch user preferences and blocklists for personalization
-    let userPreferences = null;
-    let userBlocklists = null;
-    let sessionId = generateSessionId();
-    
-    if (userId && userId !== 'anonymous') {
-      reqLogger.info('recommend.personalization.fetch_start', { userId });
-      const prefStart = Date.now();
-      
-      try {
-        [userPreferences, userBlocklists] = await Promise.all([
-          getComprehensivePreferences(userId),
-          getBlocklists(userId),
-        ]);
-        
-        const prefLatency = Date.now() - prefStart;
-        reqLogger.info('recommend.personalization.fetch_complete', {
-          userId,
-          latencyMs: prefLatency,
-          interactions: userPreferences.totalInteractions,
-          confidence: userPreferences.overallConfidence,
-          favoriteColors: userPreferences.colors.favoriteColors.length,
-          topStyles: userPreferences.styles.topStyles.length,
-        });
-        logger.metric('recommend.personalization_fetch_ms', prefLatency, { requestId, userId });
-      } catch (prefError) {
-        reqLogger.warn('recommend.personalization.fetch_failed', {
-          userId,
-          reason: 'preference_fetch_error',
-          error: prefError,
-        });
-        // Continue without personalization
-      }
-    }
-
-    // Step 1: Analyze via Gemini/Groq flow with timeout (now personalized!)
-    const analysisStart = Date.now();
-    let analysis;
-    try {
-      analysis = await withTimeout(
-        analyzeImageAndProvideRecommendations({ 
-          photoDataUri, 
-          occasion: occasion || '', 
-          genre: genre || '', 
-          gender, 
-          weather: weather || '', 
-          skinTone: skinTone || '', 
-          dressColors: Array.isArray(dressColors) ? dressColors.join(', ') : (dressColors || ''), 
-          previousRecommendation: previousRecommendation || '',
-          userId: userId || '', // Pass userId to enable personalization in AI flow
-        }),
-        15000, // 15 second timeout for AI analysis
-        'AI analysis timed out after 15 seconds'
-      );
-      const analysisLatency = Date.now() - analysisStart;
-      reqLogger.info('recommend.analysis.complete', {
-        provider: 'genkit',
-        latencyMs: analysisLatency,
-        recommendationCount: analysis.outfitRecommendations.length,
-      });
-      logger.metric('recommend.analysis_ms', analysisLatency, { requestId, provider: 'genkit' });
-    } catch (analysisError) {
-      reqLogger.error('recommend.analysis.failed', {
-        reason: 'analysis_timeout_or_provider_error',
-        error: analysisError,
-      });
-      analysis = createFallbackAnalysis({
-        occasion,
-        genre,
-        gender,
-        weather,
-        skinTone,
-        dressColors,
-      });
-
-      reqLogger.warn('recommend.analysis.fallback_used', {
-        reason: 'ai_provider_unavailable',
-        fallbackOutfits: analysis.outfitRecommendations.length,
-      });
-    }
-
-    // Step 2: Process outfits — text/palettes first, images in PARALLEL with budget cap
-    const outfitsStart = Date.now();
-    const outfitsToProcess = analysis.outfitRecommendations.slice(0, 3);
-    
-    logger.log('🔄 [PERF] Processing outfits with PARALLEL image generation (15s budget)...');
-    
-    // First: extract all text data instantly (no async needed)
-    type RecommendationOutfit = AnalyzeImageAndProvideRecommendationsOutput['outfitRecommendations'][number];
-    type EnrichedOutfit = RecommendationOutfit & {
-      imageUrl: string | null;
-      generatedImageColors: unknown;
-      shoppingLinks: {
-        amazon: string | null;
-        myntra: string | null;
-        tatacliq: string | null;
-      };
-      _imagePrompt?: string;
-      _colorHexCodes?: string[];
-    };
-
-    let enrichedOutfits: EnrichedOutfit[] = outfitsToProcess.map((outfit: RecommendationOutfit) => {
-      const colorHexCodes = outfit.colorPalette?.map((c) => {
-        if (typeof c === 'string') return c;
-        const colorObj = c as { hex?: string; name?: string };
-        return colorObj.hex || '#000000';
-      }) || [];
-
-      const shoppingLinksData = generateShoppingLinks({
-        gender,
-        items: outfit.items,
-        colorPalette: colorHexCodes.slice(0, 5),
-        style: outfit.styleType || 'casual',
-        description: outfit.description
-      });
-
-      const shoppingLinks = {
-        amazon: shoppingLinksData.byPlatform.amazon[0]?.url || null,
-        myntra: shoppingLinksData.byPlatform.myntra[0]?.url || null,
-        tatacliq: shoppingLinksData.byPlatform.tataCliq[0]?.url || null,
-      };
-
-      return {
-        ...outfit,
-        imageUrl: null, // Will be filled by parallel image gen
-        colorPalette: colorHexCodes.slice(0, 5),
-        generatedImageColors: null,
-        shoppingLinks,
-        _imagePrompt: outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`,
-        _colorHexCodes: colorHexCodes,
-      };
-    });
-
-    logger.log(`⏱️ [PERF] Text/palettes/shopping ready in ${Date.now() - outfitsStart}ms`);
-
-    // Second: generate images IN PARALLEL — all outfits fire simultaneously
-    // Pollinations is the primary/only provider, so parallel is safe and much faster
-    // Total time = slowest single image (~8s) instead of sum of all (~25s)
-    const IMAGE_BUDGET = 16_000; // 16 s — reduces placeholder fallbacks during transient provider latency
-    const imageStart = Date.now();
-
-    logger.log(`🎨 [IMAGES] Starting PARALLEL image generation for ${enrichedOutfits.length} outfits (${IMAGE_BUDGET / 1000}s budget)...`);
-
-    const imagePromises = enrichedOutfits.map(async (outfit, i) => {
-      const outfitNumber = i + 1;
-      const prompt = outfit._imagePrompt || '';
-      const colorHexCodes = outfit._colorHexCodes || [];
-      try {
-        // Check image cache first
-        const cachedImageUrl = await getCachedImage(prompt, colorHexCodes);
-        if (cachedImageUrl) {
-          logger.log(`✅ [OUTFIT ${outfitNumber}] Using cached image`);
-          const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
-          return { ...cleanOutfit, imageUrl: cachedImageUrl };
-        }
-
-        logger.log(`🎨 [OUTFIT ${outfitNumber}] Starting image generation...`);
-        const url = await generateImageWithRetry(prompt, colorHexCodes, IMAGE_BUDGET);
-        const elapsed = Date.now() - imageStart;
-        logger.log(`✅ [OUTFIT ${outfitNumber}] Image ready in ${elapsed}ms`);
-
-        // Cache non-placeholder images
-        const isSvgPlaceholder = url.startsWith('data:image/svg+xml');
-        const isPlaceholderUrl = url.includes('via.placeholder.com');
-        if (!isSvgPlaceholder && !isPlaceholderUrl) {
-          cacheImage(prompt, colorHexCodes, url).catch(() => {});
-        }
-
-        const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
-        return { ...cleanOutfit, imageUrl: url };
-      } catch (err: any) {
-        logger.warn(`⚠️ [OUTFIT ${outfitNumber}] Image failed: ${err.message}`);
-        const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
-        return { ...cleanOutfit, imageUrl: createFallbackPlaceholder(prompt, colorHexCodes) };
-      }
-    });
-
-    // Wait for all images with a hard budget cap
-    const settled = await Promise.race([
-      Promise.all(imagePromises),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), IMAGE_BUDGET)),
-    ]);
-
-    if (settled) {
-      enrichedOutfits = settled as typeof enrichedOutfits;
-    } else {
-      // Budget expired — fill any remaining with placeholders
-      logger.warn(`⏱️ [IMAGES] Budget expired (${IMAGE_BUDGET}ms) — using placeholders for remaining`);
-      enrichedOutfits = enrichedOutfits.map((outfit) => {
-        if (outfit.imageUrl) return outfit;
-        const { _imagePrompt, _colorHexCodes, ...cleanOutfit } = outfit;
-        return { ...cleanOutfit, imageUrl: createFallbackPlaceholder(outfit._imagePrompt || '', outfit._colorHexCodes || []) };
-      });
-    }
-
-    logger.log(`⏱️ [PERF] All outfits processed: ${Date.now() - outfitsStart}ms`);
-    logger.log('✅ All outfits processed!');
-
-    // ✨ Apply diversification if user is authenticated and has preferences
-    if (userId && userId !== 'anonymous' && userPreferences && userBlocklists) {
-      logger.log('🎯 [Diversification] Applying 70-20-10 rule...');
-      
-      try {
-        // Calculate match scores for all outfits
-        const outfitMatches = enrichedOutfits.map(outfit =>
-          calculateOutfitMatchScore(outfit, userPreferences, userBlocklists)
-        );
-
-        // Apply 70-20-10 diversification
-        const diversified = applyDiversificationRule(outfitMatches);
-
-        // Check for pattern lock
-        const patternLock = await detectPatternLock(userId, userPreferences);
-        if (patternLock.isLocked) {
-          logger.log('⚠️ Pattern lock detected! User stuck in style bubble. Forcing exploration.');
-        }
-
-        // Replace enrichedOutfits with diversified ones
-        enrichedOutfits = diversified.map((match, index) => ({
-          ...match.outfit,
-          matchScore: match.matchScore,
-          matchCategory: match.matchCategory,
-          explanation: match.explanation,
-          position: index + 1,
-        }));
-
-        logger.log('✅ [Diversification] Applied:', {
-          position1: diversified[0]?.matchScore,
-          position2: diversified[1]?.matchScore,
-          position3: diversified[2]?.matchScore,
-          patternLocked: patternLock.isLocked,
-        });
-
-        // Add first outfit to anti-repetition cache
-        if (enrichedOutfits.length > 0) {
-          await addToAntiRepetitionCache(userId, enrichedOutfits[0]);
-          logger.log('✅ [Diversification] Added to anti-repetition cache');
-        }
-      } catch (divError) {
-        logger.error('⚠️ [Diversification] Failed (non-critical):', divError);
-        // Continue without diversification
-      }
-    }
-
-    // ⚠️ REMOVED: Heavy color analysis that was adding 2-4s per outfit
-    // Old code was running extractColorsFromUrl + optimized Tavily searches
-    // Now using AI-generated colors directly for speed
-
-    // ✨ NEW: Create interaction tracking session
-    if (userId && userId !== 'anonymous') {
-      logger.log('📊 [Interaction Tracking] Creating session...');
-      
-      try {
-        await createInteractionSession(
-          userId,
-          sessionId,
-          {
-            occasion: occasion || 'casual',
-            genre: genre || undefined,
-            gender,
-            weather: weather ? { temp: 0, condition: weather } : undefined,
-          },
-          enrichedOutfits.map((outfit, index) => ({
-            position: index + 1,
-            title: outfit.title,
-            colors: Array.isArray(outfit.colorPalette) 
-              ? outfit.colorPalette.map((c: unknown) => {
-                  if (typeof c === 'string') return c;
-                  if (typeof c === 'object' && c && 'hex' in c) {
-                    const maybeHex = (c as { hex?: string }).hex;
-                    return maybeHex || '#000000';
-                  }
-                  return '#000000';
-                })
-              : [],
-            styles: outfit.styleType ? [outfit.styleType] : [],
-            items: outfit.items || [],
-            imageUrl: outfit.imageUrl || '',
-            description: outfit.description,
-          }))
-        );
-        
-        logger.log('✅ [Interaction Tracking] Session created:', sessionId);
-      } catch (trackError) {
-        logger.error('⚠️ [Interaction Tracking] Failed to create session:', trackError);
-      }
-    }
-
-    const payload = {
-      userId: userId || 'anonymous',
-      timestamp: Date.now(),
-      occasion,
-      genre,
-      gender,
-      weather,
-      skinTone,
-      dressColors,
-      sessionId, // Include session ID for frontend tracking
-      // PRIVACY: photoDataUri is NOT stored - only metadata
-      analysis: { ...analysis, outfitRecommendations: enrichedOutfits },
-    };
-
-    // Skip Firestore save during generation for speed - do it async after response
-    // This can be done client-side or in a background job
-    let recommendationId: string | null = null;
-    if (userId && userId !== 'anonymous') {
-      // Fire and forget with proper error handling to prevent unhandled rejections
-      saveRecommendation(userId, payload)
-        .then(id => {
-          logger.log(`✅ [ASYNC] Recommendation saved: ${id}`);
-        })
-        .catch(err => {
-          logger.error('⚠️ [ASYNC] Save failed:', err);
-        });
-    }
-
-    const totalTime = Date.now() - startTime;
-    reqLogger.info('recommend.request.complete', {
-      userId: userId || 'anonymous',
-      latencyMs: totalTime,
-      provider: 'genkit',
-      imageProvider: 'pollinations',
-      cacheSource: 'miss',
-    });
-    logger.metric('recommend.latency_ms', totalTime, {
-      requestId,
-      cacheSource: 'miss',
-      provider: 'genkit',
-    });
-
-    const response = { 
-      success: true, 
-      payload,
-      recommendationId,
-      performanceMs: totalTime,
-      cached: false,
-      imageHash, // Include for deduplication
-    };
-
-    // 🚀 OPTIMIZATION 6: Store in Firestore cache for future similar requests (1 hour TTL)
-    await firestoreCache.set(cacheParams, response, 3600);
-    logger.log(`✅ [FIRESTORE CACHE] Result stored for 1 hour`);
-
-    return NextResponse.json(response);
-  } catch (err: any) {
-    const totalTime = Date.now() - startTime;
-    reqLogger.error('recommend.request.failed', {
-      reason: err instanceof Error ? err.message : 'unknown_error',
-      latencyMs: totalTime,
-      error: err,
-    });
-    logger.metric('recommend.failure_latency_ms', totalTime, { requestId });
-
-    
-    // Detailed error logging
-    if (err instanceof Error) {
-      logger.error('Error details:', {
-        name: err.name,
-        message: err.message,
-        stack: err.stack,
-      });
-    }
-
-    return buildErrorResponse(
-      500,
-      'RECOMMEND_FAILED',
-      sanitizeErrorMessage(err?.message || 'Failed to generate recommendations. Please try again.'),
-      'An unexpected error occurred while processing your request.'
-    );
+    userId = limitResult.effectiveUserId;
+  } catch {
+    return buildErrorResponse(429, 'RATE_LIMIT_UNAVAILABLE', 'Unable to verify current usage. Please retry shortly.');
   }
+
+  const queued = await enqueueRecommendJob(
+    {
+      ...input,
+      dressColors: Array.isArray(input.dressColors)
+        ? input.dressColors
+        : typeof input.dressColors === 'string'
+          ? input.dressColors.split(',').map((c: string) => c.trim()).filter(Boolean)
+          : undefined,
+      userId,
+    },
+    userId
+  );
+
+  return NextResponse.json(
+    {
+      success: true,
+      status: 'queued',
+      jobId: queued.jobId,
+      deduped: queued.deduped,
+      message: queued.deduped
+        ? 'Similar request already in progress or cached; attached to existing job.'
+        : 'Recommendation job queued successfully.',
+    },
+    { status: 202 }
+  );
 }

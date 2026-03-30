@@ -22,6 +22,7 @@ export async function getWardrobeItemsServer(
     season?: string;
     occasion?: string;
     isActive?: boolean;
+    limitCount?: number;
   }
 ): Promise<WardrobeItemData[]> {
   try {
@@ -44,7 +45,7 @@ export async function getWardrobeItemsServer(
         .orderBy('addedDate', 'desc');
     }
 
-    const snapshot = await query.get();
+    const snapshot = await query.limit(filters?.limitCount ?? 200).get();
     
     
     const items: WardrobeItemData[] = [];

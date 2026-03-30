@@ -76,6 +76,7 @@ function WardrobeSuggestPageContent() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   const [result, setResult] = useState<OutfitResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isOutfitLimitReached, setIsOutfitLimitReached] = useState(false);
   const [wardrobeItemsMap, setWardrobeItemsMap] = useState<Map<string, WardrobeItemData>>(new Map());
   const [expandedOutfit, setExpandedOutfit] = useState<number | null>(null);
 
@@ -115,6 +116,15 @@ function WardrobeSuggestPageContent() {
   }, [wardrobeItemsMap]);
 
   const handleGetSuggestions = async () => {
+    if (isOutfitLimitReached) {
+      toast({
+        variant: 'destructive',
+        title: 'Daily limit reached',
+        description: 'You have used all outfit suggestions for today. Try again after reset.',
+      });
+      return;
+    }
+
     if (!occasion || !occasion.trim()) {
       toast({
         variant: 'destructive',
@@ -185,6 +195,14 @@ function WardrobeSuggestPageContent() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
+
+        if (response.status === 429) {
+          setIsOutfitLimitReached(true);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'wardrobe-outfit' } }));
+          }
+        }
+
         const apiError = errorData?.message || errorData?.error;
         const code = errorData?.code ? ` [${errorData.code}]` : '';
         throw new Error(`${apiError || 'Failed to generate outfit suggestions'}${code}`);
@@ -221,6 +239,10 @@ function WardrobeSuggestPageContent() {
         toastDescription = 'Add a few more items to your wardrobe to create better outfit combinations.';
       } else if (errorMessage.includes('Rate limit exceeded') || errorMessage.includes('[OUTFIT_GENERATION_FAILED]')) {
         toastDescription = 'The outfit service is busy right now. Please wait a bit and try again.';
+        if (errorMessage.includes('Rate limit exceeded')) {
+          setIsOutfitLimitReached(true);
+          toastDescription = 'You reached your daily outfit suggestion limit. Try again after reset.';
+        }
       } else if (errorMessage.includes('Unauthorized') || errorMessage.includes('[UNAUTHORIZED]')) {
         toastDescription = 'Your session expired. Please sign in again and retry.';
       } else if (errorMessage.includes('[INTERNAL_SERVER_ERROR]')) {
@@ -415,7 +437,7 @@ function WardrobeSuggestPageContent() {
 
               <Button
                 onClick={handleGetSuggestions}
-                disabled={loading || !occasion.trim() || !selectedDate}
+                disabled={loading || isOutfitLimitReached || !occasion.trim() || !selectedDate}
                 className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white gap-2"
                 size="lg"
               >
@@ -423,6 +445,11 @@ function WardrobeSuggestPageContent() {
                   <>
                     <Loader2 className="h-5 w-5 animate-spin" />
                     Generating Outfits...
+                  </>
+                ) : isOutfitLimitReached ? (
+                  <>
+                    <AlertCircle className="h-5 w-5" />
+                    Daily Limit Reached
                   </>
                 ) : (
                   <>

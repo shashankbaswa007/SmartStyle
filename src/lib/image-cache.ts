@@ -11,6 +11,8 @@
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from './firebase';
 import crypto from 'crypto';
+import { executeWithTimeoutAndRetry } from './external-request';
+import { featureFlags } from './feature-flags';
 
 /**
  * Generate a cache key from image generation prompt
@@ -62,10 +64,24 @@ export async function cacheImage(
     const imageRef = ref(storage, `generated-images/${hash}.jpg`);
     
     // Fetch image from generation service
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.statusText}`);
-    }
+    const request = async (signal?: AbortSignal): Promise<Response> => {
+      const response = await fetch(imageUrl, { signal });
+      if (!response.ok) {
+        const error = new Error(`Failed to fetch image: ${response.status}`) as Error & { status?: number };
+        error.status = response.status;
+        throw error;
+      }
+      return response;
+    };
+
+    const response = featureFlags.externalRetryWrapper
+      ? await executeWithTimeoutAndRetry(request, {
+          timeoutMs: 8000,
+          retries: 1,
+          baseDelayMs: 300,
+          operationName: 'imageCache.downloadSourceImage',
+        })
+      : await request(AbortSignal.timeout(8000));
     
     const blob = await response.blob();
     

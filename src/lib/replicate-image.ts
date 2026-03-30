@@ -8,6 +8,9 @@
  * Quality: Excellent (better than Pollinations.ai)
  */
 
+import { executeWithTimeoutAndRetry } from './external-request';
+import { featureFlags } from './feature-flags';
+
 const REPLICATE_API_TOKEN = process.env.REPLICATE_API_TOKEN;
 const MAX_RETRIES = 6;
 const POLL_INTERVAL = 1000; // 1 second
@@ -39,7 +42,7 @@ export async function generateWithReplicate(
     const enhancedPrompt = `${prompt}, featuring colors: ${colorList}, fashion product photograph, soft studio lighting, clean white background, detailed textures, high resolution, photorealistic, absolutely no text no words no letters no banners no logos no watermarks no overlays`;
 
     // Create prediction
-    const createResponse = await fetch('https://api.replicate.com/v1/predictions', {
+    const createRequest = (signal?: AbortSignal) => fetch('https://api.replicate.com/v1/predictions', {
       method: 'POST',
       headers: {
         'Authorization': `Token ${REPLICATE_API_TOKEN}`,
@@ -55,7 +58,17 @@ export async function generateWithReplicate(
           output_quality: 90,
         },
       }),
+      signal,
     });
+
+    const createResponse = featureFlags.externalRetryWrapper
+      ? await executeWithTimeoutAndRetry(createRequest, {
+          timeoutMs: 5000,
+          retries: 1,
+          baseDelayMs: 250,
+          operationName: 'replicate.createPrediction',
+        })
+      : await createRequest(AbortSignal.timeout(5000));
 
     if (!createResponse.ok) {
       // 402 Payment Required = no credits — throw so circuit breaker trips
@@ -82,14 +95,24 @@ export async function generateWithReplicate(
 
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
       
-      const statusResponse = await fetch(
+      const statusRequest = (signal?: AbortSignal) => fetch(
         `https://api.replicate.com/v1/predictions/${prediction.id}`,
         {
           headers: {
             'Authorization': `Token ${REPLICATE_API_TOKEN}`,
           },
+          signal,
         }
       );
+
+      const statusResponse = featureFlags.externalRetryWrapper
+        ? await executeWithTimeoutAndRetry(statusRequest, {
+            timeoutMs: 3000,
+            retries: 1,
+            baseDelayMs: 200,
+            operationName: 'replicate.pollPrediction',
+          })
+        : await statusRequest(AbortSignal.timeout(3000));
 
       if (!statusResponse.ok) {
         attempts++;

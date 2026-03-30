@@ -10,10 +10,27 @@
  * @see https://github.com/pollinations/pollinations/blob/main/APIDOCS.md
  */
 
+import { executeWithTimeoutAndRetry } from './external-request';
+import { featureFlags } from './feature-flags';
+
 // ─── Configuration ──────────────────────────────────────────────────────────
 const POLLINATIONS_API_KEY = process.env.POLLINATIONS_API_KEY;
 const POLLINATIONS_GEN_URL = 'https://gen.pollinations.ai/image';
 const POLLINATIONS_TIMEOUT = 8_000; // 8 s — klein model averages 3.5s, 8s gives safe headroom
+
+function mergeSignals(signalA?: AbortSignal, signalB?: AbortSignal): AbortSignal | undefined {
+  if (!signalA) return signalB;
+  if (!signalB) return signalA;
+  if (typeof (AbortSignal as any).any === 'function') {
+    return (AbortSignal as any).any([signalA, signalB]);
+  }
+
+  const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  signalA.addEventListener('abort', onAbort, { once: true });
+  signalB.addEventListener('abort', onAbort, { once: true });
+  return controller.signal;
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 export interface ImageGenerationOptions {
@@ -155,25 +172,31 @@ export async function generateWithPollinationsAuth(
 
   onLifecycle({ provider: 'pollinations-auth', status: 'in-progress', timestamp: Date.now() });
 
-  // Combine per-request timeout with external cancellation signal
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), POLLINATIONS_TIMEOUT);
-  if (externalSignal) {
-    const onAbort = () => { clearTimeout(timeoutId); controller.abort(); };
-    externalSignal.addEventListener('abort', onAbort, { once: true });
-  }
+  const request = async (signal?: AbortSignal): Promise<Response> => {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${POLLINATIONS_API_KEY}` },
+      signal: mergeSignals(signal, externalSignal),
+    });
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: { Authorization: `Bearer ${POLLINATIONS_API_KEY}` },
-    signal: controller.signal,
-  });
-  clearTimeout(timeoutId);
+    if (!response.ok) {
+      const body = await response.text().catch(() => '');
+      const error = new Error(`Pollinations API ${response.status}: ${body.slice(0, 200)}`) as Error & { status?: number };
+      error.status = response.status;
+      throw error;
+    }
 
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Pollinations API ${response.status}: ${body.slice(0, 200)}`);
-  }
+    return response;
+  };
+
+  const response = featureFlags.externalRetryWrapper
+    ? await executeWithTimeoutAndRetry(request, {
+        timeoutMs: POLLINATIONS_TIMEOUT,
+        retries: 1,
+        baseDelayMs: 350,
+        operationName: 'pollinations.generate',
+      })
+    : await request(AbortSignal.timeout(POLLINATIONS_TIMEOUT));
 
   const contentType = response.headers.get('content-type') || 'image/jpeg';
   const buffer = await response.arrayBuffer();
