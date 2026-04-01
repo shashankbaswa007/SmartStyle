@@ -20,20 +20,20 @@ interface ProtectedRouteProps {
 }
 
 export function ProtectedRoute({ children }: ProtectedRouteProps) {
-  const { user, loading } = useAuth();
+  const { user, loading, initialized } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
     // Redirect to auth page if user is not authenticated
-    if (!loading && !user) {
+    if (initialized && !loading && !user) {
       const nextPath = pathname || '/';
       router.replace(`/auth?next=${encodeURIComponent(nextPath)}`);
     }
-  }, [user, loading, pathname, router]);
+  }, [initialized, user, loading, pathname, router]);
 
-  // Show loading state while checking authentication
-  if (loading) {
+  // Show loading state while checking authentication state and initialization
+  if (!initialized || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">

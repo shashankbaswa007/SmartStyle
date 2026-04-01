@@ -7,7 +7,7 @@
  * Use the `useAuth` hook to access auth state and methods in any component.
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { User } from 'firebase/auth';
 import { onAuthChange } from '@/lib/auth';
 import { logger } from '@/lib/logger';
@@ -28,26 +28,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
+  const previousUserRef = useRef<User | null>(null);
 
   useEffect(() => {
     let didResolveAuthState = false;
     let unsubscribe: (() => void) | undefined;
 
-    const syncSession = async (user: User | null) => {
+    const syncSession = async (user: User | null, shouldClear: boolean) => {
+      const requestWithRetry = async (input: RequestInfo, init: RequestInit) => {
+        for (let attempt = 1; attempt <= 3; attempt++) {
+          try {
+            const response = await fetch(input, init);
+            if (response.ok) {
+              return true;
+            }
+          } catch {
+            // Retry transient failures.
+          }
+
+          if (attempt < 3) {
+            await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+          }
+        }
+
+        return false;
+      };
+
       try {
         if (user) {
           const idToken = await user.getIdToken();
-          await fetch('/api/auth/session', {
+          await requestWithRetry('/api/auth/session', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'Cache-Control': 'no-store',
             },
             body: JSON.stringify({ idToken }),
             credentials: 'include',
           });
-        } else {
-          await fetch('/api/auth/session', {
+        } else if (shouldClear) {
+          await requestWithRetry('/api/auth/session', {
             method: 'DELETE',
+            headers: {
+              'Cache-Control': 'no-store',
+            },
             credentials: 'include',
           });
         }
@@ -59,13 +83,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Subscribe to auth state changes
     try {
       unsubscribe = onAuthChange((user) => {
+        const previousUser = previousUserRef.current;
+        previousUserRef.current = user;
+
         didResolveAuthState = true;
         setUser(user);
         setLoading(false);
         setInitialized(true);
 
         // Keep a secure HttpOnly session cookie in sync for middleware checks.
-        void syncSession(user);
+        const shouldClear = !!previousUser && !user;
+        void syncSession(user, shouldClear);
       });
     } catch (error) {
       logger.warn('Failed to subscribe to auth state; continuing with unauthenticated UI fallback', error);
@@ -73,14 +101,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setInitialized(true);
     }
 
-    // Fallback: avoid getting stuck forever if auth callback is delayed.
+    // Fallback: avoid getting stuck forever if auth callback is unusually delayed.
     const fallbackTimer = window.setTimeout(() => {
       if (!didResolveAuthState) {
-        logger.warn('Auth state callback timed out; continuing with unauthenticated UI fallback');
+        logger.warn('Auth state callback timed out after extended wait; continuing with unauthenticated UI fallback');
         setLoading(false);
         setInitialized(true);
       }
-    }, 1200);
+    }, 8000);
 
     // Cleanup subscription on unmount
     return () => {

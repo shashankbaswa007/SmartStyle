@@ -8,8 +8,44 @@
  * - Storing authentication metadata
  */
 
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+
+function isTransientFirestoreError(error: unknown): boolean {
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { code?: unknown }).code || '')
+    : '';
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+
+  return (
+    code.includes('unavailable') ||
+    code.includes('deadline-exceeded') ||
+    code.includes('aborted') ||
+    code.includes('resource-exhausted') ||
+    message.includes('network') ||
+    message.includes('offline') ||
+    message.includes('timeout')
+  );
+}
+
+async function withFirestoreRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientFirestoreError(error) || attempt >= attempts) {
+        throw error;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+    }
+  }
+
+  throw lastError;
+}
 
 /**
  * User profile data structure
@@ -48,24 +84,24 @@ export async function createUserDocument(
     }
 
     const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
+    const userSnap = await withFirestoreRetry(() => getDoc(userRef));
 
     if (userSnap.exists()) {
       // User exists, update last login time
-      await updateDoc(userRef, {
+      await withFirestoreRetry(() => updateDoc(userRef, {
         lastLoginAt: new Date().toISOString(),
         // Update profile data in case it changed (e.g., user updated their Google profile)
         displayName: userData.displayName || userSnap.data().displayName,
         photoURL: userData.photoURL || userSnap.data().photoURL,
-      });
+      }));
       
     } else {
       // New user, create document with full profile data
-      await setDoc(userRef, {
+      await withFirestoreRetry(() => setDoc(userRef, {
         ...userData,
         createdAt: new Date().toISOString(),
         lastLoginAt: new Date().toISOString(),
-      });
+      }));
       
     }
   } catch (error) {
@@ -82,7 +118,7 @@ export async function createUserDocument(
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   try {
     const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
+    const userSnap = await withFirestoreRetry(() => getDoc(userRef));
 
     if (userSnap.exists()) {
       return userSnap.data() as UserProfile;
@@ -107,7 +143,7 @@ export async function updateUserProfile(
 ): Promise<void> {
   try {
     const userRef = doc(db, 'users', userId);
-    await updateDoc(userRef, updates);
+    await withFirestoreRetry(() => updateDoc(userRef, updates));
     
   } catch (error) {
     throw error;
@@ -123,7 +159,7 @@ export async function updateUserProfile(
 export async function userExists(userId: string): Promise<boolean> {
   try {
     const userRef = doc(db, 'users', userId);
-    const userSnap = await getDoc(userRef);
+    const userSnap = await withFirestoreRetry(() => getDoc(userRef));
     return userSnap.exists();
   } catch (error) {
     return false;

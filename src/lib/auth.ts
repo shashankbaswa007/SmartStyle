@@ -8,8 +8,9 @@
  */
 
 import {
-  signInWithPopup,
   signInWithRedirect,
+  signInWithPopup,
+  getRedirectResult,
   signOut as firebaseSignOut,
   GoogleAuthProvider,
   User,
@@ -45,8 +46,8 @@ export async function signInWithGoogle(): Promise<{ user: User | null; error?: s
       prompt: 'select_account', // Forces account selection even if user is already signed in
     });
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    if (isProduction) {
+    const usePopup = process.env.NEXT_PUBLIC_AUTH_MODE === 'popup';
+    if (!usePopup) {
       await signInWithRedirect(auth, provider);
       return { user: null, redirecting: true };
     }
@@ -67,6 +68,19 @@ export async function signInWithGoogle(): Promise<{ user: User | null; error?: s
     }
     
     return { user: null, error: errorMessage, redirecting: false };
+  }
+}
+
+/**
+ * Resolve Google redirect sign-in result, if this page load is returning from OAuth.
+ */
+export async function consumeGoogleRedirectResult(): Promise<{ user: User | null; error?: string }> {
+  try {
+    const result = await getRedirectResult(auth);
+    return { user: result?.user || null };
+  } catch (error: any) {
+    logger.error('Google redirect result error:', error);
+    return { user: null, error: 'Failed to complete Google sign-in redirect' };
   }
 }
 

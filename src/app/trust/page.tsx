@@ -1,47 +1,54 @@
 import Link from 'next/link';
-import { ShieldCheck, FileText, Activity, Lock } from 'lucide-react';
+import { LegalPageLayout, LegalSection } from '@/components/legal/LegalPageLayout';
 
 export default function TrustCenterPage() {
   return (
-    <div className="min-h-screen bg-background py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        <header className="space-y-3">
-          <h1 className="text-4xl font-bold">Trust Center</h1>
-          <p className="text-muted-foreground">
-            Central place for SmartStyle privacy, security, reliability, and operational transparency.
-          </p>
-        </header>
+    <LegalPageLayout
+      title="Trust Center"
+      lastUpdated="April 2026"
+      summary="This Trust Center outlines how SmartStyle approaches security, privacy, service reliability, and user controls. It is intended to provide a transparent operational baseline for users and stakeholders."
+    >
+      <LegalSection id="security" title="1. Security Program">
+        <p>
+          SmartStyle applies layered security controls across authentication, request handling, and data access.
+          We maintain route protections, authenticated APIs, scoped access checks, and security headers to mitigate
+          common web threats.
+        </p>
+      </LegalSection>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="rounded-xl border border-border/40 bg-card/40 p-6">
-            <h2 className="font-semibold flex items-center gap-2"><FileText className="h-4 w-4" /> Policy Docs</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Review legal and data policies that govern your account.</p>
-            <div className="mt-3 flex gap-3 text-sm">
-              <Link href="/privacy" className="underline">Privacy</Link>
-              <Link href="/terms" className="underline">Terms</Link>
-            </div>
-          </div>
+      <LegalSection id="privacy" title="2. Privacy and Data Governance">
+        <p>
+          We apply data minimization and purpose-limited processing across core recommendation and wardrobe
+          workflows. Data handling practices are documented in our privacy policy and enforced in service logic.
+        </p>
+        <p>
+          Review: <Link href="/privacy" className="underline underline-offset-2">Privacy Policy</Link>
+        </p>
+      </LegalSection>
 
-          <div className="rounded-xl border border-border/40 bg-card/40 p-6">
-            <h2 className="font-semibold flex items-center gap-2"><Lock className="h-4 w-4" /> Account Controls</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Export preference data and delete account from in-app settings.</p>
-            <div className="mt-3 flex gap-3 text-sm">
-              <Link href="/preferences" className="underline">Preferences</Link>
-              <Link href="/account-settings" className="underline">Account Settings</Link>
-            </div>
-          </div>
+      <LegalSection id="reliability" title="3. Reliability and Resilience">
+        <p>
+          We use observability and operational safeguards to improve uptime and recovery behavior, including
+          structured logging, request tracing, rate controls, and fallback handling for external dependencies.
+        </p>
+      </LegalSection>
 
-          <div className="rounded-xl border border-border/40 bg-card/40 p-6">
-            <h2 className="font-semibold flex items-center gap-2"><Activity className="h-4 w-4" /> Reliability</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Operational logging and request IDs support issue triage and incident response.</p>
-          </div>
-
-          <div className="rounded-xl border border-border/40 bg-card/40 p-6">
-            <h2 className="font-semibold flex items-center gap-2"><ShieldCheck className="h-4 w-4" /> Security</h2>
-            <p className="mt-2 text-sm text-muted-foreground">Security headers, route access checks, and authenticated APIs protect user flows.</p>
-          </div>
-        </div>
-      </div>
-    </div>
+      <LegalSection id="user-controls" title="4. User Controls and Transparency">
+        <p>
+          Users can manage key account settings, privacy preferences, and profile actions directly in the app.
+        </p>
+        <ul className="list-disc pl-6 space-y-2">
+          <li>
+            <Link href="/preferences" className="underline underline-offset-2">Preferences</Link> for personalization controls.
+          </li>
+          <li>
+            <Link href="/account-settings" className="underline underline-offset-2">Account Settings</Link> for account-level actions.
+          </li>
+          <li>
+            <Link href="/terms" className="underline underline-offset-2">Terms of Service</Link> for legal terms of use.
+          </li>
+        </ul>
+      </LegalSection>
+    </LegalPageLayout>
   );
 }

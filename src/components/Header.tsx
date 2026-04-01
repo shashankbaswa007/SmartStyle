@@ -11,12 +11,10 @@
  */
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { UserProfileDropdown } from '@/components/auth/UserProfileDropdown';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { Wand2, Heart, Palette, Shirt } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { toast } from '@/hooks/use-toast';
 import dynamic from 'next/dynamic';
 import AnimatedLogo from '@/components/AnimatedLogo';
 const StarBorder = dynamic(() => import('@/components/StarBorder'), { ssr: false });
@@ -24,19 +22,6 @@ const StarBorder = dynamic(() => import('@/components/StarBorder'), { ssr: false
 
 export function Header() {
   const { user } = useAuth();
-  const router = useRouter();
-
-  const handleProtectedNavigation = (e: React.MouseEvent, href: string) => {
-    if (!user) {
-      e.preventDefault();
-      toast({
-        variant: 'destructive',
-        title: 'Authentication Required',
-        description: 'Please sign in to access this page.',
-      });
-      router.push('/auth');
-    }
-  };
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-b border-border/40">
@@ -140,17 +125,7 @@ export function Header() {
                   </div>
                 </StarBorder>
               </nav>
-            ) : (
-              <div className="hidden md:block">
-                <Button
-                  variant="outline"
-                  onClick={() => router.push('/auth')}
-                  className="h-10 rounded-full border border-white/18 bg-slate-950/55 px-5 text-[12px] uppercase tracking-[0.14em] text-slate-100/90 shadow-[0_10px_24px_rgba(2,6,23,0.32)] backdrop-blur-md transition-all duration-300 hover:-translate-y-[1px] hover:border-teal-300/55 hover:bg-slate-900/70 hover:text-white focus-visible:ring-2 focus-visible:ring-teal-300 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                >
-                  Enter Studio
-                </Button>
-              </div>
-            )}
+            ) : null}
 
             {/* Mobile Navigation - Icon Only - Only show if authenticated */}
             {user ? (
@@ -199,18 +174,7 @@ export function Header() {
                   </Link>
                 </Button>
               </div>
-            ) : (
-              <div className="flex md:hidden">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => router.push('/auth')}
-                  className="rounded-full border border-white/18 bg-slate-950/55 px-3 text-[11px] uppercase tracking-[0.12em] text-slate-100/90 backdrop-blur-md transition-all duration-300 hover:border-teal-300/55 hover:bg-slate-900/70 hover:text-white"
-                >
-                  Enter
-                </Button>
-              </div>
-            )}
+            ) : null}
 
             {/* User Profile Dropdown */}
             <UserProfileDropdown />

@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { Palette, Shirt } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { signInWithGoogle } from '@/lib/auth';
+import { consumeGoogleRedirectResult, signInWithGoogle } from '@/lib/auth';
 import { createUserDocument } from '@/lib/userService';
+import { logger } from '@/lib/logger';
 import { toast } from '@/hooks/use-toast';
 import DarkVeil from '@/components/DarkVeil';
 import { BRAND } from '@/lib/branding';
@@ -18,11 +19,11 @@ import { PremiumAuthLoader } from '@/components/auth/PremiumAuthLoader';
 
 function GoogleGlyph() {
   return (
-    <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-      <path fill="#EA4335" d="M12 10.2v3.9h5.5c-.2 1.3-1.5 3.9-5.5 3.9-3.3 0-6-2.8-6-6.3s2.7-6.3 6-6.3c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 2.8 14.6 2 12 2 6.9 2 2.8 6.4 2.8 11.7S6.9 21.4 12 21.4c6.1 0 9.2-4.4 9.2-6.7 0-.5-.1-.9-.1-1.2H12Z" />
-      <path fill="#4285F4" d="M21.1 13.5c.1.3.1.7.1 1.2 0 2.3-3.1 6.7-9.2 6.7-5.1 0-9.2-4.4-9.2-9.7S6.9 2 12 2c2.6 0 4.7.8 6.4 2.4l-2.6 2.5C15.1 6.2 13.9 5.4 12 5.4c-3.3 0-6 2.8-6 6.3s2.7 6.3 6 6.3c4 0 5.3-2.6 5.5-3.9h-5.5v-3.9h9.1Z" opacity=".18" />
-      <path fill="#FBBC05" d="M4.8 7.3 L8 9.6c.9-2.1 2.7-3.5 5-3.5 1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 2.8 14.6 2 12 2 8 2 4.6 4.2 2.9 7.3l1.9 0Z" />
-      <path fill="#34A853" d="M12 21.4c2.5 0 4.6-.8 6.2-2.3l-2.9-2.4c-.8.6-1.9 1-3.3 1-2.3 0-4.2-1.5-5-3.6l-3.1 2.5C5.5 19.5 8.5 21.4 12 21.4Z" />
+    <svg viewBox="0 0 48 48" className="h-5 w-5 shrink-0" aria-hidden="true" shapeRendering="geometricPrecision">
+      <path fill="#EA4335" d="M24 9.5c3.2 0 6.1 1.1 8.4 3.2l6.3-6.3C34.8 2.8 29.8 1 24 1 14.7 1 6.7 6.3 2.7 14l7.8 6.1C12.3 13.8 17.7 9.5 24 9.5z" />
+      <path fill="#4285F4" d="M46.5 24.5c0-1.7-.2-3.4-.6-5H24v9.2h12.5c-.5 3-2.2 5.6-4.7 7.3l7.3 5.7c4.3-4 6.8-9.9 6.8-17.2z" />
+      <path fill="#FBBC05" d="M10.5 28.6c-.5-1.3-.8-2.8-.8-4.3s.3-3 .8-4.3L2.7 14C1.6 17.1 1 20.5 1 24.3c0 3.8.6 7.2 1.7 10.3l7.8-6z" />
+      <path fill="#34A853" d="M24 47.5c5.8 0 10.7-1.9 14.3-5.1L31 36.7c-2 1.3-4.4 2.1-7 2.1-6.3 0-11.7-4.2-13.6-10.1l-7.8 6c4 7.8 12 12.8 21.4 12.8z" />
     </svg>
   );
 }
@@ -41,23 +42,64 @@ export default function AuthPage() {
   const [finalizingSession, setFinalizingSession] = useState(false);
   const sceneRef = useRef<HTMLDivElement>(null);
   const hasRedirectedRef = useRef(false);
+  const handledRedirectResultRef = useRef(false);
 
   const resolveNextPath = (rawPath: string): string => {
     if (!rawPath || rawPath === '/auth') return '/';
     return rawPath;
   };
 
-  const establishSessionCookie = async (idToken: string): Promise<boolean> => {
-    const response = await fetch('/api/auth/session', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ idToken }),
-      credentials: 'include',
-    });
+  const navigateAfterAuth = useCallback((rawPath: string) => {
+    const destination = resolveNextPath(rawPath);
+    if (typeof window !== 'undefined') {
+      window.location.assign(destination);
+      return;
+    }
+    router.replace(destination);
+  }, [router]);
 
-    return response.ok;
+  const establishSessionCookie = async (idToken: string): Promise<boolean> => {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const response = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          },
+          body: JSON.stringify({ idToken }),
+          credentials: 'include',
+        });
+
+        if (response.ok) {
+          return true;
+        }
+      } catch {
+        // Retry transient network/session route failures.
+      }
+
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 250));
+      }
+    }
+
+    return false;
+  };
+
+  const ensureUserDocument = async (uid: string, profile: {
+    displayName: string;
+    email: string;
+    photoURL: string;
+    provider: 'google';
+    createdAt: string;
+    lastLoginAt: string;
+  }): Promise<void> => {
+    try {
+      await createUserDocument(uid, profile);
+    } catch (error) {
+      // Database write should not block sign-in completion.
+      logger.warn('User document sync failed during sign-in; continuing', error);
+    }
   };
 
   const cardTransition = useMemo(
@@ -67,6 +109,53 @@ export default function AuthPage() {
     }),
     [duration]
   );
+
+  useEffect(() => {
+    const handleRedirectResult = async () => {
+      if (handledRedirectResultRef.current) return;
+      handledRedirectResultRef.current = true;
+
+      const { user: redirectUser, error } = await consumeGoogleRedirectResult();
+      if (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Authentication Error',
+          description: error,
+        });
+      }
+
+      if (!redirectUser) return;
+
+      setFinalizingSession(true);
+      try {
+        const idToken = await redirectUser.getIdToken();
+        const ok = await establishSessionCookie(idToken);
+        if (!ok) {
+          toast({
+            variant: 'destructive',
+            title: 'Sign-in incomplete',
+            description: 'Could not establish a secure session. Please try again.',
+          });
+          return;
+        }
+
+        await ensureUserDocument(redirectUser.uid, {
+          displayName: redirectUser.displayName || 'Anonymous User',
+          email: redirectUser.email || '',
+          photoURL: redirectUser.photoURL || '',
+          provider: 'google',
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+        });
+
+        navigateAfterAuth(nextPath);
+      } finally {
+        setFinalizingSession(false);
+      }
+    };
+
+    void handleRedirectResult();
+  }, [navigateAfterAuth, nextPath]);
 
   useEffect(() => {
     const finalizeRedirect = async () => {
@@ -90,7 +179,7 @@ export default function AuthPage() {
           return;
         }
 
-        router.replace(resolveNextPath(nextPath));
+        navigateAfterAuth(nextPath);
       } catch {
         hasRedirectedRef.current = false;
         toast({
@@ -104,7 +193,7 @@ export default function AuthPage() {
     };
 
     void finalizeRedirect();
-  }, [user, authLoading, nextPath, router]);
+  }, [user, authLoading, nextPath, navigateAfterAuth]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -143,7 +232,7 @@ export default function AuthPage() {
           return;
         }
 
-        await createUserDocument(user.uid, {
+        await ensureUserDocument(user.uid, {
           displayName: user.displayName || 'Anonymous User',
           email: user.email || '',
           photoURL: user.photoURL || '',
@@ -157,7 +246,7 @@ export default function AuthPage() {
           description: `Signed in as ${user.displayName || user.email}`,
         });
 
-        router.replace(resolveNextPath(nextPath));
+        navigateAfterAuth(nextPath);
       }
 
       setGoogleLoading(false);
@@ -191,7 +280,7 @@ export default function AuthPage() {
         {/* Background layers */}
         <div className="absolute inset-0 z-0">
           <DarkVeil
-            hueShift={8}
+            hueShift={0}
             noiseIntensity={0.012}
             scanlineIntensity={0.018}
             speed={0.34}
@@ -201,14 +290,6 @@ export default function AuthPage() {
           />
         </div>
 
-        {/* Gradient overlay */}
-        <div
-          className="absolute inset-0 z-0"
-          style={{
-            background:
-              'radial-gradient(circle at 10% 16%, rgba(14,165,233,0.18), transparent 33%), radial-gradient(circle at 92% 24%, rgba(59,130,246,0.2), transparent 43%), radial-gradient(circle at 74% 82%, rgba(6,182,212,0.12), transparent 42%), linear-gradient(138deg, rgba(2,6,23,0.78) 0%, rgba(7,12,28,0.85) 46%, rgba(2,6,23,0.84) 100%)',
-          }}
-        />
 
         {/* Grid overlay */}
         <div
@@ -223,24 +304,6 @@ export default function AuthPage() {
         {/* Noise overlay */}
         <div className="absolute inset-0 z-0 noise-overlay pointer-events-none" />
 
-        {/* Drifting blobs animation */}
-        {!prefersReducedMotion ? (
-          <motion.div
-            aria-hidden="true"
-            className="pointer-events-none absolute -left-20 top-16 h-[28rem] w-[28rem] rounded-full bg-teal-300/8 blur-[150px] z-0"
-            animate={{ x: [-20, 20], y: [-30, 30], scale: [0.95, 1.05] }}
-            transition={{ duration: 12, repeat: Infinity, repeatType: 'mirror' }}
-          />
-        ) : null}
-
-        {!prefersReducedMotion ? (
-          <motion.div
-            aria-hidden="true"
-            className="pointer-events-none absolute -right-28 bottom-0 h-[32rem] w-[32rem] rounded-full bg-indigo-500/10 blur-[165px] z-0"
-            animate={{ x: [20, -20], y: [30, -30], scale: [0.95, 1.05] }}
-            transition={{ duration: 14, repeat: Infinity, repeatType: 'mirror' }}
-          />
-        ) : null}
 
         {/* Content */}
         <div className="relative z-10 max-w-2xl">
@@ -256,7 +319,7 @@ export default function AuthPage() {
             className="flex flex-col items-center gap-2 mb-8"
           >
             <AnimatedLogo size={64} className="scale-90 sm:scale-100" />
-            <p className="text-[11px] uppercase tracking-[0.18em] text-cyan-100/72">Your Personal Style Assistant</p>
+            <p className="text-[11px] uppercase tracking-[0.18em] text-slate-100/80">Your Personal Style Assistant</p>
           </motion.div>
 
           {/* Main headline */}
@@ -301,9 +364,9 @@ export default function AuthPage() {
             {/* Badge 1: Color Intelligence */}
             <div className="rounded-xl border-l-4 border-purple-600 bg-gradient-to-r from-purple-600/8 via-transparent to-transparent px-4 py-3 backdrop-blur-sm">
               <div className="flex items-start gap-3">
-                <Palette className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                <Palette className="h-5 w-5 text-slate-200 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-100/70 font-semibold">Color Intelligence</p>
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-100/85 font-semibold">Color Intelligence</p>
                   <p className="mt-1 text-xs text-slate-200/80">Palette-led outfit decisions in seconds.</p>
                 </div>
               </div>
@@ -312,9 +375,9 @@ export default function AuthPage() {
             {/* Badge 2: Wardrobe Precision */}
             <div className="rounded-xl border-l-4 border-purple-600 bg-gradient-to-r from-purple-600/8 via-transparent to-transparent px-4 py-3 backdrop-blur-sm">
               <div className="flex items-start gap-3">
-                <Shirt className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                <Shirt className="h-5 w-5 text-slate-200 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-cyan-100/70 font-semibold">Wardrobe Precision</p>
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-100/85 font-semibold">Wardrobe Precision</p>
                   <p className="mt-1 text-xs text-slate-200/80">Recommendations grounded in your closet.</p>
                 </div>
               </div>

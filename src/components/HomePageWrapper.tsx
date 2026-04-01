@@ -15,18 +15,18 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { Loader2 } from 'lucide-react';
 
 export function HomePageWrapper({ children }: { children: React.ReactNode }) {
-  const { user, loading } = useAuth();
+  const { user, loading, initialized } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     // Redirect to auth page if user is not authenticated
-    if (!loading && !user) {
+    if (initialized && !loading && !user) {
       router.push('/auth');
     }
-  }, [user, loading, router]);
+  }, [initialized, user, loading, router]);
 
   // Show loading state while checking authentication
-  if (loading) {
+  if (!initialized || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
