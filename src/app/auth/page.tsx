@@ -38,7 +38,27 @@ export default function AuthPage() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get('next') || '/';
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [finalizingSession, setFinalizingSession] = useState(false);
   const sceneRef = useRef<HTMLDivElement>(null);
+  const hasRedirectedRef = useRef(false);
+
+  const resolveNextPath = (rawPath: string): string => {
+    if (!rawPath || rawPath === '/auth') return '/';
+    return rawPath;
+  };
+
+  const establishSessionCookie = async (idToken: string): Promise<boolean> => {
+    const response = await fetch('/api/auth/session', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ idToken }),
+      credentials: 'include',
+    });
+
+    return response.ok;
+  };
 
   const cardTransition = useMemo(
     () => ({
@@ -49,9 +69,41 @@ export default function AuthPage() {
   );
 
   useEffect(() => {
-    if (!authLoading && user) {
-      router.push(nextPath);
-    }
+    const finalizeRedirect = async () => {
+      if (authLoading || !user || hasRedirectedRef.current) {
+        return;
+      }
+
+      hasRedirectedRef.current = true;
+      setFinalizingSession(true);
+
+      try {
+        const idToken = await user.getIdToken();
+        const ok = await establishSessionCookie(idToken);
+        if (!ok) {
+          hasRedirectedRef.current = false;
+          toast({
+            variant: 'destructive',
+            title: 'Sign-in incomplete',
+            description: 'Could not establish a secure session. Please try signing in again.',
+          });
+          return;
+        }
+
+        router.replace(resolveNextPath(nextPath));
+      } catch {
+        hasRedirectedRef.current = false;
+        toast({
+          variant: 'destructive',
+          title: 'Sign-in incomplete',
+          description: 'Could not complete login. Please try again.',
+        });
+      } finally {
+        setFinalizingSession(false);
+      }
+    };
+
+    void finalizeRedirect();
   }, [user, authLoading, nextPath, router]);
 
   const handleGoogleSignIn = async () => {
@@ -80,14 +132,16 @@ export default function AuthPage() {
 
       if (user) {
         const idToken = await user.getIdToken();
-        await fetch('/api/auth/session', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ idToken }),
-          credentials: 'include',
-        });
+        const ok = await establishSessionCookie(idToken);
+        if (!ok) {
+          toast({
+            variant: 'destructive',
+            title: 'Sign-in incomplete',
+            description: 'Could not establish a secure session. Please try again.',
+          });
+          setGoogleLoading(false);
+          return;
+        }
 
         await createUserDocument(user.uid, {
           displayName: user.displayName || 'Anonymous User',
@@ -103,7 +157,7 @@ export default function AuthPage() {
           description: `Signed in as ${user.displayName || user.email}`,
         });
 
-        router.push(nextPath);
+        router.replace(resolveNextPath(nextPath));
       }
 
       setGoogleLoading(false);
@@ -117,7 +171,7 @@ export default function AuthPage() {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || finalizingSession) {
     return <AuthLoadingSplash />;
   }
 

@@ -1290,11 +1290,6 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           // Use status text as fallback
           errorData = { error: response.statusText || 'API request failed', code: 'HTTP_ERROR' };
         }
-
-        if (response.status === 429 && typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'recommend' } }));
-        }
-
         throw new Error(errorData.error || errorData.message || `API request failed with status ${response.status}`);
       }
 
