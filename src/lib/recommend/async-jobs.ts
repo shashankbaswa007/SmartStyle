@@ -3,6 +3,7 @@ import { analyzeImageAndProvideRecommendations } from '@/ai/flows/analyze-image-
 import type { RecommendRequest } from '@/lib/validation';
 import type { AnalyzeImageAndProvideRecommendationsOutput } from '@/ai/flows/analyze-image-and-provide-recommendations';
 import { getDistributedJson, setDistributedJson } from '@/lib/distributed-cache';
+import type { DistributedLock } from '@/lib/distributed-lock';
 import { acquireDistributedLock, releaseDistributedLock } from '@/lib/distributed-lock';
 import { executeWithTimeoutAndRetry } from '@/lib/external-request';
 import { generateImageWithRetry } from '@/lib/smart-image-generation';
@@ -432,66 +433,160 @@ async function saveJob(job: RecommendJobRecord): Promise<void> {
   await setDistributedJson(jobKey(job.jobId), job, JOB_TTL_SECONDS);
 }
 
-export async function enqueueRecommendJob(input: RecommendRequest, userId: string): Promise<{ jobId: string; deduped: boolean; status: RecommendJobStatus }> {
+export async function enqueueRecommendJob(
+  input: RecommendRequest,
+  userId: string,
+  options?: { autoStart?: boolean }
+): Promise<{ jobId: string; deduped: boolean; status: RecommendJobStatus }> {
   const dedupeKey = buildDedupeKey(input, userId || 'anonymous');
   const redis = getRedisClient();
   const uxVariant = normalizeVariant(input.uxVariant);
   await incrMetric('total_requests', 1);
   await incrVariantMetric(uxVariant, 'requests', 1);
 
+  const autoStart = options?.autoStart ?? true;
+  const lockKey = `recommend:dedupe:lock:${dedupeKey}`;
+  let dedupeLock: DistributedLock | null = null;
+
   if (redis) {
-    try {
-      const existingJobId = await redis.get<string>(dedupePointerKey(dedupeKey));
-      if (existingJobId) {
-        const existingJob = await getJob(existingJobId);
-        if (existingJob && ['queued', 'processing', 'completed'].includes(existingJob.status)) {
-          await incrMetric('dedupe_hits', 1);
-          await incrMetric('ai_calls_avoided', 1);
-          await incrVariantMetric(uxVariant, 'dedupe_hits', 1);
-          await incrVariantMetric(uxVariant, 'ai_calls_avoided', 1);
-          if (existingJob.status === 'completed') {
-            await incrMetric('cache_hits', 1);
-            await incrVariantMetric(uxVariant, 'cache_hits', 1);
-          }
-          return { jobId: existingJobId, deduped: true, status: existingJob.status };
-        }
+    for (let attempt = 0; attempt < 3 && !dedupeLock; attempt += 1) {
+      dedupeLock = await acquireDistributedLock(lockKey, 5);
+      if (!dedupeLock) {
+        await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
       }
-    } catch {
-      // Ignore pointer lookup failures and continue creating a new job.
     }
   }
 
-  const jobId = crypto.randomUUID();
-  const record: RecommendJobRecord = {
-    jobId,
-    status: 'queued',
-    dedupeKey,
-    createdAt: now(),
+  try {
+    if (redis) {
+      try {
+        const existingJobId = await redis.get<string>(dedupePointerKey(dedupeKey));
+        if (existingJobId) {
+          const existingJob = await getJob(existingJobId);
+          if (existingJob && ['queued', 'processing', 'completed'].includes(existingJob.status)) {
+            await incrMetric('dedupe_hits', 1);
+            await incrMetric('ai_calls_avoided', 1);
+            await incrVariantMetric(uxVariant, 'dedupe_hits', 1);
+            await incrVariantMetric(uxVariant, 'ai_calls_avoided', 1);
+            if (existingJob.status === 'completed') {
+              await incrMetric('cache_hits', 1);
+              await incrVariantMetric(uxVariant, 'cache_hits', 1);
+            }
+            return { jobId: existingJobId, deduped: true, status: existingJob.status };
+          }
+        }
+      } catch {
+        // Ignore pointer lookup failures and continue creating a new job.
+      }
+    }
+
+    const jobId = crypto.randomUUID();
+    const record: RecommendJobRecord = {
+      jobId,
+      status: 'queued',
+      dedupeKey,
+      createdAt: now(),
+      updatedAt: now(),
+      input: { ...input, userId },
+      progress: {
+        stage: 'queued',
+        queueWaitMs: 0,
+        totalImages: 3,
+        imagesReady: 0,
+      },
+    };
+
+    await saveJob(record);
+
+    if (redis) {
+      try {
+        await redis.set(dedupePointerKey(dedupeKey), jobId, { ex: DEDUPE_TTL_SECONDS });
+        await redis.lpush('recommend:queue', jobId);
+      } catch {
+        // Queue metadata write is best effort.
+      }
+    }
+
+    // Trigger processing asynchronously unless explicitly deferred by caller.
+    if (autoStart) {
+      void processRecommendJob(jobId);
+    }
+
+    return { jobId, deduped: false, status: 'queued' };
+  } finally {
+    if (dedupeLock) {
+      await releaseDistributedLock(dedupeLock);
+    }
+  }
+}
+
+export async function startRecommendJob(jobId: string): Promise<void> {
+  void processRecommendJob(jobId);
+}
+
+export async function markRecommendJobRateLimited(jobId: string, message: string): Promise<void> {
+  const job = await getJob(jobId);
+  if (!job) return;
+
+  const updated: RecommendJobRecord = {
+    ...job,
+    status: 'failed',
+    error: message,
     updatedAt: now(),
-    input: { ...input, userId },
+    completedAt: now(),
     progress: {
-      stage: 'queued',
-      queueWaitMs: 0,
-      totalImages: 3,
-      imagesReady: 0,
+      ...(job.progress || { stage: 'queued' as RecommendProgressStage }),
+      stage: 'failed',
+      queueWaitMs: job.progress?.queueWaitMs,
+      totalImages: job.progress?.totalImages || 3,
+      imagesReady: job.progress?.imagesReady || 0,
+      jobTimeMs: Math.max(0, now() - (job.startedAt || job.createdAt)),
+    },
+    result: {
+      success: false,
+      code: 'RATE_LIMIT_EXCEEDED',
+      status: 'rate_limited',
+      error: message,
     },
   };
 
-  await saveJob(record);
+  await saveJob(updated);
 
-  if (redis) {
-    try {
-      await redis.set(dedupePointerKey(dedupeKey), jobId, { ex: DEDUPE_TTL_SECONDS });
-      await redis.lpush('recommend:queue', jobId);
-    } catch {
-      // Queue metadata write is best effort.
-    }
+  const redis = getRedisClient();
+  if (!redis) return;
+  try {
+    await redis.del(dedupePointerKey(updated.dedupeKey));
+  } catch {
+    // Best-effort dedupe pointer cleanup.
   }
+}
 
-  // Trigger processing asynchronously.
-  void processRecommendJob(jobId);
+export async function findExistingRecommendJob(
+  input: RecommendRequest,
+  userId: string
+): Promise<{ jobId: string; status: RecommendJobStatus } | null> {
+  const redis = getRedisClient();
+  if (!redis) return null;
 
-  return { jobId, deduped: false, status: 'queued' };
+  const dedupeKey = buildDedupeKey(input, userId || 'anonymous');
+  try {
+    const existingJobId = await redis.get<string>(dedupePointerKey(dedupeKey));
+    if (!existingJobId) return null;
+
+    const existingJob = await getJob(existingJobId);
+    if (!existingJob) return null;
+
+    if (!['queued', 'processing', 'completed'].includes(existingJob.status)) {
+      return null;
+    }
+
+    return {
+      jobId: existingJobId,
+      status: existingJob.status,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function runWorkflow(job: RecommendJobRecord): Promise<any> {

@@ -278,6 +278,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   const [completionGlow, setCompletionGlow] = React.useState(false);
   const [uxVariant, setUxVariant] = React.useState<'A' | 'B'>('A');
   const [resultMeta, setResultMeta] = React.useState<ResultMeta | null>(null);
+  const [recommendCooldownUntil, setRecommendCooldownUntil] = React.useState<number | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
@@ -1088,6 +1089,21 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     const requestWithRetry = async (url: string, init: RequestInit, maxRetries = 2) => {
       let lastError: Error | null = null;
 
+      const parseRetryAfterMs = (retryAfter: string | null): number => {
+        if (!retryAfter) return 0;
+        const numeric = Number(retryAfter);
+        if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
+          return Math.max(0, Math.round(numeric * 1000));
+        }
+
+        const parsedDate = Date.parse(retryAfter);
+        if (!Number.isNaN(parsedDate)) {
+          return Math.max(0, parsedDate - Date.now());
+        }
+
+        return 0;
+      };
+
       for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
         const attemptController = new AbortController();
         const onAbort = () => attemptController.abort();
@@ -1100,8 +1116,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
             signal: attemptController.signal,
           });
 
-          if (response.status >= 500 && attempt < maxRetries) {
-            await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+          const shouldRetry = response.status >= 500 || response.status === 429;
+          if (shouldRetry && attempt < maxRetries) {
+            const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
+            const baseBackoff = response.status === 429 ? 1000 * 2 ** attempt : 500 * 2 ** attempt;
+            const waitMs = Math.max(baseBackoff, retryAfterMs);
+            await new Promise((resolve) => setTimeout(resolve, waitMs));
             continue;
           }
 
@@ -1283,6 +1303,14 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       if (isStale()) return;
 
       if (!response.ok) {
+        if (response.status === 429) {
+          const retryAfterHeader = response.headers.get('retry-after');
+          const retryAfterSeconds = Number(retryAfterHeader);
+          if (!Number.isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {
+            setRecommendCooldownUntil(Date.now() + retryAfterSeconds * 1000);
+          }
+        }
+
         let errorData: { error?: string; message?: string; code?: string } = { error: 'Unknown error' };
         try {
           errorData = await response.json();
@@ -1299,6 +1327,9 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       } catch {
         throw new Error('Received an invalid server response. Please try again.');
       }
+
+      setRecommendCooldownUntil(null);
+
       if (isStale()) return;
 
       if (data?.status === 'queued') {
@@ -1501,12 +1532,17 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       let title = "Analysis Failed";
       let description = "An unexpected error occurred. Please try again.";
       
-      if (errorMessage.includes('high demand') || errorMessage.includes('overloaded') || errorMessage.includes('temporarily unavailable')) {
+      const normalizedError = errorMessage.toLowerCase();
+
+      if (normalizedError.includes('high demand') || normalizedError.includes('overloaded') || normalizedError.includes('temporarily unavailable')) {
         title = "Service Busy";
         description = "⏳ Our AI service is experiencing high demand. Please wait 30-60 seconds and try again. We apologize for the inconvenience!";
-      } else if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
+      } else if (normalizedError.includes('rate limit') || normalizedError.includes('quota')) {
         title = "Rate Limit Reached";
         description = "⏱️ Too many requests. Please wait a minute and try again.";
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'recommend' } }));
+        }
       } else if (errorMessage.includes('schema validation')) {
         title = "AI Response Error";
         description = "The AI response was incomplete. Please try again.";
@@ -1538,6 +1574,16 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   };
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
+    if (recommendCooldownUntil && Date.now() < recommendCooldownUntil) {
+      const secondsRemaining = Math.max(1, Math.ceil((recommendCooldownUntil - Date.now()) / 1000));
+      toast({
+        variant: 'destructive',
+        title: 'Please wait before retrying',
+        description: `Recommendation service is cooling down. Try again in ${secondsRemaining}s.`,
+      });
+      return;
+    }
+
     if (isLimitReached) {
       toast({
         variant: "destructive",

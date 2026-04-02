@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { Palette, Shirt } from 'lucide-react';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { consumeGoogleRedirectResult, signInWithGoogle } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 import { createUserDocument } from '@/lib/userService';
 import { logger } from '@/lib/logger';
 import { toast } from '@/hooks/use-toast';
@@ -16,6 +17,13 @@ import { MOTION_DURATION, MOTION_EASING } from '@/lib/premium-motion';
 import { useMotionSettings } from '@/components/MotionProvider';
 import AnimatedLogo from '@/components/AnimatedLogo';
 import { PremiumAuthLoader } from '@/components/auth/PremiumAuthLoader';
+
+const LOGIN_GRACE_KEY = 'smartstyle_login_grace_ts';
+
+function markLoginGraceWindow() {
+  if (typeof window === 'undefined') return;
+  window.sessionStorage.setItem(LOGIN_GRACE_KEY, Date.now().toString());
+}
 
 function GoogleGlyph() {
   return (
@@ -115,8 +123,11 @@ export default function AuthPage() {
       if (handledRedirectResultRef.current) return;
       handledRedirectResultRef.current = true;
 
+      logger.info('Auth page: checking redirect result', { nextPath });
+
       const { user: redirectUser, error } = await consumeGoogleRedirectResult();
       if (error) {
+        logger.warn('Auth page: redirect result returned error', { error });
         toast({
           variant: 'destructive',
           title: 'Authentication Error',
@@ -124,13 +135,21 @@ export default function AuthPage() {
         });
       }
 
-      if (!redirectUser) return;
+      if (!redirectUser) {
+        logger.info('Auth page: no redirect user resolved');
+        return;
+      }
+
+      logger.info('Auth page: redirect user resolved, establishing session', {
+        userId: redirectUser.uid,
+      });
 
       setFinalizingSession(true);
       try {
         const idToken = await redirectUser.getIdToken();
         const ok = await establishSessionCookie(idToken);
         if (!ok) {
+          logger.warn('Auth page: failed to establish session cookie for redirect user');
           toast({
             variant: 'destructive',
             title: 'Sign-in incomplete',
@@ -148,6 +167,8 @@ export default function AuthPage() {
           lastLoginAt: new Date().toISOString(),
         });
 
+        logger.info('Auth page: redirect session established, navigating', { nextPath });
+        markLoginGraceWindow();
         navigateAfterAuth(nextPath);
       } finally {
         setFinalizingSession(false);
@@ -194,6 +215,61 @@ export default function AuthPage() {
 
     void finalizeRedirect();
   }, [user, authLoading, nextPath, navigateAfterAuth]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const recoverMissedRedirectSession = async () => {
+      if (authLoading || finalizingSession || user) {
+        return;
+      }
+
+      const fallbackUser = getCurrentUser();
+      if (!fallbackUser || hasRedirectedRef.current) {
+        return;
+      }
+
+      logger.info('Auth page: recovering session from currentUser fallback', {
+        userId: fallbackUser.uid,
+      });
+
+      hasRedirectedRef.current = true;
+      setFinalizingSession(true);
+
+      try {
+        const idToken = await fallbackUser.getIdToken();
+        const ok = await establishSessionCookie(idToken);
+        if (!ok) {
+          hasRedirectedRef.current = false;
+          logger.warn('Auth page: fallback currentUser session establishment failed');
+          return;
+        }
+
+        await ensureUserDocument(fallbackUser.uid, {
+          displayName: fallbackUser.displayName || 'Anonymous User',
+          email: fallbackUser.email || '',
+          photoURL: fallbackUser.photoURL || '',
+          provider: 'google',
+          createdAt: new Date().toISOString(),
+          lastLoginAt: new Date().toISOString(),
+        });
+
+        if (cancelled) return;
+        markLoginGraceWindow();
+        navigateAfterAuth(nextPath);
+      } finally {
+        if (!cancelled) {
+          setFinalizingSession(false);
+        }
+      }
+    };
+
+    void recoverMissedRedirectSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, finalizingSession, user, navigateAfterAuth, nextPath]);
 
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -246,6 +322,7 @@ export default function AuthPage() {
           description: `Signed in as ${user.displayName || user.email}`,
         });
 
+        markLoginGraceWindow();
         navigateAfterAuth(nextPath);
       }
 

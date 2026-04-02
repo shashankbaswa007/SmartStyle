@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { recommendRequestSchema, validateRequest, formatValidationError } from '@/lib/validation';
 import { quickValidateImageDataUri } from '@/lib/server-image-validation';
 import { enforceRecommendAuth, enforceRecommendRateLimit, AuthError } from '@/lib/recommend/request-guard';
-import { enqueueRecommendJob } from '@/lib/recommend/async-jobs';
+import { enqueueRecommendJob, markRecommendJobRateLimited, startRecommendJob } from '@/lib/recommend/async-jobs';
 
 function buildErrorResponse(
   status: number,
@@ -54,9 +54,45 @@ export async function POST(req: Request) {
     }
   }
 
+  const normalizedInput = {
+    ...input,
+    dressColors: Array.isArray(input.dressColors)
+      ? input.dressColors
+      : typeof input.dressColors === 'string'
+        ? input.dressColors.split(',').map((c: string) => c.trim()).filter(Boolean)
+        : undefined,
+    userId,
+  };
+
+  const queued = await enqueueRecommendJob(normalizedInput, userId, { autoStart: false });
+
+  if (queued.deduped) {
+    return NextResponse.json(
+      {
+        success: true,
+        status: 'queued',
+        jobId: queued.jobId,
+        deduped: true,
+        existingStatus: queued.status,
+        message: 'Similar request already in progress or cached; attached to existing job.',
+      },
+      { status: 202 }
+    );
+  }
+
   try {
     const limitResult = await enforceRecommendRateLimit(req, userId === 'anonymous' ? undefined : userId);
     if (!limitResult.rateLimit.allowed) {
+      const retryAfterSeconds = Math.max(
+        1,
+        Math.ceil((limitResult.rateLimit.resetAt.getTime() - Date.now()) / 1000)
+      );
+
+      await markRecommendJobRateLimited(
+        queued.jobId,
+        limitResult.rateLimit.message || 'Rate limit exceeded'
+      );
+
       return NextResponse.json(
         {
           success: false,
@@ -71,28 +107,21 @@ export async function POST(req: Request) {
           headers: {
             'X-RateLimit-Remaining': '0',
             'X-RateLimit-Reset': limitResult.rateLimit.resetAt.toISOString(),
+            'Retry-After': String(retryAfterSeconds),
           },
         }
       );
     }
 
-    userId = limitResult.effectiveUserId;
   } catch {
+    await markRecommendJobRateLimited(
+      queued.jobId,
+      'Unable to verify current usage. Please retry shortly.'
+    );
     return buildErrorResponse(429, 'RATE_LIMIT_UNAVAILABLE', 'Unable to verify current usage. Please retry shortly.');
   }
 
-  const queued = await enqueueRecommendJob(
-    {
-      ...input,
-      dressColors: Array.isArray(input.dressColors)
-        ? input.dressColors
-        : typeof input.dressColors === 'string'
-          ? input.dressColors.split(',').map((c: string) => c.trim()).filter(Boolean)
-          : undefined,
-      userId,
-    },
-    userId
-  );
+  await startRecommendJob(queued.jobId);
 
   return NextResponse.json(
     {

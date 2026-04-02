@@ -16,6 +16,7 @@ import type { NextRequest } from 'next/server';
 import { createRemoteJWKSet } from 'jose/jwks/remote';
 import { jwtVerify } from 'jose/jwt/verify';
 import { isProtectedPath } from '@/lib/protected-routes';
+import { logger } from '@/lib/logger';
 
 const SESSION_COOKIE_NAME = 'smartstyle-session';
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
@@ -90,12 +91,37 @@ export async function middleware(request: NextRequest) {
   const isAuthenticated = !!verifiedSession?.sub || hasFreshFallbackClaims;
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
 
+  logger.info('Auth middleware evaluation', {
+    pathname,
+    requestId,
+    hasSessionCookie,
+    hasVerifiedSession: !!verifiedSession?.sub,
+    hasFreshFallbackClaims,
+    isAuthenticated,
+  });
+
+  if (pathname === '/auth' && isAuthenticated) {
+    const nextParam = request.nextUrl.searchParams.get('next');
+    const destination = nextParam && nextParam !== '/auth' ? nextParam : '/';
+    logger.info('Auth middleware: authenticated user visiting /auth, redirecting', {
+      requestId,
+      destination,
+    });
+    const redirectResponse = NextResponse.redirect(new URL(destination, request.url));
+    redirectResponse.headers.set('X-Request-Id', requestId);
+    return redirectResponse;
+  }
+
   if (isProtectedPath(pathname) && !isAuthenticated) {
     // If any auth cookie exists but cannot be verified right now, avoid forcing a hard
     // redirect loop. Let client auth resolve and re-sync the cookie on this request cycle.
     if (hasSessionCookie) {
       const passthrough = NextResponse.next();
       passthrough.headers.set('X-Request-Id', requestId);
+      logger.info('Auth middleware: protected route with session cookie, allowing passthrough', {
+        requestId,
+        pathname,
+      });
       return passthrough;
     }
 
@@ -104,6 +130,11 @@ export async function middleware(request: NextRequest) {
     redirectUrl.searchParams.set('next', pathname);
     const redirectResponse = NextResponse.redirect(redirectUrl);
     redirectResponse.headers.set('X-Request-Id', requestId);
+    logger.info('Auth middleware: redirecting unauthenticated request', {
+      requestId,
+      from: pathname,
+      to: redirectUrl.pathname,
+    });
     return redirectResponse;
   }
 

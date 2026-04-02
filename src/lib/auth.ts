@@ -27,7 +27,7 @@ import { logger } from './logger';
 // ============================================
 
 /**
- * Sign in with Google using popup
+ * Sign in with Google using popup-first flow with redirect fallback
  * @returns Promise with user credential or error
  */
 export async function signInWithGoogle(): Promise<{ user: User | null; error?: string; redirecting?: boolean }> {
@@ -46,14 +46,37 @@ export async function signInWithGoogle(): Promise<{ user: User | null; error?: s
       prompt: 'select_account', // Forces account selection even if user is already signed in
     });
 
-    const usePopup = process.env.NEXT_PUBLIC_AUTH_MODE === 'popup';
-    if (!usePopup) {
+    // Prefer popup for more deterministic callback handling.
+    // Fall back to redirect if popup is blocked or disallowed.
+    try {
+      const popupResult: UserCredential = await signInWithPopup(auth, provider);
+      logger.info('Google popup sign-in succeeded', {
+        userId: popupResult.user?.uid || null,
+      });
+      return { user: popupResult.user, redirecting: false };
+    } catch (popupError: any) {
+      const code = String(popupError?.code || '');
+      const shouldFallbackToRedirect =
+        code === 'auth/popup-blocked' ||
+        code === 'auth/cancelled-popup-request' ||
+        code === 'auth/operation-not-supported-in-this-environment';
+
+      if (!shouldFallbackToRedirect) {
+        throw popupError;
+      }
+
+      logger.warn('Google popup unavailable, falling back to redirect', {
+        code,
+      });
+
+      logger.info('Starting Google OAuth redirect flow', {
+        authDomain: typeof window !== 'undefined' ? window.location.host : 'server',
+        configuredAuthDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+      });
+
       await signInWithRedirect(auth, provider);
       return { user: null, redirecting: true };
     }
-
-    const result: UserCredential = await signInWithPopup(auth, provider);
-    return { user: result.user, redirecting: false };
   } catch (error: any) {
     logger.error('Google sign-in error:', error);
     
@@ -63,8 +86,6 @@ export async function signInWithGoogle(): Promise<{ user: User | null; error?: s
       errorMessage = 'Sign-in popup was closed';
     } else if (error.code === 'auth/cancelled-popup-request') {
       errorMessage = 'Sign-in was cancelled';
-    } else if (error.code === 'auth/popup-blocked') {
-      errorMessage = 'Popup was blocked by browser';
     }
     
     return { user: null, error: errorMessage, redirecting: false };
@@ -77,7 +98,14 @@ export async function signInWithGoogle(): Promise<{ user: User | null; error?: s
 export async function consumeGoogleRedirectResult(): Promise<{ user: User | null; error?: string }> {
   try {
     const result = await getRedirectResult(auth);
-    return { user: result?.user || null };
+    const fallbackUser = auth.currentUser;
+    const resolvedUser = result?.user || fallbackUser || null;
+    logger.info('Google redirect result resolved', {
+      hasUser: !!result?.user,
+      hasCurrentUserFallback: !!fallbackUser,
+      userId: resolvedUser?.uid || null,
+    });
+    return { user: resolvedUser };
   } catch (error: any) {
     logger.error('Google redirect result error:', error);
     return { user: null, error: 'Failed to complete Google sign-in redirect' };
