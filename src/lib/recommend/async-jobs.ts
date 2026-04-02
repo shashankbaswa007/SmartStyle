@@ -449,10 +449,12 @@ export async function enqueueRecommendJob(
   let dedupeLock: DistributedLock | null = null;
 
   if (redis) {
-    for (let attempt = 0; attempt < 3 && !dedupeLock; attempt += 1) {
+    const maxAttempts = 8;
+    for (let attempt = 0; attempt < maxAttempts && !dedupeLock; attempt += 1) {
       dedupeLock = await acquireDistributedLock(lockKey, 5);
       if (!dedupeLock) {
-        await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+        const backoffMs = Math.min(140, 35 * (attempt + 1));
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
     }
   }
@@ -853,6 +855,28 @@ export async function getRecommendJobStatus(jobId: string): Promise<RecommendJob
   }
 
   return job;
+}
+
+export async function awaitRecommendJobTerminalState(
+  jobId: string,
+  options?: { timeoutMs?: number; pollIntervalMs?: number }
+): Promise<RecommendJobRecord | null> {
+  const timeoutMs = Math.max(1000, options?.timeoutMs ?? 22_000);
+  const pollIntervalMs = Math.max(200, options?.pollIntervalMs ?? 550);
+  const startedAt = now();
+
+  while (now() - startedAt < timeoutMs) {
+    const job = await getRecommendJobStatus(jobId);
+    if (!job) return null;
+
+    if (job.status === 'completed' || job.status === 'failed') {
+      return job;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+  }
+
+  return getRecommendJobStatus(jobId);
 }
 
 export async function getRecommendMetrics(): Promise<{

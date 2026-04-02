@@ -2,17 +2,31 @@ import { NextResponse } from 'next/server';
 import { recordRecommendInteraction } from '@/lib/recommend/async-jobs';
 import { getClientIdentifier } from '@/lib/rate-limiter';
 import { checkServerRateLimit } from '@/lib/server-rate-limiter';
+import { logger } from '@/lib/logger';
 
 const ALLOWED_EVENTS = new Set(['results_visible', 'another_recommendation']);
 const ALLOWED_VARIANTS = new Set(['A', 'B']);
 
 export async function POST(req: Request) {
   const clientId = getClientIdentifier(req);
-  const limit = await checkServerRateLimit(clientId, {
-    windowMs: 60_000,
-    maxRequests: 30,
-    scope: 'recommend-interaction',
-  });
+  let limit = {
+    allowed: true,
+    remaining: 30,
+    resetAt: new Date(Date.now() + 60_000),
+  };
+
+  try {
+    limit = await checkServerRateLimit(clientId, {
+      windowMs: 60_000,
+      maxRequests: 30,
+      scope: 'recommend-interaction',
+    });
+  } catch (error) {
+    logger.warn('recommend interaction rate-limit check unavailable; allowing request', {
+      error: error instanceof Error ? error.message : String(error),
+      clientId,
+    });
+  }
 
   if (!limit.allowed) {
     return NextResponse.json(
@@ -46,7 +60,20 @@ export async function POST(req: Request) {
 
   const variant = variantRaw && ALLOWED_VARIANTS.has(variantRaw) ? variantRaw : undefined;
 
-  await recordRecommendInteraction(variant);
+  try {
+    await recordRecommendInteraction(variant);
+  } catch (error) {
+    logger.warn('recommend interaction metric write failed', {
+      error: error instanceof Error ? error.message : String(error),
+      variant,
+    });
+
+    return NextResponse.json({
+      success: true,
+      tracked: false,
+      warning: 'interaction_tracking_unavailable',
+    });
+  }
 
   return NextResponse.json({
     success: true,

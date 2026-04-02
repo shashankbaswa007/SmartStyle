@@ -37,6 +37,23 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const pathname = usePathname();
   const [resolvingSession, setResolvingSession] = useState(false);
   const checkedServerSessionRef = useRef(false);
+  const userRef = useRef(user);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  const fetchSessionAuthenticated = async (signal: AbortSignal): Promise<boolean> => {
+    const response = await fetch('/api/auth/session', {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+      signal,
+    });
+
+    const data = await response.json().catch(() => ({ authenticated: false }));
+    return Boolean(data?.authenticated);
+  };
 
   useEffect(() => {
     // Reset session resolution marker once auth state recovers.
@@ -62,19 +79,22 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
       setResolvingSession(true);
 
       try {
-        const response = await fetch('/api/auth/session', {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store',
-        });
+        const sessionTimeoutController = new AbortController();
+        const timeoutId = window.setTimeout(() => sessionTimeoutController.abort(), 3500);
+        const authenticated = await fetchSessionAuthenticated(sessionTimeoutController.signal);
+        window.clearTimeout(timeoutId);
 
-        const data = await response.json();
         if (cancelled) return;
 
-        if (data?.authenticated) {
-          // Server session exists: wait for Firebase client hydration instead of bouncing.
-          setResolvingSession(false);
-          return;
+        if (authenticated) {
+          // Grace window for Firebase client hydration; prevents false redirects during auth races.
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          if (cancelled) return;
+
+          if (userRef.current) {
+            setResolvingSession(false);
+            return;
+          }
         }
       } catch {
         // If we cannot confirm server session, fall through to redirect.
@@ -82,7 +102,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
       if (cancelled) return;
       setResolvingSession(false);
-      const nextPath = pathname || '/';
+      const rawNextPath = pathname || '/';
+      // Prevent auth redirect loops if a protected route resolves to auth itself.
+      const nextPath = rawNextPath.startsWith('/auth') ? '/' : rawNextPath;
       router.replace(`/auth?next=${encodeURIComponent(nextPath)}`);
     };
 

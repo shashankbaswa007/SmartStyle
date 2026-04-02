@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyBearerToken, AuthError } from '@/lib/server-auth';
 import { checkServerRateLimit } from '@/lib/server-rate-limiter';
-import { addWardrobeItemServer, getWardrobeItemsServer } from '@/lib/wardrobeService.server';
+import { addWardrobeItemWithCapacityServer } from '@/lib/wardrobeService.server';
 import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 
 const MAX_WARDROBE_ITEMS = 300;
@@ -72,18 +72,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const currentItems = await getWardrobeItemsServer(userId, { isActive: true });
-    if (currentItems.length >= MAX_WARDROBE_ITEMS) {
-      return NextResponse.json(
-        {
-          error: 'Wardrobe capacity reached',
-          message: `You have reached the current wardrobe capacity of ${MAX_WARDROBE_ITEMS} items. Delete some items before uploading more.`,
-        },
-        { status: 400 }
-      );
-    }
-
-    const saveResult = await addWardrobeItemServer(userId, {
+    const saveResult = await addWardrobeItemWithCapacityServer(userId, MAX_WARDROBE_ITEMS, {
       imageUrl: itemData.imageUrl,
       images:
         itemData.images?.thumbnail && itemData.images?.medium && itemData.images?.full
@@ -104,6 +93,16 @@ export async function POST(request: Request) {
       tags: itemData.tags,
       notes: itemData.notes,
     });
+
+    if (!saveResult.success && saveResult.code === 'CAPACITY_REACHED') {
+      return NextResponse.json(
+        {
+          error: 'Wardrobe capacity reached',
+          message: `You have reached the current wardrobe capacity of ${MAX_WARDROBE_ITEMS} items. Delete some items before uploading more.`,
+        },
+        { status: 400 }
+      );
+    }
 
     if (!saveResult.success) {
       return NextResponse.json(

@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { User, LogOut, Settings, Loader2, BarChart3 } from 'lucide-react';
+import { LogOut, Loader2 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export function UserProfileDropdown() {
@@ -73,15 +73,6 @@ export function UserProfileDropdown() {
       });
       setSignOutLoading(false);
     }
-  };
-
-  /**
-   * Handle account settings navigation
-   * Navigates to the account settings page
-   */
-  const handleAccountSettings = () => {
-    setDropdownOpen(false);
-    router.push('/account-settings');
   };
 
   // Show loading state
@@ -163,27 +154,6 @@ export function UserProfileDropdown() {
               </DropdownMenuLabel>
 
               <DropdownMenuSeparator />
-
-              {/* Analytics */}
-              <DropdownMenuItem
-                onClick={() => {
-                  setDropdownOpen(false);
-                  router.push('/analytics');
-                }}
-                className="cursor-pointer gap-2 px-3 py-2.5 text-sm"
-              >
-                <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                <span>Analytics</span>
-              </DropdownMenuItem>
-
-              {/* Account Settings */}
-              <DropdownMenuItem
-                onClick={handleAccountSettings}
-                className="cursor-pointer gap-2 px-3 py-2.5 text-sm"
-              >
-                <Settings className="h-4 w-4 text-muted-foreground" />
-                <span>Account Settings</span>
-              </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 

@@ -73,6 +73,7 @@ function WardrobePageContent() {
   type ItemFilter = typeof ITEM_FILTERS[number];
   const [selectedFilter, setSelectedFilter] = useState<ItemFilter>('all');
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [imageLoadErrors, setImageLoadErrors] = useState<Set<string>>(new Set());
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
   const [lastDeletedItem, setLastDeletedItem] = useState<{item: WardrobeItemData, timestamp: number} | null>(null);
   const [showUndoToast, setShowUndoToast] = useState(false);
@@ -155,6 +156,7 @@ function WardrobePageContent() {
     wardrobeUpload?: { remaining: number; limit: number; resetAt?: string };
   }>({});
   const [usageLoading, setUsageLoading] = useState(true);
+  const FETCH_TIMEOUT_MS = 10000;
   
   // Scale awareness for large wardrobes
   const LARGE_WARDROBE_THRESHOLD = 100;
@@ -166,7 +168,7 @@ function WardrobePageContent() {
       setIsOnline(true);
       // Auto-refresh when coming back online
       if (userId) {
-        fetchWardrobeItems(userId);
+        fetchWardrobeItems(userId, false, true);
       }
     };
     const handleOffline = () => {
@@ -190,7 +192,7 @@ function WardrobePageContent() {
       if (user) {
         setUserId(user.uid);
         setIsAuthenticated(true);
-        fetchWardrobeItems(user.uid);
+        fetchWardrobeItems(user.uid, false, true);
       } else {
         setUserId(null);
         setIsAuthenticated(false);
@@ -207,12 +209,12 @@ function WardrobePageContent() {
     if (!userId) return;
 
     // Initial fetch
-    fetchWardrobeItems(userId);
+    fetchWardrobeItems(userId, false, true);
 
     // Set up polling every 45 seconds (skip if a fetch is already in progress)
     const pollInterval = setInterval(() => {
-      if (!isSyncingRef.current) {
-        fetchWardrobeItems(userId);
+      if (!isSyncingRef.current && navigator.onLine) {
+        fetchWardrobeItems(userId, true, true);
       }
     }, 45000); // 45 seconds
 
@@ -325,18 +327,28 @@ function WardrobePageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFilter, wardrobeItems, contextMode, searchQuery, sortBy]);
 
-  const fetchWardrobeItems = async (uid: string, silent = false) => {
+  const fetchWardrobeItems = async (uid: string, silent = false, preserveExistingOnError = false) => {
     try {
       if (!silent) setLoading(true);
       setIsSyncing(true);
       isSyncingRef.current = true;
       setError(null);
-      const items = await getWardrobeItems(uid);
+      const items = await Promise.race([
+        getWardrobeItems(uid),
+        new Promise<WardrobeItemData[]>((_, reject) =>
+          window.setTimeout(() => reject(new Error('WARDROBE_FETCH_TIMEOUT')), FETCH_TIMEOUT_MS)
+        ),
+      ]);
       
       setWardrobeItems(items);
       setLastUpdated(Date.now());
     } catch (error) {
       let errorMessage = 'Failed to load your wardrobe';
+      if (!navigator.onLine) {
+        errorMessage = 'You are offline. Reconnect and tap Retry.';
+      } else if (error instanceof Error && error.message === 'WARDROBE_FETCH_TIMEOUT') {
+        errorMessage = 'Wardrobe request timed out. Please retry.';
+      }
       if (error && typeof error === 'object' && 'code' in error) {
         if (error.code === 'permission-denied') {
           errorMessage = 'Permission denied. Please sign in again.';
@@ -346,7 +358,9 @@ function WardrobePageContent() {
       }
       
       setError(errorMessage);
-      setWardrobeItems([]);
+      if (!preserveExistingOnError) {
+        setWardrobeItems([]);
+      }
     } finally {
       setLoading(false);
       setIsSyncing(false);
@@ -366,13 +380,20 @@ function WardrobePageContent() {
       setUsageLoading(true);
       const fetchUsageStatus = async (forceRefreshToken = false) => {
         const idToken = await auth.currentUser!.getIdToken(forceRefreshToken);
-        return fetch('/api/usage-status', {
-          cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-            'Cache-Control': 'no-cache',
-          },
-        });
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+        try {
+          return await fetch('/api/usage-status', {
+            cache: 'no-store',
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+              'Cache-Control': 'no-cache',
+            },
+            signal: controller.signal,
+          });
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
       };
 
       let response = await fetchUsageStatus(false);
@@ -442,7 +463,7 @@ function WardrobePageContent() {
       }
       setError(null);
       setLoading(true);
-      fetchWardrobeItems(userId);
+      fetchWardrobeItems(userId, false, false);
     }
   };
 
@@ -696,6 +717,34 @@ function WardrobePageContent() {
       case 'all': return <Shirt className={iconClass} />;
       default: return <Shirt className={iconClass} />;
     }
+  };
+
+  const markImageLoadError = (itemId: string) => {
+    setImageLoadErrors((prev) => {
+      const next = new Set(prev);
+      next.add(itemId);
+      return next;
+    });
+  };
+
+  const createWardrobeImageFallback = (itemType: string): string => {
+    const label = (itemType || 'item').replace(/[^a-z]/gi, ' ').trim() || 'item';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="1000" viewBox="0 0 800 1000"><defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#c4b5fd"/><stop offset="100%" stop-color="#a78bfa"/></linearGradient></defs><rect width="800" height="1000" fill="url(#bg)"/><circle cx="400" cy="420" r="120" fill="rgba(255,255,255,0.3)"/><path d="M320 360 L480 360 L510 520 L290 520 Z" fill="rgba(255,255,255,0.65)"/><text x="400" y="610" text-anchor="middle" font-size="44" fill="#312e81" font-family="Arial,sans-serif">${label}</text><text x="400" y="660" text-anchor="middle" font-size="24" fill="#4c1d95" font-family="Arial,sans-serif">Image unavailable</text></svg>`;
+    return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+  };
+
+  const getItemImageSrc = (item: WardrobeItemData): string => {
+    const itemId = item.id || '';
+    if (!itemId || imageLoadErrors.has(itemId)) {
+      return createWardrobeImageFallback(item.itemType || 'item');
+    }
+
+    const preferredSrc = item.images?.thumbnail || item.imageUrl;
+    if (!preferredSrc || typeof preferredSrc !== 'string' || !preferredSrc.trim()) {
+      return createWardrobeImageFallback(item.itemType || 'item');
+    }
+
+    return preferredSrc;
   };
 
   const convertColorToHex = (color: string): string => {
@@ -1644,10 +1693,28 @@ function WardrobePageContent() {
 
           {/* Error State */}
           {error && !loading && (
-            <Alert variant="destructive" className="max-w-2xl mx-auto">
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
+            <div className="max-w-2xl mx-auto space-y-3">
+              <Alert variant="destructive">
+                <AlertTitle>{!isOnline ? 'Offline' : 'Error'}</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+              <div className="flex justify-center gap-2">
+                <Button
+                  onClick={handleRefresh}
+                  disabled={!isOnline || isSyncing}
+                  className="bg-violet-600 hover:bg-violet-700 text-white"
+                >
+                  {isSyncing ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Retrying...
+                    </>
+                  ) : (
+                    'Retry'
+                  )}
+                </Button>
+              </div>
+            </div>
           )}
 
           {/* Empty State */}
@@ -1753,13 +1820,14 @@ function WardrobePageContent() {
                               {/* Image */}
                               <div className="relative h-64 overflow-hidden bg-gradient-to-br from-violet-50 to-purple-50">
                                 <Image
-                                  src={item.images?.thumbnail || item.imageUrl}
+                                  src={getItemImageSrc(item)}
                                   alt={item.description}
                                   fill
                                   className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out will-change-transform"
                                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                                   loading="lazy"
                                   quality={75}
+                                  onError={() => markImageLoadError(item.id || '')}
                                   placeholder="blur"
                                   blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNzAwIiBoZWlnaHQ9IjQ3NSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiLz4="
                                 />
@@ -1921,13 +1989,14 @@ function WardrobePageContent() {
                         {/* Image */}
                         <div className="relative h-64 overflow-hidden bg-gradient-to-br from-violet-50 to-purple-50">
                           <Image
-                            src={item.images?.thumbnail || item.imageUrl}
+                            src={getItemImageSrc(item)}
                             alt={item.description}
                             fill
                             className="object-cover group-hover:scale-105 transition-transform duration-700 ease-out will-change-transform"
                             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                             loading="lazy"
                             quality={75}
+                            onError={() => markImageLoadError(item.id || '')}
                             placeholder="blur"
                             blurDataURL="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNzAwIiBoZWlnaHQ9IjQ3NSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB2ZXJzaW9uPSIxLjEiLz4="
                           />
@@ -2149,8 +2218,12 @@ function WardrobePageContent() {
               open={showUploadModal}
               onOpenChange={setShowUploadModal}
               onItemAdded={() => {
+                toast({
+                  title: 'Upload complete',
+                  description: 'Item saved. Syncing wardrobe view...',
+                });
                 if (userId) {
-                  fetchWardrobeItems(userId);
+                  fetchWardrobeItems(userId, true, true);
                 }
                 fetchUsageLimits(userId);
               }}

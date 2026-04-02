@@ -82,7 +82,7 @@ export function Header() {
                 >
                   <div className="flex flex-row items-center justify-center gap-2">
                     <Palette 
-                      className="h-4 w-4 text-violet-400/80 transition-[transform,color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform group-hover:-translate-y-0.5 group-hover:rotate-6 group-hover:scale-105 group-hover:text-violet-300/95" 
+                      className="h-4 w-4 text-violet-400/80 transition-[transform,color] duration-500 ease-out will-change-transform group-hover:-translate-y-0.5 group-hover:rotate-6 group-hover:scale-105 group-hover:text-violet-300/95" 
                     />
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
                       Color Match
@@ -100,7 +100,7 @@ export function Header() {
                 >
                   <div className="flex flex-row items-center justify-center gap-2">
                     <Heart 
-                      className="h-4 w-4 text-violet-400/80 fill-transparent transition-[transform,fill,color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform group-hover:-translate-y-0.5 group-hover:scale-110 group-hover:fill-violet-400/70 group-hover:text-violet-300/95" 
+                      className="h-4 w-4 text-violet-400/80 fill-transparent transition-[transform,fill,color] duration-500 ease-out will-change-transform group-hover:-translate-y-0.5 group-hover:scale-110 group-hover:fill-violet-400/70 group-hover:text-violet-300/95" 
                     />
                     
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
@@ -120,7 +120,7 @@ export function Header() {
                 >
                   <div className="flex flex-row items-center justify-center gap-2">
                     <Shirt 
-                      className="h-4 w-4 text-purple-400/80 fill-none transition-[transform,fill,color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] will-change-transform group-hover:-translate-y-0.5 group-hover:-rotate-3 group-hover:scale-105 group-hover:text-purple-300/95 group-hover:fill-purple-500/20" 
+                      className="h-4 w-4 text-purple-400/80 fill-none transition-[transform,fill,color] duration-500 ease-out will-change-transform group-hover:-translate-y-0.5 group-hover:-rotate-3 group-hover:scale-105 group-hover:text-purple-300/95 group-hover:fill-purple-500/20" 
                     />
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
                       Wardrobe

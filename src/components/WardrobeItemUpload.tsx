@@ -43,6 +43,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
   const [showSuggestionBadge, setShowSuggestionBadge] = useState(false);
   const [backgroundProcessing, setBackgroundProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const uploadTaskRef = useRef<any>(null);
   const submissionIdRef = useRef(0);
   const backgroundProcessingRef = useRef<string | null>(null);
@@ -755,6 +756,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       }
 
       setUploadStatus('complete');
+      setUploadProgress(100);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'wardrobe-upload' } }));
@@ -775,6 +777,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
     } catch (error) {
       
       setUploadStatus('idle');
+      setUploadProgress(0);
       const errorMessage = error instanceof Error ? error.message : 'Failed to add item to wardrobe. Please try again.';
       setUploadError(errorMessage);
       
@@ -828,7 +831,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
           )}
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 mt-2 sm:mt-4">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 mt-2 sm:mt-4">
           {/* Image Upload Section */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -1127,6 +1130,23 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
                 <p className="text-sm font-medium text-red-900">Upload Failed</p>
                 <p className="text-sm text-red-700 mt-1">{uploadError}</p>
                 <p className="text-xs text-red-600 mt-2">Your changes have been preserved. You can try again.</p>
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="h-16 w-16 rounded-md border border-red-200 bg-white flex items-center justify-center">
+                    <Shirt className="h-6 w-6 text-red-300" />
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="border-red-300 text-red-700 hover:bg-red-100"
+                    onClick={() => {
+                      setUploadError(null);
+                      formRef.current?.requestSubmit();
+                    }}
+                  >
+                    Retry Upload
+                  </Button>
+                </div>
               </div>
             </div>
           )}

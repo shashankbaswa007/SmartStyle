@@ -790,9 +790,18 @@ export function StyleAdvisorResults({
     const fetchShoppingLinks = async () => {
       try {
         setLoadingLinks(true);
-        
-        const updatedOutfits = await Promise.all(
-          analysisResult.outfitRecommendations.map(async (outfit, index) => {
+
+        const maxConcurrency = 2;
+        const outfits = analysisResult.outfitRecommendations;
+        const updatedOutfits = [...outfits];
+
+        let cursor = 0;
+        const workers = Array.from({ length: Math.min(maxConcurrency, outfits.length) }, async () => {
+          while (cursor < outfits.length) {
+            const currentIndex = cursor;
+            cursor += 1;
+            const outfit = outfits[currentIndex];
+
             // Check if outfit already has valid shopping links from API
             const hasValidLinks = outfit.shoppingLinks && (
               outfit.shoppingLinks.amazon || 
@@ -801,7 +810,8 @@ export function StyleAdvisorResults({
             );
 
             if (hasValidLinks) {
-              return outfit;
+              updatedOutfits[currentIndex] = outfit;
+              continue;
             }
 
             // No links from API - fetch them now as fallback
@@ -817,7 +827,7 @@ export function StyleAdvisorResults({
             
             // If Tavily returns links, use them
             if (links && (links.amazon || links.tatacliq || links.myntra)) {
-              return {
+              updatedOutfits[currentIndex] = {
                 ...outfit,
                 shoppingLinks: {
                   amazon: links.amazon ?? null,
@@ -825,12 +835,13 @@ export function StyleAdvisorResults({
                   myntra: links.myntra ?? null,
                 }
               };
+              continue;
             }
             
             // Fallback: Generate optimized search URLs
             const searchUrls = generateSearchUrls(allItems, gender);
             
-            return {
+            updatedOutfits[currentIndex] = {
               ...outfit,
               shoppingLinks: {
                 amazon: searchUrls.amazon,
@@ -838,8 +849,10 @@ export function StyleAdvisorResults({
                 myntra: searchUrls.myntra,
               }
             };
-          })
-        );
+          }
+        });
+
+        await Promise.all(workers);
 
         setEnrichedOutfits(updatedOutfits);
       } catch (error) {

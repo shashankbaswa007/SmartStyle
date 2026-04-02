@@ -145,6 +145,69 @@ function getFallbackFriendlyMessage(
   return null;
 }
 
+function buildDemoFallbackAnalysis(): AnalyzeImageAndProvideRecommendationsOutput {
+  return {
+    feedback:
+      'We prepared a fast demo-safe recommendation set so you can continue without interruption.',
+    highlights: [
+      'Keep one anchor neutral to make the look cohesive.',
+      'Use one accent piece to add visual interest.',
+      'Prioritize fit and layering for a polished silhouette.',
+    ],
+    colorSuggestions: [
+      { name: 'Midnight Navy', hex: '#1E3A8A', reason: 'Adds structure and depth.' },
+      { name: 'Ivory', hex: '#F8F5F0', reason: 'Balances deeper tones cleanly.' },
+      { name: 'Forest Green', hex: '#166534', reason: 'Adds refined contrast.' },
+      { name: 'Charcoal', hex: '#1F2937', reason: 'Reliable modern neutral.' },
+      { name: 'Soft Beige', hex: '#D6C7B0', reason: 'Keeps the look warm and wearable.' },
+      { name: 'Dusty Rose', hex: '#C08497', reason: 'Subtle accent option.' },
+      { name: 'Slate Blue', hex: '#64748B', reason: 'Pairs well across seasons.' },
+      { name: 'Warm Taupe', hex: '#8B7D6B', reason: 'Grounds brighter accents.' },
+    ],
+    outfitRecommendations: [
+      {
+        title: 'Refined Smart Casual',
+        description:
+          'Pair a crisp neutral top with tailored dark bottoms for a clean and modern profile. Layer with a lightweight jacket to add dimension without overcomplicating the silhouette. Finish with minimal accessories and a structured shoe for a polished everyday look.',
+        colorPalette: ['#1E3A8A', '#F8F5F0', '#1F2937'],
+        styleType: 'smart casual',
+        occasion: 'casual outing',
+        imagePrompt: 'A refined smart casual outfit with clean lines and balanced neutrals.',
+        shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
+        isExistingMatch: true,
+        items: ['Neutral shirt', 'Tailored trousers', 'Light jacket', 'Clean sneakers'],
+      },
+      {
+        title: 'Elevated Minimal',
+        description:
+          'Use a monochrome base and introduce one accent color to keep the look intentional. Keep textures subtle so the outfit reads premium and effortless. Choose understated accessories to maintain a sharp, editorial finish.',
+        colorPalette: ['#1F2937', '#D6C7B0', '#166534'],
+        styleType: 'minimal',
+        occasion: 'day event',
+        imagePrompt: 'An elevated minimal outfit with monochrome base and one tasteful accent.',
+        shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
+        isExistingMatch: true,
+        items: ['Minimal top', 'Straight-fit pants', 'Accent layer', 'Leather loafers'],
+      },
+      {
+        title: 'Contemporary Classic',
+        description:
+          'Blend classic cuts with contemporary color balance for a timeless result. Keep proportions balanced from top to bottom so the look feels intentional on camera. Add one textural element to create depth while preserving a clean overall presentation.',
+        colorPalette: ['#64748B', '#F8F5F0', '#8B7D6B'],
+        styleType: 'classic modern',
+        occasion: 'smart occasion',
+        imagePrompt: 'A contemporary classic outfit with balanced proportions and soft texture.',
+        shoppingLinks: { amazon: null, tatacliq: null, myntra: null },
+        isExistingMatch: true,
+        items: ['Structured top', 'Classic bottom', 'Textured outerwear', 'Neutral footwear'],
+      },
+    ],
+    notes: 'You can use this quick set immediately and refresh later for a fully regenerated result.',
+    imagePrompt: 'Premium contemporary outfit styling with balanced colors and clean silhouette.',
+    provider: 'gemini',
+  };
+}
+
 interface ResultMeta {
   isFresh: boolean;
   usedFallback: boolean;
@@ -286,6 +349,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   const analysisAbortRef = React.useRef<AbortController | null>(null);
   const activeRequestIdRef = React.useRef(0);
   const isMountedRef = React.useRef(true);
+  const submitInFlightRef = React.useRef(false);
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -1086,7 +1150,13 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     analysisAbortRef.current = controller;
     const timeoutId = window.setTimeout(() => controller.abort(), 70000);
 
-    const requestWithRetry = async (url: string, init: RequestInit, maxRetries = 2) => {
+    const requestWithRetry = async (
+      url: string,
+      init: RequestInit,
+      options: { maxRetries?: number; retryOn429?: boolean } = {}
+    ) => {
+      const maxRetries = options.maxRetries ?? 2;
+      const retryOn429 = options.retryOn429 ?? true;
       let lastError: Error | null = null;
 
       const parseRetryAfterMs = (retryAfter: string | null): number => {
@@ -1116,7 +1186,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
             signal: attemptController.signal,
           });
 
-          const shouldRetry = response.status >= 500 || response.status === 429;
+          const shouldRetry = response.status >= 500 || (retryOn429 && response.status === 429);
           if (shouldRetry && attempt < maxRetries) {
             const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
             const baseBackoff = response.status === 429 ? 1000 * 2 ** attempt : 500 * 2 ** attempt;
@@ -1298,6 +1368,9 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         method: 'POST',
         headers,
         body: JSON.stringify(apiRequest),
+      }, {
+        maxRetries: 1,
+        retryOn429: false,
       });
 
       if (isStale()) return;
@@ -1359,7 +1432,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
               method: 'GET',
               headers,
             },
-            1
+            { maxRetries: 1 }
           );
 
           if (!statusResponse.ok) {
@@ -1558,14 +1631,38 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           : errorMessage;
       }
       
+      const fallbackAnalysis = buildDemoFallbackAnalysis();
+      const fallbackImages = [
+        'https://via.placeholder.com/1024x1365/1e3a8a/f8f5f0?text=Demo+Look+1',
+        'https://via.placeholder.com/1024x1365/1f2937/d6c7b0?text=Demo+Look+2',
+        'https://via.placeholder.com/1024x1365/64748b/f8f5f0?text=Demo+Look+3',
+      ];
+
+      setAnalysisResult(fallbackAnalysis);
+      setGeneratedImageUrls(fallbackImages);
+      setImageSources(['placeholder', 'placeholder', 'placeholder']);
+      setRecommendationId(`demo_fallback_${Date.now()}`);
+      setFallbackMessage('Live demo fallback enabled: showing a stable sample result.');
+      setResultMeta({ isFresh: true, usedFallback: true });
+      setStagedPreview(null);
+      setLoadingMessage('');
+      setAllContentReady(true);
+      setShowResults(true);
+
+      updateStep('analyze', 'complete');
+      updateStep('generate', 'complete');
+      updateStep('enhance', 'complete');
+      updateStep('search', 'complete');
+      updateStep('finalize', 'complete');
+
       toast({
-        variant: "destructive",
         title,
-        description,
-        duration: errorMessage.includes('high demand') ? 8000 : 5000, // Show longer for overload errors
+        description: `${description} Showing demo-safe recommendations now.`,
+        duration: 4500,
       });
     } finally {
       window.clearTimeout(timeoutId);
+      submitInFlightRef.current = false;
       if (isMountedRef.current && requestId === activeRequestIdRef.current) {
         setIsLoading(false);
       }
@@ -1597,6 +1694,14 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       toast({
         title: "Analysis in progress",
         description: "Please wait for the current analysis to finish.",
+      });
+      return;
+    }
+
+    if (submitInFlightRef.current) {
+      toast({
+        title: "Request already in progress",
+        description: "Please wait while we process your current recommendation.",
       });
       return;
     }
@@ -1634,34 +1739,73 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       return;
     }
 
+    submitInFlightRef.current = true;
+
     const imageElement = document.createElement('img');
+    const PRELOAD_TIMEOUT_MS = 12_000;
+    let resolved = false;
+    const cleanupPreload = () => {
+      imageElement.onload = null;
+      imageElement.onerror = null;
+    };
+
+    const preloadTimeoutId = window.setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      cleanupPreload();
+      submitInFlightRef.current = false;
+      toast({
+        variant: 'destructive',
+        title: 'Image validation timed out',
+        description: 'Please reselect your image and try again.',
+      });
+    }, PRELOAD_TIMEOUT_MS);
+
     imageElement.src = previewImage;
     imageElement.onload = async () => {
+        if (resolved) return;
+        resolved = true;
+        window.clearTimeout(preloadTimeoutId);
+        cleanupPreload();
+
         const canvas = canvasRef.current;
-        if (canvas) {
-            canvas.width = imageElement.width;
-            canvas.height = imageElement.height;
-            const ctx = canvas.getContext('2d');
-            ctx?.drawImage(imageElement, 0, 0);
-
-            // Get user ID for personalization
-            const userId = auth.currentUser?.uid;
-
-            await performAnalysis({
-              photoDataUri: previewImage,
-              occasion: values.occasion,
-              genre: values.genre,
-              gender: values.gender,
-              weather: weather,
-              skinTone: '', 
-              dressColors: '',
-              userId,
-            });
+        if (!canvas) {
+          submitInFlightRef.current = false;
+          toast({
+            variant: 'destructive',
+            title: 'Unable to start analysis',
+            description: 'Please try again in a moment.',
+          });
+          return;
         }
+
+        canvas.width = imageElement.width;
+        canvas.height = imageElement.height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(imageElement, 0, 0);
+
+        // Get user ID for personalization
+        const userId = auth.currentUser?.uid;
+
+        await performAnalysis({
+          photoDataUri: previewImage,
+          occasion: values.occasion,
+          genre: values.genre,
+          gender: values.gender,
+          weather: weather,
+          skinTone: '',
+          dressColors: '',
+          userId,
+        });
     };
     imageElement.onerror = () => {
-        toast({ variant: 'destructive', title: 'Image Load Error', description: 'Could not load the selected image for analysis.' });
-    }
+      if (resolved) return;
+      resolved = true;
+      window.clearTimeout(preloadTimeoutId);
+      cleanupPreload();
+      submitInFlightRef.current = false;
+      toast({ variant: 'destructive', title: 'Image Load Error', description: 'Could not load the selected image for analysis.' });
+    };
   };
 
   const handleGetAnotherRecommendation = async () => {
@@ -1675,6 +1819,14 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     }
 
     if (!lastAnalysisRequest || !analysisResult) return;
+
+    if (submitInFlightRef.current || isLoading) {
+      toast({
+        title: 'Analysis in progress',
+        description: 'Please wait for the current analysis to finish.',
+      });
+      return;
+    }
 
     void fetch('/api/recommend/interaction', {
       method: 'POST',

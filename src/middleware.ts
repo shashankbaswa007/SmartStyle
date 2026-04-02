@@ -19,6 +19,13 @@ import { isProtectedPath } from '@/lib/protected-routes';
 import { logger } from '@/lib/logger';
 
 const SESSION_COOKIE_NAME = 'smartstyle-session';
+const DEMO_DISABLED_ROUTES = new Set([
+  '/test-analytics',
+  '/saved-palettes',
+  '/preferences',
+  '/account-settings',
+  '/analytics',
+]);
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 
 function parseJwtPayload(token: string): Record<string, unknown> | null {
@@ -84,6 +91,16 @@ async function verifyFirebaseSessionCookie(sessionCookie: string): Promise<{ sub
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  const isDemoDisabledRoute = Array.from(DEMO_DISABLED_ROUTES).some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`)
+  );
+  if (isDemoDisabledRoute) {
+    const redirectResponse = NextResponse.redirect(new URL('/', request.url));
+    redirectResponse.headers.set('X-Request-Id', request.headers.get('x-request-id') || crypto.randomUUID());
+    return redirectResponse;
+  }
+
   const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const verifiedSession = sessionCookie ? await verifyFirebaseSessionCookie(sessionCookie) : null;
   const hasSessionCookie = !!sessionCookie;

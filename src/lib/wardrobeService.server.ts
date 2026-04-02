@@ -145,6 +145,73 @@ export async function addWardrobeItemServer(
 }
 
 /**
+ * Add a wardrobe item with an atomic active-item capacity guard.
+ * Prevents race conditions where concurrent uploads can exceed the max limit.
+ */
+export async function addWardrobeItemWithCapacityServer(
+  userId: string,
+  maxItems: number,
+  itemData: Omit<WardrobeItemData, 'id' | 'addedDate' | 'wornCount' | 'isActive'>
+): Promise<{ success: boolean; message: string; itemId?: string; code?: 'CAPACITY_REACHED' }> {
+  if (!userId || userId.trim() === '' || userId === 'anonymous') {
+    return {
+      success: false,
+      message: 'Invalid user ID',
+    };
+  }
+
+  if (!itemData.imageUrl || !itemData.itemType || !itemData.description) {
+    return {
+      success: false,
+      message: 'Image, item type, and description are required',
+    };
+  }
+
+  try {
+    const db = getFirestore();
+    const userRef = db.collection('users').doc(userId);
+    const itemsRef = userRef.collection('wardrobeItems');
+    const dataToSave = {
+      imageUrl: itemData.imageUrl,
+      itemType: itemData.itemType,
+      category: itemData.category || '',
+      brand: itemData.brand || '',
+      description: itemData.description,
+      dominantColors: itemData.dominantColors || [],
+      season: itemData.season || [],
+      occasions: itemData.occasions || [],
+      purchaseDate: itemData.purchaseDate || '',
+      addedDate: Date.now(),
+      wornCount: 0,
+      lastWornDate: null,
+      tags: itemData.tags || [],
+      notes: itemData.notes || '',
+      isActive: true,
+    };
+
+    const result = await db.runTransaction(async (tx) => {
+      const activeQuery = itemsRef.where('isActive', '==', true);
+      const activeSnapshot = await tx.get(activeQuery);
+
+      if (activeSnapshot.size >= maxItems) {
+        return { success: false as const, message: 'Wardrobe capacity reached', code: 'CAPACITY_REACHED' as const };
+      }
+
+      const newDocRef = itemsRef.doc();
+      tx.set(newDocRef, dataToSave);
+      return { success: true as const, message: 'Item added to wardrobe successfully', itemId: newDocRef.id };
+    });
+
+    return result;
+  } catch (error) {
+    return {
+      success: false,
+      message: error instanceof Error ? error.message : 'Failed to add item',
+    };
+  }
+}
+
+/**
  * Update a wardrobe item (server-side with Admin SDK)
  * @param userId - The user's ID (already authenticated)
  * @param itemId - The item's document ID

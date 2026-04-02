@@ -33,13 +33,20 @@ export default function StyleCheckPage() {
       setUsageLoading(true);
       const fetchUsageStatus = async (forceRefreshToken = false) => {
         const idToken = await user.getIdToken(forceRefreshToken);
-        return fetch('/api/usage-status', {
-          cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${idToken}`,
-            'Cache-Control': 'no-cache',
-          },
-        });
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 6000);
+        try {
+          return await fetch('/api/usage-status', {
+            cache: 'no-store',
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+              'Cache-Control': 'no-cache',
+            },
+            signal: controller.signal,
+          });
+        } finally {
+          window.clearTimeout(timeoutId);
+        }
       };
 
       let response = await fetchUsageStatus(false);

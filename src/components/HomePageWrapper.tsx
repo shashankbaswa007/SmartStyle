@@ -30,6 +30,23 @@ export function HomePageWrapper({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [resolvingSession, setResolvingSession] = useState(false);
   const checkedServerSessionRef = useRef(false);
+  const userRef = useRef(user);
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  const fetchSessionAuthenticated = async (signal: AbortSignal): Promise<boolean> => {
+    const response = await fetch('/api/auth/session', {
+      method: 'GET',
+      credentials: 'include',
+      cache: 'no-store',
+      signal,
+    });
+
+    const data = await response.json().catch(() => ({ authenticated: false }));
+    return Boolean(data?.authenticated);
+  };
 
   useEffect(() => {
     if (user || !initialized || loading) {
@@ -54,18 +71,21 @@ export function HomePageWrapper({ children }: { children: React.ReactNode }) {
       setResolvingSession(true);
 
       try {
-        const response = await fetch('/api/auth/session', {
-          method: 'GET',
-          credentials: 'include',
-          cache: 'no-store',
-        });
+        const sessionTimeoutController = new AbortController();
+        const timeoutId = window.setTimeout(() => sessionTimeoutController.abort(), 3500);
+        const authenticated = await fetchSessionAuthenticated(sessionTimeoutController.signal);
+        window.clearTimeout(timeoutId);
 
-        const data = await response.json();
         if (cancelled) return;
 
-        if (data?.authenticated) {
-          setResolvingSession(false);
-          return;
+        if (authenticated) {
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+          if (cancelled) return;
+
+          if (userRef.current) {
+            setResolvingSession(false);
+            return;
+          }
         }
       } catch {
         // Fall through to redirect.

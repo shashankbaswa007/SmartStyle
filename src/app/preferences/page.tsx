@@ -30,6 +30,7 @@ import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface UserPreferences {
   colorProfiles: Record<string, number>;
@@ -222,7 +223,8 @@ export default function PreferencesPage() {
     : [];
 
   return (
-    <div className="min-h-screen bg-background">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-background">
       <div className="container max-w-6xl mx-auto p-3 sm:p-4 md:p-6 space-y-6 sm:space-y-8">
         {/* Header */}
         <motion.div
@@ -533,5 +535,6 @@ export default function PreferencesPage() {
         </Tabs>
       </div>
     </div>
+    </ProtectedRoute>
   );
 }

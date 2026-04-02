@@ -535,3 +535,71 @@ export const snapshotRecommendExperimentMetricsDaily = functions
     console.log('✅ Daily recommend experiment metrics snapshot completed');
     return { success: true, statusCode: response.statusCode };
   });
+
+// ============================================
+// USER DATA CLEANUP ON ACCOUNT DELETION
+// ============================================
+
+/**
+ * Triggered when a Firebase Auth user is deleted.
+ * Ensures Firestore user profile documents and nested user subcollections
+ * are removed so no orphaned personal data remains.
+ */
+export const cleanupUserDataOnDelete = functions.auth.user().onDelete(async (user) => {
+  const uid = user.uid;
+  console.log(`🧽 Starting user data cleanup for uid=${uid}`);
+
+  const startTime = Date.now();
+  const errors: string[] = [];
+
+  try {
+    const userRootRef = db.collection('users').doc(uid);
+
+    // Delete the full user tree first (profile + nested subcollections).
+    await db.recursiveDelete(userRootRef);
+
+    // Remove additional top-level user-bound docs if present.
+    const topLevelRefs = [
+      db.collection('userPreferences').doc(uid),
+      db.collection('userBlocklists').doc(uid),
+      db.collection('usageTracking').doc(uid),
+      db.collection('userInteractions').doc(uid),
+    ];
+
+    for (const ref of topLevelRefs) {
+      try {
+        await ref.delete();
+      } catch (error) {
+        // Ignore not-found; capture any other failures for observability.
+        errors.push(`Failed deleting ${ref.path}: ${String(error)}`);
+      }
+    }
+
+    await db.collection('cleanupJobs').add({
+      jobId: `cleanup_user_${uid}_${Date.now()}`,
+      jobType: 'user_delete_cleanup',
+      userId: uid,
+      startedAt: admin.firestore.Timestamp.fromMillis(startTime),
+      completedAt: admin.firestore.Timestamp.now(),
+      errors,
+      status: errors.length === 0 ? 'success' : 'partial_success',
+    });
+
+    console.log(`✅ User cleanup completed for uid=${uid}`);
+    return;
+  } catch (error) {
+    console.error(`❌ User cleanup failed for uid=${uid}:`, error);
+
+    await db.collection('cleanupJobs').add({
+      jobId: `cleanup_user_${uid}_${Date.now()}`,
+      jobType: 'user_delete_cleanup',
+      userId: uid,
+      startedAt: admin.firestore.Timestamp.fromMillis(startTime),
+      completedAt: admin.firestore.Timestamp.now(),
+      errors: [...errors, String(error)],
+      status: 'failed',
+    });
+
+    throw error;
+  }
+});

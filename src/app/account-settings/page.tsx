@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/components/auth/AuthProvider';
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { updateUserProfile } from '@/lib/userService';
 import { updateProfile } from 'firebase/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,13 +51,6 @@ export default function AccountSettingsPage() {
   const [displayName, setDisplayName] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-
-  // Redirect to auth page if not authenticated
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/auth');
-    }
-  }, [user, authLoading, router]);
 
   // Initialize form with user data
   useEffect(() => {
@@ -186,7 +180,8 @@ export default function AccountSettingsPage() {
     : 'Unknown';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5 py-12 px-4">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5 py-12 px-4">
       <div className="container max-w-4xl mx-auto">
         {/* Back Button */}
         <motion.div
@@ -427,5 +422,6 @@ export default function AccountSettingsPage() {
         </div>
       </div>
     </div>
+    </ProtectedRoute>
   );
 }

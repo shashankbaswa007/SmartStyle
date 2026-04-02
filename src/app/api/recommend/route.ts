@@ -2,7 +2,12 @@ import { NextResponse } from 'next/server';
 import { recommendRequestSchema, validateRequest, formatValidationError } from '@/lib/validation';
 import { quickValidateImageDataUri } from '@/lib/server-image-validation';
 import { enforceRecommendAuth, enforceRecommendRateLimit, AuthError } from '@/lib/recommend/request-guard';
-import { enqueueRecommendJob, markRecommendJobRateLimited, startRecommendJob } from '@/lib/recommend/async-jobs';
+import {
+  enqueueRecommendJob,
+  markRecommendJobRateLimited,
+  startRecommendJob,
+  awaitRecommendJobTerminalState,
+} from '@/lib/recommend/async-jobs';
 
 function buildErrorResponse(
   status: number,
@@ -23,6 +28,9 @@ function buildErrorResponse(
 }
 
 export async function POST(req: Request) {
+  const MAX_IMAGE_DATA_URI_CHARS = 10_000_000;
+  const TERMINAL_WAIT_MS = 22_000;
+
   let body: unknown;
   try {
     body = await req.json();
@@ -40,6 +48,10 @@ export async function POST(req: Request) {
   const imageValidation = quickValidateImageDataUri(input.photoDataUri);
   if (!imageValidation.isValid) {
     return buildErrorResponse(400, 'INVALID_IMAGE', imageValidation.error || 'Invalid image payload');
+  }
+
+  if (input.photoDataUri.length > MAX_IMAGE_DATA_URI_CHARS) {
+    return buildErrorResponse(413, 'IMAGE_TOO_LARGE', 'Image payload too large. Please upload a smaller image.');
   }
 
   let userId = input.userId || 'anonymous';
@@ -67,6 +79,48 @@ export async function POST(req: Request) {
   const queued = await enqueueRecommendJob(normalizedInput, userId, { autoStart: false });
 
   if (queued.deduped) {
+    if (queued.status === 'completed' || queued.status === 'failed') {
+      const terminalJob = await awaitRecommendJobTerminalState(queued.jobId, {
+        timeoutMs: 1200,
+        pollIntervalMs: 200,
+      });
+
+      if (terminalJob && (terminalJob.status === 'completed' || terminalJob.status === 'failed')) {
+        const result = terminalJob.result as
+          | {
+              payload?: unknown;
+              recommendationId?: string | null;
+              cached?: boolean;
+              cacheSource?: string;
+              code?: string;
+              success?: boolean;
+              error?: string;
+              message?: string;
+            }
+          | undefined;
+
+        return NextResponse.json(
+          {
+            success: true,
+            status: terminalJob.status,
+            jobId: terminalJob.jobId,
+            progress: terminalJob.progress,
+            partialPayload: terminalJob.partialPayload ?? null,
+            payload: result?.payload ?? null,
+            recommendationId: result?.recommendationId ?? null,
+            cached: result?.cached ?? true,
+            cacheSource: result?.cacheSource ?? 'job',
+            fallbackSource: terminalJob.fallbackSource,
+            error: result?.error ?? terminalJob.error,
+            code: result?.code,
+            completedAt: terminalJob.completedAt,
+            deduped: true,
+          },
+          { status: 200 }
+        );
+      }
+    }
+
     return NextResponse.json(
       {
         success: true,
@@ -122,6 +176,45 @@ export async function POST(req: Request) {
   }
 
   await startRecommendJob(queued.jobId);
+
+  const terminalJob = await awaitRecommendJobTerminalState(queued.jobId, {
+    timeoutMs: TERMINAL_WAIT_MS,
+    pollIntervalMs: 550,
+  });
+
+  if (terminalJob && (terminalJob.status === 'completed' || terminalJob.status === 'failed')) {
+    const result = terminalJob.result as
+      | {
+          payload?: unknown;
+          recommendationId?: string | null;
+          cached?: boolean;
+          cacheSource?: string;
+          code?: string;
+          success?: boolean;
+          error?: string;
+          message?: string;
+        }
+      | undefined;
+
+    return NextResponse.json(
+      {
+        success: true,
+        status: terminalJob.status,
+        jobId: terminalJob.jobId,
+        progress: terminalJob.progress,
+        partialPayload: terminalJob.partialPayload ?? null,
+        payload: result?.payload ?? null,
+        recommendationId: result?.recommendationId ?? null,
+        cached: result?.cached ?? false,
+        cacheSource: result?.cacheSource ?? 'job',
+        fallbackSource: terminalJob.fallbackSource,
+        error: result?.error ?? terminalJob.error,
+        code: result?.code,
+        completedAt: terminalJob.completedAt,
+      },
+      { status: 200 }
+    );
+  }
 
   return NextResponse.json(
     {
