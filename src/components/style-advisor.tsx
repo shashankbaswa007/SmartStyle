@@ -1607,7 +1607,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       
       const normalizedError = errorMessage.toLowerCase();
 
-      if (normalizedError.includes('high demand') || normalizedError.includes('overloaded') || normalizedError.includes('temporarily unavailable')) {
+      if (
+        normalizedError.includes('high demand') ||
+        normalizedError.includes('overloaded') ||
+        normalizedError.includes('temporarily unavailable') ||
+        normalizedError.includes('status 503')
+      ) {
         title = "Service Busy";
         description = "⏳ Our AI service is experiencing high demand. Please wait 30-60 seconds and try again. We apologize for the inconvenience!";
       } else if (normalizedError.includes('rate limit') || normalizedError.includes('quota')) {

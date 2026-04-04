@@ -52,8 +52,8 @@ export function InstallPWA() {
       const installEvent = event as BeforeInstallPromptEvent;
       if (typeof installEvent.prompt !== 'function') return;
 
-      // We intentionally defer browser UI and trigger prompt() only on explicit user action.
-      installEvent.preventDefault();
+      // Preserve access to the install event for optional custom CTA,
+      // but avoid suppressing browser-native install UX.
       setDeferredPrompt(installEvent);
 
       // Show prompt after 30 seconds of usage

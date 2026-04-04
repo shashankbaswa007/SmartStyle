@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-const protectedRoutesWithNext = ['/likes', '/wardrobe', '/wardrobe/suggest', '/style-check'];
-const demoDisabledRoutes = ['/analytics', '/preferences', '/saved-palettes', '/account-settings', '/test-analytics'];
+const protectedRoutesWithNext = ['/analytics', '/likes', '/wardrobe', '/wardrobe/suggest', '/style-check'];
+const demoDisabledRoutes = ['/preferences', '/saved-palettes', '/account-settings', '/test-analytics'];
 
 test.describe('Protected Routing', () => {
   for (const path of protectedRoutesWithNext) {

@@ -396,10 +396,7 @@ function WardrobePageContent() {
         }
       };
 
-      let response = await fetchUsageStatus(false);
-      if (response.status === 401) {
-        response = await fetchUsageStatus(true);
-      }
+      const response = await fetchUsageStatus(true);
 
       if (!response.ok) {
         setUsageLimits({});

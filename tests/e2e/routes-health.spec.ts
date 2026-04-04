@@ -9,8 +9,8 @@ const publicRoutes = [
   { path: '/trust', check: async (page: Page) => expect(page.getByRole('heading', { name: /trust center/i })).toBeVisible() },
 ];
 
-const protectedRoutes = ['/likes', '/wardrobe', '/wardrobe/suggest', '/style-check'];
-const demoDisabledRoutes = ['/analytics', '/preferences', '/saved-palettes', '/account-settings', '/test-analytics'];
+const protectedRoutes = ['/analytics', '/likes', '/wardrobe', '/wardrobe/suggest', '/style-check'];
+const demoDisabledRoutes = ['/preferences', '/saved-palettes', '/account-settings', '/test-analytics'];
 
 test.describe('Route Health', () => {
   test('root redirects unauthenticated users to auth', async ({ page }) => {
