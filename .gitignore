@@ -95,6 +95,7 @@ next-env.d.ts
 test-*.js
 *-test-local.js
 check-*.js
+!scripts/check-node-version.js
 diagnose-*.js
 verify-*.js
 comprehensive-*.js

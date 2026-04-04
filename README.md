@@ -537,12 +537,18 @@ Redirect to App
 
 ### Prerequisites
 
-- Node.js 18+ and npm
+- Node.js 18-22 (recommended: Node 20 LTS) and npm
 - Firebase account with project
 - API keys for:
   - Groq API (free tier: 14,400 requests/day)
   - Google Gemini API (free tier: 100 requests/day)
   - Tavily API (optional, for shopping)
+
+If you use `nvm`, run:
+```bash
+nvm use
+```
+The repository includes `.nvmrc` with Node 20.
 
 ### Installation
 

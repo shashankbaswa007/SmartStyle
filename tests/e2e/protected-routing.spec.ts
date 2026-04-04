@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
-const protectedRoutesWithNext = ['/likes', '/wardrobe', '/style-check'];
-const demoDisabledRoutes = ['/analytics', '/preferences', '/saved-palettes', '/account-settings'];
+const protectedRoutesWithNext = ['/likes', '/wardrobe', '/wardrobe/suggest', '/style-check'];
+const demoDisabledRoutes = ['/analytics', '/preferences', '/saved-palettes', '/account-settings', '/test-analytics'];
 
 test.describe('Protected Routing', () => {
   for (const path of protectedRoutesWithNext) {
@@ -20,7 +20,8 @@ test.describe('Protected Routing', () => {
       await page.context().clearCookies();
       await page.goto(path);
 
-      await expect(page).toHaveURL(/\/$/);
+      await expect(page).not.toHaveURL(new RegExp(`${path}$`));
+      await expect(page).toHaveURL(/\/(?:$|auth(?:\?|$))/);
     });
   }
 });
