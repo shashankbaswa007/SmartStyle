@@ -766,7 +766,7 @@ function WardrobePageContent() {
             </div>
 
             {/* Stats Bar */}
-            {wardrobeItems.length > 0 && (
+            {userId && (
               <motion.div 
                 initial={prefersReducedMotion ? { opacity: 1 } : { opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}

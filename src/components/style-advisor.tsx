@@ -1369,7 +1369,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         headers,
         body: JSON.stringify(apiRequest),
       }, {
-        maxRetries: 1,
+        maxRetries: 2,
         retryOn429: false,
       });
 
@@ -1432,10 +1432,16 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
               method: 'GET',
               headers,
             },
-            { maxRetries: 1 }
+            { maxRetries: 2 }
           );
 
           if (!statusResponse.ok) {
+            if (statusResponse.status === 404) {
+              // Eventual consistency across serverless instances can briefly miss queued jobs.
+              // Treat as in-progress and continue polling instead of surfacing an error.
+              continue;
+            }
+
             let statusError: { error?: string; message?: string } = { error: 'Unable to check recommendation status' };
             try {
               statusError = await statusResponse.json();
