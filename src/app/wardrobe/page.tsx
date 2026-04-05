@@ -15,6 +15,9 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import UsageLimitMeter from '@/components/UsageLimitMeter';
+import FirstTimeTip from '@/components/FirstTimeTip';
+import PageStatusAlert from '@/components/PageStatusAlert';
+import QuickStartEmptyState from '@/components/QuickStartEmptyState';
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { getWardrobeItems, deleteWardrobeItem, markItemAsWorn, WardrobeItemData } from '@/lib/wardrobeService';
@@ -1166,6 +1169,19 @@ function WardrobePageContent() {
               </Tooltip>
             </div>
 
+            <div className="mx-auto mb-5 max-w-3xl text-left">
+              <FirstTimeTip
+                storageKey="tip:wardrobe:v1"
+                title="Build your smart wardrobe"
+                description="Tagging and usage tracking helps SmartStyle generate better outfit suggestions."
+                bullets={[
+                  'Add at least 10 items across tops, bottoms, and shoes.',
+                  'Use accurate occasion and season tags for better context filters.',
+                  'Mark items as worn so the app can rotate underused pieces.',
+                ]}
+              />
+            </div>
+
             {/* Action Buttons - Mobile optimized */}
             <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-3 justify-center mt-6 sm:mt-8 px-4 sm:px-0">
               <Tooltip>
@@ -1690,28 +1706,14 @@ function WardrobePageContent() {
 
           {/* Error State */}
           {error && !loading && (
-            <div className="max-w-2xl mx-auto space-y-3">
-              <Alert variant="destructive">
-                <AlertTitle>{!isOnline ? 'Offline' : 'Error'}</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-              <div className="flex justify-center gap-2">
-                <Button
-                  onClick={handleRefresh}
-                  disabled={!isOnline || isSyncing}
-                  className="bg-violet-600 hover:bg-violet-700 text-white"
-                >
-                  {isSyncing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Retrying...
-                    </>
-                  ) : (
-                    'Retry'
-                  )}
-                </Button>
-              </div>
-            </div>
+            <PageStatusAlert
+              className="mx-auto max-w-2xl"
+              title={!isOnline ? 'Offline' : 'Unable to load wardrobe'}
+              description={error}
+              onRetry={handleRefresh}
+              retryDisabled={!isOnline || isSyncing}
+              isRetrying={isSyncing}
+            />
           )}
 
           {/* Empty State */}
@@ -2137,73 +2139,45 @@ function WardrobePageContent() {
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="text-center py-16"
+              className="py-16"
             >
-              <div className="bg-gradient-to-br from-violet-50 to-purple-50 border border-violet-200 rounded-xl p-10 max-w-lg mx-auto">
-                {searchQuery ? (
-                  <>
-                    <Search className="h-16 w-16 mx-auto mb-4 text-violet-400" />
-                    <h3 className="text-xl font-bold text-violet-900 mb-2">
-                      No items match &quot;{searchQuery}&quot;
-                    </h3>
-                    <p className="text-violet-700 mb-4">
-                      Try searching with different keywords or clear your filters.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <Filter className="h-16 w-16 mx-auto mb-4 text-violet-400" />
-                    <h3 className="text-xl font-bold text-violet-900 mb-2">
-                      {contextMode !== 'all' 
-                        ? `No ${contextMode} ${selectedFilter !== 'all' ? selectedFilter : ''} items found`
-                        : `No ${selectedFilter === 'all' ? '' : selectedFilter} items yet`}
-                    </h3>
-                    <p className="text-violet-700 mb-4">
-                      {contextMode !== 'all'
-                        ? `Tag items with "${contextMode}" occasions to see them in this context.`
-                        : selectedFilter === 'all' 
-                          ? 'Your wardrobe is empty.'
-                          : `You haven't added any ${selectedFilter}s to your wardrobe yet.`}
-                    </p>
-                  </>
-                )}
-                <div className="flex gap-2 justify-center flex-wrap">
-                  {searchQuery && (
-                    <Button 
-                      variant="outline"
-                      className="border-violet-600 text-violet-600 hover:bg-violet-50"
-                      onClick={() => setSearchQuery('')}
-                    >
-                      Clear Search
-                    </Button>
-                  )}
-                  {contextMode !== 'all' && (
-                    <Button 
-                      variant="outline"
-                      className="border-violet-600 text-violet-600 hover:bg-violet-50"
-                      onClick={() => setContextMode('all')}
-                    >
-                      Clear Context
-                    </Button>
-                  )}
-                  {selectedFilter !== 'all' && (
-                    <Button 
-                      variant="outline"
-                      className="border-violet-600 text-violet-600 hover:bg-violet-50"
-                      onClick={() => setSelectedFilter('all')}
-                    >
-                      View All Items
-                    </Button>
-                  )}
-                  <Button 
-                    className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white gap-2"
-                    onClick={() => setShowUploadModal(true)}
-                  >
-                    <Plus className="h-4 w-4" />
-                    Add Item
-                  </Button>
-                </div>
-              </div>
+              <QuickStartEmptyState
+                className="mx-auto max-w-lg"
+                icon={searchQuery ? Search : Filter}
+                title={searchQuery
+                  ? `No items match \"${searchQuery}\"`
+                  : contextMode !== 'all'
+                    ? `No ${contextMode} ${selectedFilter !== 'all' ? selectedFilter : ''} items found`
+                    : `No ${selectedFilter === 'all' ? '' : selectedFilter} items yet`}
+                description={searchQuery
+                  ? 'Try searching with different keywords or clear your filters.'
+                  : contextMode !== 'all'
+                    ? `Tag items with "${contextMode}" occasions to see them in this context.`
+                    : selectedFilter === 'all'
+                      ? 'Your wardrobe is empty.'
+                      : `You haven't added any ${selectedFilter}s to your wardrobe yet.`}
+                primaryAction={{
+                  label: 'Add Item',
+                  onClick: () => setShowUploadModal(true),
+                  icon: Plus,
+                }}
+                secondaryAction={searchQuery
+                  ? {
+                      label: 'Clear Search',
+                      onClick: () => setSearchQuery(''),
+                    }
+                  : contextMode !== 'all'
+                    ? {
+                        label: 'Clear Context',
+                        onClick: () => setContextMode('all'),
+                      }
+                    : selectedFilter !== 'all'
+                      ? {
+                          label: 'View All Items',
+                          onClick: () => setSelectedFilter('all'),
+                        }
+                      : undefined}
+              />
             </motion.div>
           )}
         </div>

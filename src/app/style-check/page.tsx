@@ -7,7 +7,11 @@ import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { auth } from '@/lib/firebase';
 import UsageLimitMeter from '@/components/UsageLimitMeter';
+import FirstTimeTip from '@/components/FirstTimeTip';
+import PageStatusAlert from '@/components/PageStatusAlert';
+import QuickStartEmptyState from '@/components/QuickStartEmptyState';
 import { USAGE_LIMITS } from '@/lib/usage-limits';
+import { Calendar, Shirt } from 'lucide-react';
 
 // Lazy load heavy components for better performance
 const StyleAdvisor = lazy(() => import('@/components/style-advisor').then(mod => ({ default: mod.StyleAdvisor })));
@@ -20,6 +24,7 @@ export default function StyleCheckPage() {
   const isMounted = useMounted();
   const [usage, setUsage] = useState<{ remaining: number; limit: number; resetAt?: string } | null>(null);
   const [usageLoading, setUsageLoading] = useState(true);
+  const [usageError, setUsageError] = useState<string | null>(null);
 
   const fetchUsage = useCallback(async () => {
     const user = auth.currentUser;
@@ -31,6 +36,7 @@ export default function StyleCheckPage() {
 
     try {
       setUsageLoading(true);
+      setUsageError(null);
       const fetchUsageStatus = async (forceRefreshToken = false) => {
         const idToken = await user.getIdToken(forceRefreshToken);
         const controller = new AbortController();
@@ -53,6 +59,7 @@ export default function StyleCheckPage() {
 
       if (!response.ok) {
         setUsage(null);
+        setUsageError('Could not refresh your daily limit right now.');
         return;
       }
       const data = await response.json();
@@ -68,6 +75,7 @@ export default function StyleCheckPage() {
       }
     } catch {
       setUsage(null);
+      setUsageError('Unable to load usage status. Please try again.');
     } finally {
       setUsageLoading(false);
     }
@@ -148,6 +156,29 @@ export default function StyleCheckPage() {
               text="Get instant feedback on your outfit. Upload a photo and let our AI-powered style advisor give you personalized recommendations."
             />
           </Suspense>
+          <div className="mx-auto mt-6 max-w-2xl text-left">
+            <FirstTimeTip
+              storageKey="tip:style-check:v1"
+              title="First time here?"
+              description="Use this flow for quick outfit feedback and personalized recommendations."
+              bullets={[
+                'Upload a clear full-body or outfit photo for best results.',
+                'Try different occasions (work, date, casual) to compare advice.',
+                'Save looks you like so your analytics and preferences improve faster.',
+              ]}
+            />
+          </div>
+          {usageError && (
+            <PageStatusAlert
+              className="mx-auto mt-4 max-w-2xl"
+              title="Usage status unavailable"
+              description={usageError}
+              onRetry={() => {
+                void fetchUsage();
+              }}
+              isRetrying={usageLoading}
+            />
+          )}
           <div className="mx-auto mt-8 max-w-lg">
             <div className="rounded-lg p-1 bg-gradient-to-r from-purple-500/20 to-violet-500/20">
               <UsageLimitMeter
@@ -164,9 +195,23 @@ export default function StyleCheckPage() {
           </div>
         </header>
 
-        <Suspense fallback={<div className="flex justify-center items-center min-h-[400px]"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div><p className="text-muted-foreground">Loading style advisor...</p></div></div>}>
-          <StyleAdvisor isLimitReached={isStyleCheckLimitReached} />
-        </Suspense>
+        {isStyleCheckLimitReached ? (
+          <QuickStartEmptyState
+            className="mx-auto max-w-2xl"
+            icon={Calendar}
+            title="Daily style-check limit reached"
+            description="You have used today\'s analysis quota. Explore your wardrobe suggestions in the meantime and come back after reset."
+            primaryAction={{
+              label: 'Open Wardrobe',
+              href: '/wardrobe',
+              icon: Shirt,
+            }}
+          />
+        ) : (
+          <Suspense fallback={<div className="flex justify-center items-center min-h-[400px]"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div><p className="text-muted-foreground">Loading style advisor...</p></div></div>}>
+            <StyleAdvisor isLimitReached={isStyleCheckLimitReached} />
+          </Suspense>
+        )}
       </div>
     </div>
     </ProtectedRoute>

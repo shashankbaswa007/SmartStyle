@@ -20,8 +20,10 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import FirstTimeTip from '@/components/FirstTimeTip';
+import PageStatusAlert from '@/components/PageStatusAlert';
+import QuickStartEmptyState from '@/components/QuickStartEmptyState';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/components/auth/AuthProvider';
 import {
@@ -616,14 +618,31 @@ export default function AnalyticsPage() {
                 {refreshing ? 'Refreshing…' : 'Refresh'}
               </Button>
             )}
+            <div className="mx-auto mt-6 max-w-3xl text-left">
+              <FirstTimeTip
+                storageKey="tip:analytics:v1"
+                title="How to get useful analytics"
+                description="This page gets smarter as you interact with recommendations and your wardrobe."
+                bullets={[
+                  'Generate a few recommendations from Style Check first.',
+                  'Like and rate outfits to improve preference accuracy.',
+                  'Add wardrobe items to unlock richer color and category insights.',
+                ]}
+                actionHref="/style-check"
+                actionLabel="Start with Style Check"
+              />
+            </div>
           </header>
 
           {error && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-              <Alert variant="destructive" className="mb-6 max-w-4xl mx-auto">
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+              <PageStatusAlert
+                className="mb-6 max-w-4xl mx-auto"
+                title="Unable to load analytics"
+                description={error}
+                onRetry={() => loadAnalytics(true)}
+                isRetrying={refreshing}
+              />
             </motion.div>
           )}
 
@@ -890,20 +909,22 @@ export default function AnalyticsPage() {
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4 }}
-              className="text-center max-w-2xl mx-auto"
+              className="max-w-2xl mx-auto"
             >
-              <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-6 sm:p-10 md:p-16">
-                <BarChart3 className="w-20 h-20 text-muted-foreground/40 mx-auto mb-6" />
-                <h3 className="text-2xl font-bold mb-3">No Analytics Data Yet</h3>
-                <p className="text-muted-foreground mb-8 text-lg">
-                  Start your style journey by getting personalized outfit recommendations.
-                  Your analytics will appear here as you explore different styles!
-                </p>
-                <div className="flex gap-4 justify-center flex-wrap">
-                  <Button asChild size="lg" className="gap-2"><Link href="/style-check"><Sparkles className="h-5 w-5" />Get Your First Recommendation</Link></Button>
-                  <Button asChild size="lg" variant="outline" className="gap-2"><Link href="/wardrobe"><Shirt className="h-5 w-5" />Build Your Wardrobe</Link></Button>
-                </div>
-              </div>
+              <QuickStartEmptyState
+                icon={BarChart3}
+                title="No analytics data yet"
+                description="Start your style journey by getting personalized recommendations and building your wardrobe. Your analytics will appear here as you interact with SmartStyle."
+                primaryAction={{
+                  label: 'Get your first recommendation',
+                  href: '/style-check',
+                  icon: Sparkles,
+                }}
+                secondaryAction={{
+                  label: 'Build your wardrobe',
+                  href: '/wardrobe',
+                }}
+              />
             </motion.div>
           )}
         </div>
