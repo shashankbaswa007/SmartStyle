@@ -32,6 +32,11 @@ interface UseWardrobeDataResult {
 
 const FETCH_TIMEOUT_MS = 10_000;
 
+function getTimezoneHeader(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  return { 'x-timezone-offset-minutes': String(new Date().getTimezoneOffset()) };
+}
+
 export function useWardrobeData(): UseWardrobeDataResult {
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItemData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -155,6 +160,7 @@ export function useWardrobeData(): UseWardrobeDataResult {
             headers: {
               Authorization: `Bearer ${idToken}`,
               'Cache-Control': 'no-cache',
+              ...getTimezoneHeader(),
             },
             signal: controller.signal,
           });

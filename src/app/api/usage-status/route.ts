@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyBearerToken, AuthError } from '@/lib/server-auth';
 import { getServerRateLimitStatus } from '@/lib/server-rate-limiter';
-import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
+import { DAILY_WINDOW_MS, getTimezoneOffsetMinutesFromRequest, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,22 +29,26 @@ function sanitizeUsageStatus(status: { limit: number; used: number; remaining: n
 export async function GET(request: Request) {
   try {
     const userId = await verifyBearerToken(request);
+    const timezoneOffsetMinutes = getTimezoneOffsetMinutesFromRequest(request);
 
     const [recommend, wardrobeOutfit, wardrobeUpload] = await Promise.all([
       getServerRateLimitStatus(userId, {
         scope: RATE_LIMIT_SCOPES.recommend,
         windowMs: DAILY_WINDOW_MS,
         maxRequests: USAGE_LIMITS.recommend,
+        timezoneOffsetMinutes,
       }),
       getServerRateLimitStatus(userId, {
         scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
         windowMs: DAILY_WINDOW_MS,
         maxRequests: USAGE_LIMITS.wardrobeOutfit,
+        timezoneOffsetMinutes,
       }),
       getServerRateLimitStatus(userId, {
         scope: RATE_LIMIT_SCOPES.wardrobeUpload,
         windowMs: DAILY_WINDOW_MS,
         maxRequests: USAGE_LIMITS.wardrobeUpload,
+        timezoneOffsetMinutes,
       }),
     ]);
 

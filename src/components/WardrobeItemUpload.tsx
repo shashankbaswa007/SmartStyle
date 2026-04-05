@@ -718,6 +718,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${idToken}`,
+              'x-timezone-offset-minutes': String(new Date().getTimezoneOffset()),
             },
             body: JSON.stringify({
               userId: user.uid,

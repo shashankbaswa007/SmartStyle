@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { verifyBearerToken, AuthError } from '@/lib/server-auth';
 import { checkServerRateLimit } from '@/lib/server-rate-limiter';
 import { addWardrobeItemWithCapacityServer } from '@/lib/wardrobeService.server';
-import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
+import { DAILY_WINDOW_MS, getTimezoneOffsetMinutesFromRequest, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 
 const MAX_WARDROBE_ITEMS = 300;
 
@@ -31,6 +31,7 @@ interface WardrobeItemPayload {
 export async function POST(request: Request) {
   try {
     const authenticatedUserId = await verifyBearerToken(request);
+    const timezoneOffsetMinutes = getTimezoneOffsetMinutesFromRequest(request);
 
     let body: WardrobeItemPayload;
     try {
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
       scope: RATE_LIMIT_SCOPES.wardrobeUpload,
       windowMs: DAILY_WINDOW_MS,
       maxRequests: USAGE_LIMITS.wardrobeUpload,
+      timezoneOffsetMinutes,
     });
 
     if (!rateLimit.allowed) {

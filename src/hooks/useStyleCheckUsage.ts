@@ -20,6 +20,11 @@ interface HttpLikeError {
   retryAfter: string | null;
 }
 
+function getTimezoneHeader(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  return { 'x-timezone-offset-minutes': String(new Date().getTimezoneOffset()) };
+}
+
 interface UseStyleCheckUsageResult {
   usage: UsageWindow;
   usageLoading: boolean;
@@ -48,6 +53,7 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
       headers: {
         Authorization: `Bearer ${idToken}`,
         'Cache-Control': 'no-cache',
+        ...getTimezoneHeader(),
       },
       signal,
     });
@@ -77,6 +83,7 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
         headers: {
           Authorization: `Bearer ${idToken}`,
           'Cache-Control': 'no-cache',
+          ...getTimezoneHeader(),
         },
         signal,
       });

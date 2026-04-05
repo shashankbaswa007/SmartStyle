@@ -1,11 +1,13 @@
 import admin from '@/lib/firebase-admin';
 import { checkRateLimit, getRateLimitStatus } from '@/lib/rate-limiter';
 import { checkDistributedRateLimit, getDistributedRateLimitStatus } from '@/lib/distributed-rate-limiter';
+import { normalizeTimezoneOffsetMinutes } from '@/lib/usage-limits';
 
 export interface ServerRateLimitConfig {
   windowMs: number;
   maxRequests: number;
   scope: string;
+  timezoneOffsetMinutes?: number;
 }
 
 export interface ServerRateLimitResult {
@@ -31,7 +33,10 @@ const COLLECTION = 'rateLimits';
 
 function getCurrentWindow(config: ServerRateLimitConfig) {
   const now = Date.now();
-  const windowStartMs = now - (now % config.windowMs);
+  const offsetMinutes = normalizeTimezoneOffsetMinutes(config.timezoneOffsetMinutes);
+  const offsetMs = offsetMinutes * 60 * 1000;
+  const shiftedNow = now - offsetMs;
+  const windowStartMs = shiftedNow - (shiftedNow % config.windowMs) + offsetMs;
   const resetAt = new Date(windowStartMs + config.windowMs);
   return { now, windowStartMs, resetAt };
 }
@@ -46,6 +51,7 @@ export async function checkServerRateLimit(
     scope: config.scope,
     windowMs: config.windowMs,
     maxRequests: config.maxRequests,
+    timezoneOffsetMinutes: config.timezoneOffsetMinutes,
   });
   if (distributedResult) {
     return distributedResult;
@@ -143,6 +149,7 @@ export async function getServerRateLimitStatus(
     scope: config.scope,
     windowMs: config.windowMs,
     maxRequests: config.maxRequests,
+    timezoneOffsetMinutes: config.timezoneOffsetMinutes,
   });
   if (distributedStatus) {
     return distributedStatus;

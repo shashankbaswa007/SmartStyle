@@ -3,7 +3,7 @@ import { generateWardrobeOutfits } from '@/lib/wardrobeOutfitGenerator';
 import { fetchWeatherForecast } from '@/lib/weather-service';
 import { verifyBearerToken, AuthError } from '@/lib/server-auth';
 import { checkServerRateLimit } from '@/lib/server-rate-limiter';
-import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
+import { DAILY_WINDOW_MS, getTimezoneOffsetMinutesFromRequest, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 import { 
   generateWardrobeHash, 
   generateRequestHash, 
@@ -15,6 +15,7 @@ const MAX_REQUESTS_PER_DAY = USAGE_LIMITS.wardrobeOutfit;
 export async function POST(request: NextRequest) {
   try {
     const authenticatedUserId = await verifyBearerToken(request);
+    const timezoneOffsetMinutes = getTimezoneOffsetMinutesFromRequest(request);
 
     // Parse request body
     let body;
@@ -57,6 +58,7 @@ export async function POST(request: NextRequest) {
       scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
       windowMs: DAILY_WINDOW_MS,
       maxRequests: MAX_REQUESTS_PER_DAY,
+      timezoneOffsetMinutes,
     });
 
     if (!rateLimit.allowed) {

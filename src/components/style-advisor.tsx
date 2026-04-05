@@ -1336,6 +1336,9 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
+      if (typeof window !== 'undefined') {
+        headers['x-timezone-offset-minutes'] = String(new Date().getTimezoneOffset());
+      }
       if (!auth.currentUser) {
         toast({
           variant: 'destructive',

@@ -1,10 +1,12 @@
 import { featureFlags } from '@/lib/feature-flags';
 import { getRedisClient } from '@/lib/redis';
+import { normalizeTimezoneOffsetMinutes } from '@/lib/usage-limits';
 
 export interface DistributedRateLimitConfig {
   windowMs: number;
   maxRequests: number;
   scope: string;
+  timezoneOffsetMinutes?: number;
 }
 
 export interface DistributedRateLimitResult {
@@ -18,7 +20,10 @@ const RATE_LIMIT_NAMESPACE = 'smartstyle:v1:ratelimit';
 
 function getWindow(config: DistributedRateLimitConfig) {
   const now = Date.now();
-  const windowStartMs = now - (now % config.windowMs);
+  const offsetMinutes = normalizeTimezoneOffsetMinutes(config.timezoneOffsetMinutes);
+  const offsetMs = offsetMinutes * 60 * 1000;
+  const shiftedNow = now - offsetMs;
+  const windowStartMs = shiftedNow - (shiftedNow % config.windowMs) + offsetMs;
   const resetAt = new Date(windowStartMs + config.windowMs);
   return { now, windowStartMs, resetAt };
 }
