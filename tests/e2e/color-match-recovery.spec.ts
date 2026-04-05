@@ -1,20 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { enableE2EAuthBypass } from './helpers/auth-bypass';
 
 test.describe('Color Match Recovery UX', () => {
   test.beforeEach(async ({ context, page }) => {
-    await context.addCookies([
-      {
-        name: 'smartstyle-e2e-auth',
-        value: 'enabled',
-        domain: 'localhost',
-        path: '/',
-        httpOnly: false,
-        secure: false,
-        sameSite: 'Lax',
-      },
-    ]);
-
-    await page.goto('/');
+    await enableE2EAuthBypass(context, page);
   });
 
   test('shows retryable error state and recovers after valid retry', async ({ page }) => {

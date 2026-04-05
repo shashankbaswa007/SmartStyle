@@ -17,10 +17,14 @@ import {
   Zap,
   Target,
   ChevronRight,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import FirstTimeTip from '@/components/FirstTimeTip';
 import PageStatusAlert from '@/components/PageStatusAlert';
 import QuickStartEmptyState from '@/components/QuickStartEmptyState';
@@ -52,6 +56,25 @@ interface StyleInsights {
   topWardrobeColors: { color: string; count: number; hex: string }[];
   engagementScore: number;
 }
+
+interface UxHealthSnapshot {
+  completionRate: number;
+  recoveryRate: number;
+  retrySuccessRate: number;
+  dropOffRate: number;
+  status: 'healthy' | 'warning' | 'critical';
+  issues: string[];
+}
+
+const UX_HEALTH_THRESHOLDS = {
+  minCompletionRate: 80,
+  minRecoveryRate: 65,
+  minRetrySuccessRate: 60,
+  maxDropOffRate: 20,
+  criticalCompletionRate: 65,
+  criticalRecoveryRate: 40,
+  criticalDropOffRate: 35,
+};
 
 // ─── Animation Variants ─────────────────────────────────────────
 const containerVariants = {
@@ -493,6 +516,43 @@ export default function AnalyticsPage() {
     };
   }, [history, likedOutfits, wardrobeItems]);
 
+  const uxHealthSnapshot: UxHealthSnapshot | null = useMemo(() => {
+    if (!uxMetrics) return null;
+
+    const dropOffRate = uxMetrics.taskStarted > 0
+      ? Number(((uxMetrics.dropOff / uxMetrics.taskStarted) * 100).toFixed(1))
+      : 0;
+
+    const issues: string[] = [];
+
+    if (uxMetrics.completionRate < UX_HEALTH_THRESHOLDS.minCompletionRate) {
+      issues.push(`Completion is ${uxMetrics.completionRate}% (target ${UX_HEALTH_THRESHOLDS.minCompletionRate}%+)`);
+    }
+    if (uxMetrics.recoveryRate < UX_HEALTH_THRESHOLDS.minRecoveryRate) {
+      issues.push(`Recovery is ${uxMetrics.recoveryRate}% (target ${UX_HEALTH_THRESHOLDS.minRecoveryRate}%+)`);
+    }
+    if (uxMetrics.retrySuccessRate < UX_HEALTH_THRESHOLDS.minRetrySuccessRate) {
+      issues.push(`Retry success is ${uxMetrics.retrySuccessRate}% (target ${UX_HEALTH_THRESHOLDS.minRetrySuccessRate}%+)`);
+    }
+    if (dropOffRate > UX_HEALTH_THRESHOLDS.maxDropOffRate) {
+      issues.push(`Drop-off rate is ${dropOffRate}% (target <= ${UX_HEALTH_THRESHOLDS.maxDropOffRate}%)`);
+    }
+
+    const isCritical =
+      uxMetrics.completionRate < UX_HEALTH_THRESHOLDS.criticalCompletionRate ||
+      uxMetrics.recoveryRate < UX_HEALTH_THRESHOLDS.criticalRecoveryRate ||
+      dropOffRate > UX_HEALTH_THRESHOLDS.criticalDropOffRate;
+
+    return {
+      completionRate: uxMetrics.completionRate,
+      recoveryRate: uxMetrics.recoveryRate,
+      retrySuccessRate: uxMetrics.retrySuccessRate,
+      dropOffRate,
+      status: isCritical ? 'critical' : issues.length > 0 ? 'warning' : 'healthy',
+      issues,
+    };
+  }, [uxMetrics]);
+
   // ── Pre-render gates ──────────────────────────────────────────
   if (!isMounted) return null;
 
@@ -666,6 +726,72 @@ export default function AnalyticsPage() {
                     color="pink"
                   />
                 </div>
+              )}
+
+              {uxHealthSnapshot && (
+                <motion.div variants={itemVariants}>
+                  <Card className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg">
+                    <CardHeader>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-base">UX Health Gate</CardTitle>
+                          {uxHealthSnapshot.status === 'healthy' ? (
+                            <Badge className="bg-emerald-600 text-white hover:bg-emerald-600">Healthy</Badge>
+                          ) : uxHealthSnapshot.status === 'warning' ? (
+                            <Badge className="bg-amber-600 text-white hover:bg-amber-600">Warning</Badge>
+                          ) : (
+                            <Badge variant="destructive">Critical</Badge>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => loadAnalytics(true)}
+                          disabled={refreshing}
+                          className="gap-2"
+                        >
+                          <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                          Refresh Metrics
+                        </Button>
+                      </div>
+                      <CardDescription>
+                        Proactive threshold checks for completion, recovery, retry success, and drop-offs.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {uxHealthSnapshot.status === 'healthy' ? (
+                        <Alert>
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                          <AlertTitle>UX quality gate is passing</AlertTitle>
+                          <AlertDescription>
+                            All tracked funnel thresholds are within target range.
+                          </AlertDescription>
+                        </Alert>
+                      ) : (
+                        <Alert variant="destructive">
+                          <AlertTriangle className="h-4 w-4" />
+                          <AlertTitle>
+                            {uxHealthSnapshot.status === 'critical' ? 'Critical UX regression risk detected' : 'UX health warning detected'}
+                          </AlertTitle>
+                          <AlertDescription>
+                            <ul className="list-disc pl-4 space-y-1">
+                              {uxHealthSnapshot.issues.map((issue) => (
+                                <li key={issue}>{issue}</li>
+                              ))}
+                            </ul>
+                          </AlertDescription>
+                        </Alert>
+                      )}
+
+                      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs text-muted-foreground">
+                        <p>Completion: {uxHealthSnapshot.completionRate}%</p>
+                        <p>Recovery: {uxHealthSnapshot.recoveryRate}%</p>
+                        <p>Retry Success: {uxHealthSnapshot.retrySuccessRate}%</p>
+                        <p>Drop-off Rate: {uxHealthSnapshot.dropOffRate}%</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
               )}
 
               {/* ─── Activity & Engagement Row ──────────────────── */}

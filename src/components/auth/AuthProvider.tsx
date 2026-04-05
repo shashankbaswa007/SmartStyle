@@ -12,6 +12,13 @@ import { User } from 'firebase/auth';
 import { onAuthChange } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 
+const E2E_AUTH_BYPASS_COOKIE = 'smartstyle-e2e-auth=enabled';
+
+function hasE2EAuthBypassCookie(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.cookie.includes(E2E_AUTH_BYPASS_COOKIE);
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -31,6 +38,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const previousUserRef = useRef<User | null>(null);
 
   useEffect(() => {
+    const e2eBypassEnabled = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === 'true';
+    if (e2eBypassEnabled && hasE2EAuthBypassCookie()) {
+      const now = new Date().toISOString();
+      const e2eUser = {
+        uid: 'e2e-bypass-user',
+        email: 'e2e@smartstyle.local',
+        displayName: 'E2E Test User',
+        providerData: [{ providerId: 'google.com' }],
+        metadata: {
+          creationTime: now,
+          lastSignInTime: now,
+        },
+      } as unknown as User;
+
+      previousUserRef.current = e2eUser;
+      setUser(e2eUser);
+      setLoading(false);
+      setInitialized(true);
+      return;
+    }
+
     let didResolveAuthState = false;
     let unsubscribe: (() => void) | undefined;
 
