@@ -1,15 +1,17 @@
 "use client";
 
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
-import { Palette, Search, Sparkles, Info, Copy, Check, Download, Pipette, ChevronDown, ChevronUp } from "lucide-react";
+import { Palette, Search, Sparkles, Info, Copy, Check, Pipette, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useMounted } from "@/hooks/useMounted";
+import { useClipboardActions } from "@/hooks/useClipboardActions";
+import { usePaletteExport } from "@/hooks/usePaletteExport";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { generateColorMatches, type ColorResponse, type ColorMatch } from "@/lib/colorMatching";
+import { generateColorMatches, type ColorResponse } from "@/lib/colorMatching";
 import { SaveColorPalette } from "@/components/SaveColorPalette";
 import { MatchingWardrobeItems } from "@/components/MatchingWardrobeItems";
 import { PaletteExportMenu } from "@/components/PaletteExportMenu";
@@ -46,12 +48,13 @@ export default function ColorMatchPage() {
   const [harmonyType, setHarmonyType] = useState("recommended");
   const [loading, setLoading] = useState(false);
   const [colorData, setColorData] = useState<ColorResponse | null>(null);
-  const [copiedColor, setCopiedColor] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showAllColors, setShowAllColors] = useState(false);
   const { toast } = useToast();
   const isMounted = useMounted();
+  const { copiedValue: copiedColor, copyToClipboard } = useClipboardActions();
+  const { quickCopyAllHex } = usePaletteExport();
 
   // Respect reduced-motion preference for accessibility
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -63,69 +66,6 @@ export default function ColorMatchPage() {
     mq.addEventListener('change', handler);
     return () => mq.removeEventListener('change', handler);
   }, []);
-
-  const copyToClipboard = async (text: string, label: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopiedColor(text);
-      setTimeout(() => setCopiedColor(null), 2000);
-      toast({
-        title: "Copied!",
-        description: `${label} copied to clipboard`,
-      });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Failed to copy",
-        description: "Could not copy color to clipboard",
-      });
-    }
-  };
-
-  const exportPalette = () => {
-    if (!colorData) return;
-    
-    const paletteText = `Color Palette - ${colorData.harmonyType?.replace('_', ' ').toUpperCase()} Harmony\n\n` +
-      `Input Color: ${colorData.inputColor.name}\n${colorData.inputColor.hex}\n\n` +
-      `Matching Colors:\n` +
-      colorData.matches.map((m, i) => `${i + 1}. ${m.name} - ${m.hex}`).join('\n');
-    
-    const blob = new Blob([paletteText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `color-palette-${Date.now()}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
-    toast({
-      title: "Palette Exported!",
-      description: "Color palette saved to your downloads",
-    });
-  };
-
-  const quickCopyAll = async () => {
-    if (!colorData) return;
-    
-    const allColors = [colorData.inputColor, ...colorData.matches];
-    const hexCodes = allColors.map(c => c.hex).join(', ');
-    
-    try {
-      await navigator.clipboard.writeText(hexCodes);
-      toast({
-        title: "Colors Copied!",
-        description: "All hex codes copied to clipboard",
-      });
-    } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Failed to copy",
-        description: "Could not copy colors to clipboard",
-      });
-    }
-  };
 
   const handleSearch = () => {
     if (!color.trim()) {
@@ -461,7 +401,9 @@ export default function ColorMatchPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={quickCopyAll}
+                      onClick={() => {
+                        void quickCopyAllHex(colorData);
+                      }}
                       className="gap-2"
                     >
                       <Copy className="w-4 h-4" />
@@ -623,7 +565,9 @@ export default function ColorMatchPage() {
                           size="icon"
                           variant="secondary"
                           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity"
-                          onClick={() => copyToClipboard(match.hex, match.name || 'Color')}
+                          onClick={() => {
+                            void copyToClipboard(match.hex, match.name || 'Color');
+                          }}
                         >
                           {copiedColor === match.hex ? (
                             <Check className="w-4 h-4" />
@@ -642,7 +586,9 @@ export default function ColorMatchPage() {
                           <p className="text-base font-bold">{match.name}</p>
                         )}
                         <button
-                          onClick={() => copyToClipboard(match.hex, 'Hex code')}
+                          onClick={() => {
+                            void copyToClipboard(match.hex, 'Hex code');
+                          }}
                           className="text-xs font-mono text-muted-foreground hover:text-foreground break-all cursor-pointer transition-colors"
                         >
                           {match.hex}
