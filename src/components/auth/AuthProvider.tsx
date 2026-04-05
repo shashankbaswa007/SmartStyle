@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         uid: 'e2e-bypass-user',
         email: 'e2e@smartstyle.local',
         displayName: 'E2E Test User',
-        providerData: [{ providerId: 'google.com' }],
+        providerData: [{ providerId: 'password' }],
         metadata: {
           creationTime: now,
           lastSignInTime: now,

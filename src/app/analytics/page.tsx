@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, lazy, Suspense } from 'react';
+import { useEffect, useMemo, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import {
   TrendingUp,
@@ -33,6 +33,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import Link from 'next/link';
 import { useMounted } from '@/hooks/useMounted';
 import { useAnalyticsData } from '@/hooks/useAnalyticsData';
+import { sendUxHealthAlert } from '@/lib/ux-alerting';
 
 // Lazy load heavy components for better performance
 const Particles = lazy(() => import('@/components/Particles'));
@@ -75,6 +76,8 @@ const UX_HEALTH_THRESHOLDS = {
   criticalRecoveryRate: 40,
   criticalDropOffRate: 35,
 };
+const UX_ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const UX_ALERT_STORAGE_KEY = 'smartstyle:ux-alert:last-sent';
 
 // ─── Animation Variants ─────────────────────────────────────────
 const containerVariants = {
@@ -552,6 +555,46 @@ export default function AnalyticsPage() {
       issues,
     };
   }, [uxMetrics]);
+
+  useEffect(() => {
+    if (!user?.uid || !uxHealthSnapshot || uxHealthSnapshot.status === 'healthy') {
+      return;
+    }
+
+    const signature = `${uxHealthSnapshot.status}|${uxHealthSnapshot.issues.join('|')}`;
+    const now = Date.now();
+
+    try {
+      const raw = localStorage.getItem(UX_ALERT_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { at: number; signature: string };
+        if (
+          parsed &&
+          Number.isFinite(parsed.at) &&
+          typeof parsed.signature === 'string' &&
+          parsed.signature === signature &&
+          now - parsed.at < UX_ALERT_COOLDOWN_MS
+        ) {
+          return;
+        }
+      }
+    } catch {
+      // Ignore local storage parsing issues.
+    }
+
+    localStorage.setItem(UX_ALERT_STORAGE_KEY, JSON.stringify({ at: now, signature }));
+
+    void sendUxHealthAlert({
+      userId: user.uid,
+      status: uxHealthSnapshot.status,
+      issues: uxHealthSnapshot.issues,
+      completionRate: uxHealthSnapshot.completionRate,
+      recoveryRate: uxHealthSnapshot.recoveryRate,
+      retrySuccessRate: uxHealthSnapshot.retrySuccessRate,
+      dropOffRate: uxHealthSnapshot.dropOffRate,
+      source: 'analytics_dashboard',
+    });
+  }, [user?.uid, uxHealthSnapshot]);
 
   // ── Pre-render gates ──────────────────────────────────────────
   if (!isMounted) return null;

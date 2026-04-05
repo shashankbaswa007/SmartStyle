@@ -17,6 +17,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAccountProfileEditor } from '@/hooks/useAccountProfileEditor';
 import { useAccountDeletion } from '@/hooks/useAccountDeletion';
+import { useAccountSecurity } from '@/hooks/useAccountSecurity';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,7 +33,11 @@ import {
   Calendar,
   ArrowLeft,
   Save,
-  Trash2
+  Trash2,
+  KeyRound,
+  ShieldCheck,
+  ExternalLink,
+  Lock,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -51,8 +56,33 @@ export default function AccountSettingsPage() {
   const router = useRouter();
   const { displayName, setDisplayName, saving, saveProfile } = useAccountProfileEditor(user);
   const { deleting, deleteAccount } = useAccountDeletion(user);
+  const {
+    providerId,
+    isPasswordProvider,
+    isGoogleProvider,
+    mfaFactorCount,
+    mfaMethods,
+    currentPassword,
+    setCurrentPassword,
+    newEmail,
+    setNewEmail,
+    newPassword,
+    setNewPassword,
+    confirmPassword,
+    setConfirmPassword,
+    reauthenticating,
+    updatingEmail,
+    updatingPassword,
+    sendingResetLink,
+    reauthenticate,
+    updateEmailAddress,
+    updatePasswordValue,
+    sendResetLink,
+  } = useAccountSecurity(user);
   const [actionError, setActionError] = useState<string | null>(null);
   const [retryAction, setRetryAction] = useState<'save-profile' | 'delete-account' | null>(null);
+  const [securityError, setSecurityError] = useState<string | null>(null);
+  const [securityRetryAction, setSecurityRetryAction] = useState<'reauth' | 'update-email' | 'update-password' | 'reset-link' | null>(null);
 
   /**
    * Handle profile update
@@ -128,6 +158,84 @@ export default function AccountSettingsPage() {
 
     if (retryAction === 'delete-account') {
       await handleDeleteAccount();
+    }
+  };
+
+  const handleReauthenticate = async () => {
+    setSecurityError(null);
+    setSecurityRetryAction(null);
+    const result = await reauthenticate();
+
+    if (result.success) {
+      toast({ title: 'Re-authenticated', description: result.message });
+      return;
+    }
+
+    toast({ variant: 'destructive', title: 'Re-authentication Failed', description: result.message });
+    setSecurityError(result.message);
+    setSecurityRetryAction('reauth');
+  };
+
+  const handleUpdateEmail = async () => {
+    setSecurityError(null);
+    setSecurityRetryAction(null);
+    const result = await updateEmailAddress();
+
+    if (result.success) {
+      toast({ title: 'Email Updated', description: result.message });
+      return;
+    }
+
+    toast({ variant: 'destructive', title: 'Email Update Failed', description: result.message });
+    setSecurityError(result.message);
+    setSecurityRetryAction('update-email');
+  };
+
+  const handleUpdatePassword = async () => {
+    setSecurityError(null);
+    setSecurityRetryAction(null);
+    const result = await updatePasswordValue();
+
+    if (result.success) {
+      toast({ title: 'Password Updated', description: result.message });
+      return;
+    }
+
+    toast({ variant: 'destructive', title: 'Password Update Failed', description: result.message });
+    setSecurityError(result.message);
+    setSecurityRetryAction('update-password');
+  };
+
+  const handleSendResetLink = async () => {
+    setSecurityError(null);
+    setSecurityRetryAction(null);
+    const result = await sendResetLink();
+
+    if (result.success) {
+      toast({ title: 'Reset Link Sent', description: result.message });
+      return;
+    }
+
+    toast({ variant: 'destructive', title: 'Reset Link Failed', description: result.message });
+    setSecurityError(result.message);
+    setSecurityRetryAction('reset-link');
+  };
+
+  const handleRetrySecurityAction = async () => {
+    if (securityRetryAction === 'reauth') {
+      await handleReauthenticate();
+      return;
+    }
+    if (securityRetryAction === 'update-email') {
+      await handleUpdateEmail();
+      return;
+    }
+    if (securityRetryAction === 'update-password') {
+      await handleUpdatePassword();
+      return;
+    }
+    if (securityRetryAction === 'reset-link') {
+      await handleSendResetLink();
     }
   };
 
@@ -345,6 +453,175 @@ export default function AccountSettingsPage() {
                       <p className="text-xs text-muted-foreground font-mono">{user.uid}</p>
                     </div>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+
+          {/* Security Card */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.25 }}
+          >
+            <Card className="border-accent/20">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <KeyRound className="h-5 w-5" />
+                  Security Settings
+                </CardTitle>
+                <CardDescription>
+                  Manage password, re-authentication, and account protection settings.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {securityError && (
+                  <PageStatusAlert
+                    title="Security action failed"
+                    description={securityError}
+                    onRetry={securityRetryAction ? handleRetrySecurityAction : undefined}
+                    isRetrying={reauthenticating || updatingEmail || updatingPassword || sendingResetLink}
+                    retryLabel="Retry Security Action"
+                  />
+                )}
+
+                <div className="p-4 rounded-lg bg-accent/5 border border-accent/10 space-y-2">
+                  <p className="text-sm font-medium">Provider: {providerName}</p>
+                  <p className="text-xs text-muted-foreground">Provider ID: {providerId}</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="currentPassword">Current Password (required for sensitive updates)</Label>
+                  <Input
+                    id="currentPassword"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    className="max-w-md"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleReauthenticate}
+                      disabled={reauthenticating}
+                    >
+                      {reauthenticating ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Verifying...
+                        </>
+                      ) : (
+                        <>
+                          <ShieldCheck className="h-4 w-4 mr-2" />
+                          Re-authenticate
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {isPasswordProvider ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="newEmail">New Email Address</Label>
+                      <Input
+                        id="newEmail"
+                        type="email"
+                        value={newEmail}
+                        onChange={(e) => setNewEmail(e.target.value)}
+                        placeholder="Enter new email"
+                        className="max-w-md"
+                      />
+                      <Button onClick={handleUpdateEmail} disabled={updatingEmail || !newEmail.trim()}>
+                        {updatingEmail ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Updating Email...
+                          </>
+                        ) : (
+                          <>
+                            <Mail className="h-4 w-4 mr-2" />
+                            Update Email
+                          </>
+                        )}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="newPassword">New Password</Label>
+                      <Input
+                        id="newPassword"
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Minimum 8 characters"
+                        className="max-w-md"
+                      />
+
+                      <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        placeholder="Re-enter new password"
+                        className="max-w-md"
+                      />
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button onClick={handleUpdatePassword} disabled={updatingPassword || !newPassword || !confirmPassword}>
+                          {updatingPassword ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Updating Password...
+                            </>
+                          ) : (
+                            <>
+                              <Lock className="h-4 w-4 mr-2" />
+                              Update Password
+                            </>
+                          )}
+                        </Button>
+                        <Button variant="outline" onClick={handleSendResetLink} disabled={sendingResetLink}>
+                          {sendingResetLink ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            'Send Reset Link'
+                          )}
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="p-4 rounded-lg bg-accent/5 border border-accent/10 space-y-2">
+                    <p className="text-sm font-medium">Security actions are managed by your identity provider.</p>
+                    <p className="text-xs text-muted-foreground">
+                      For {providerName} accounts, update password, recovery options, and sign-in verification in provider settings.
+                    </p>
+                    {isGoogleProvider && (
+                      <Button asChild variant="outline" size="sm">
+                        <a href="https://myaccount.google.com/security" target="_blank" rel="noreferrer">
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Open Google Security Settings
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                <div className="p-4 rounded-lg bg-accent/5 border border-accent/10 space-y-2">
+                  <p className="text-sm font-medium">Multi-Factor Authentication (MFA)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Enrolled factors: {mfaFactorCount}
+                    {mfaMethods.length > 0 ? ` (${mfaMethods.join(', ')})` : ''}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    MFA enforcement depends on your authentication provider and project-level Firebase Auth configuration.
+                  </p>
                 </div>
               </CardContent>
             </Card>
