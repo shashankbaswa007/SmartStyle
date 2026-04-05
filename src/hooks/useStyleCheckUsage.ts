@@ -33,6 +33,8 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
   const hasTaskStartedRef = useRef(false);
   const hasTaskCompletedRef = useRef(false);
   const lastForcedRefreshFailureAtRef = useRef(0);
+  const inFlightFetchRef = useRef<Promise<UsageWindow | null> | null>(null);
+  const lastFetchAtRef = useRef(0);
 
   const fetchUsageOperation = useCallback(async ({ signal }: { signal: AbortSignal }) => {
     const user = auth.currentUser;
@@ -124,6 +126,28 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
     },
   });
 
+  const runUsageFetch = useCallback(async () => {
+    const now = Date.now();
+    if (inFlightFetchRef.current) {
+      return await inFlightFetchRef.current;
+    }
+
+    // Avoid burst requests from closely spaced auth/events/rerenders.
+    if (now - lastFetchAtRef.current < 1500) {
+      return null;
+    }
+
+    lastFetchAtRef.current = now;
+    const promise = execute();
+    inFlightFetchRef.current = promise;
+
+    try {
+      return await promise;
+    } finally {
+      inFlightFetchRef.current = null;
+    }
+  }, [execute]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAuthChecked(true);
@@ -139,23 +163,23 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
       });
       hasTaskStartedRef.current = true;
       hasTaskCompletedRef.current = false;
-      void execute();
+      void runUsageFetch();
     });
 
     return () => unsubscribe();
-  }, [execute, reset]);
+  }, [reset, runUsageFetch]);
 
   useEffect(() => {
     const onUsageConsumed = (event: Event) => {
       const customEvent = event as CustomEvent<{ scope?: string }>;
       if (customEvent.detail?.scope === RATE_LIMIT_SCOPES.recommend) {
-        void execute();
+        void runUsageFetch();
       }
     };
 
     window.addEventListener('usage:consumed', onUsageConsumed as EventListener);
     return () => window.removeEventListener('usage:consumed', onUsageConsumed as EventListener);
-  }, [execute]);
+  }, [runUsageFetch]);
 
   useEffect(() => {
     return () => {
@@ -180,7 +204,7 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
       flow: 'style_check_usage',
       step: 'manual_retry',
     });
-    const result = await execute();
+    const result = await runUsageFetch();
     if (result !== null) {
       void logUxEvent(uid, 'recovered_from_error', {
         flow: 'style_check_usage',
@@ -188,7 +212,7 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
         success: true,
       });
     }
-  }, [execute]);
+  }, [runUsageFetch]);
 
   return {
     usage,

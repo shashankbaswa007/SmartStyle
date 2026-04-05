@@ -2,6 +2,7 @@
 'use client';
 
 import { lazy, Suspense } from 'react';
+import { useEffect, useState } from 'react';
 import { useMounted } from '@/hooks/useMounted';
 import { useStyleCheckUsage } from '@/hooks/useStyleCheckUsage';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
@@ -22,6 +23,37 @@ const Particles = lazy(() => import('@/components/Particles'));
 export default function StyleCheckPage() {
   const isMounted = useMounted();
   const { usage, usageLoading, usageError, fetchUsage, isStyleCheckLimitReached } = useStyleCheckUsage();
+  const [showSplashCursor, setShowSplashCursor] = useState(false);
+  const [showParticles, setShowParticles] = useState(false);
+  const [isTabVisible, setIsTabVisible] = useState(true);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
+    const splashTimer = window.setTimeout(() => setShowSplashCursor(true), 120);
+    const particlesTimer = window.setTimeout(() => setShowParticles(true), 520);
+
+    const handleVisibilityChange = () => {
+      const visible = document.visibilityState === 'visible';
+      setIsTabVisible(visible);
+
+      if (!visible) {
+        setShowSplashCursor(false);
+        setShowParticles(false);
+      } else {
+        window.setTimeout(() => setShowSplashCursor(true), 80);
+        window.setTimeout(() => setShowParticles(true), 360);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      window.clearTimeout(splashTimer);
+      window.clearTimeout(particlesTimer);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isMounted]);
 
   return (
     <ProtectedRoute>
@@ -29,22 +61,35 @@ export default function StyleCheckPage() {
       <div className="absolute inset-0 -z-10">
         {isMounted && (
           <>
-            <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-indigo-500/10" />}>
-              <SplashCursor SPLAT_RADIUS={0.10} SPLAT_FORCE={2000} COLOR_UPDATE_SPEED={6} SIM_RESOLUTION={64} DYE_RESOLUTION={512} PRESSURE_ITERATIONS={8} />
-            </Suspense>
-            <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-purple-500/10" />}>
-              <Particles
-                className="absolute inset-0"
-                particleColors={['#a855f7', '#c4b5fd']}
-                particleCount={200}
-                particleSpread={10}
-                speed={0.5}
-                particleBaseSize={120}
-                moveParticlesOnHover={false}
-                alphaParticles={false}
-                disableRotation={true}
-              />
-            </Suspense>
+            {isTabVisible && showSplashCursor ? (
+              <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-indigo-500/10" />}>
+                <div className="opacity-40">
+                  <SplashCursor
+                    SPLAT_RADIUS={0.06}
+                    SPLAT_FORCE={900}
+                    COLOR_UPDATE_SPEED={2}
+                    SIM_RESOLUTION={48}
+                    DYE_RESOLUTION={256}
+                    PRESSURE_ITERATIONS={6}
+                  />
+                </div>
+              </Suspense>
+            ) : null}
+            {isTabVisible && showParticles ? (
+              <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-purple-500/10" />}>
+                <Particles
+                  className="absolute inset-0"
+                  particleColors={['#a855f7', '#c4b5fd']}
+                  particleCount={200}
+                  particleSpread={10}
+                  speed={0.5}
+                  particleBaseSize={120}
+                  moveParticlesOnHover={false}
+                  alphaParticles={false}
+                  disableRotation={true}
+                />
+              </Suspense>
+            ) : null}
           </>
         )}
       </div>

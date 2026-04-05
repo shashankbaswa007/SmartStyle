@@ -60,7 +60,32 @@ export function useAsyncFlow<T>({
 }: UseAsyncFlowOptions<T>): UseAsyncFlowResult<T> {
   const [loadable, setLoadable] = useState<LoadableState<T>>(() => createInitialLoadableState(initialData));
   const mountedRef = useRef(true);
+  const operationRef = useRef(operation);
+  const mapErrorRef = useRef(mapError);
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+  const retryDelayMsRef = useRef(retryDelayMs);
   const dependencyKey = getDependencyKey(dependencies);
+
+  useEffect(() => {
+    operationRef.current = operation;
+  }, [operation]);
+
+  useEffect(() => {
+    mapErrorRef.current = mapError;
+  }, [mapError]);
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    retryDelayMsRef.current = retryDelayMs;
+  }, [retryDelayMs]);
 
   useEffect(() => {
     return () => {
@@ -81,7 +106,7 @@ export function useAsyncFlow<T>({
           retryCount: attempt,
         }));
 
-        const result = await operation({ signal: controller.signal, attempt });
+        const result = await operationRef.current({ signal: controller.signal, attempt });
 
         if (!mountedRef.current) return result;
 
@@ -93,10 +118,10 @@ export function useAsyncFlow<T>({
           retryCount: attempt,
           lastUpdated: Date.now(),
         }));
-        onSuccess?.(result);
+        onSuccessRef.current?.(result);
         return result;
       } catch (error) {
-        const normalizedError = mapError?.(error) ?? categorizeError(error);
+        const normalizedError = mapErrorRef.current?.(error) ?? categorizeError(error);
         const shouldRetry = normalizedError.retryable && attempt < maxRetries;
 
         if (!shouldRetry) {
@@ -107,12 +132,12 @@ export function useAsyncFlow<T>({
               error: normalizedError,
               retryCount: attempt,
             }));
-            onError?.(normalizedError);
+            onErrorRef.current?.(normalizedError);
           }
           return null;
         }
 
-        const delayMs = normalizedError.retryAfterMs ?? retryDelayMs(attempt + 1);
+        const delayMs = normalizedError.retryAfterMs ?? retryDelayMsRef.current(attempt + 1);
         await sleep(delayMs);
       } finally {
         window.clearTimeout(timeoutId);
@@ -120,7 +145,7 @@ export function useAsyncFlow<T>({
     }
 
     return null;
-  }, [maxRetries, timeoutMs, operation, mapError, onSuccess, onError, retryDelayMs]);
+  }, [maxRetries, timeoutMs]);
 
   const retry = useCallback(async () => execute(), [execute]);
 
@@ -131,7 +156,7 @@ export function useAsyncFlow<T>({
   useEffect(() => {
     if (!autoLoad) return;
     void execute();
-  }, [autoLoad, execute, dependencyKey]);
+  }, [autoLoad, dependencyKey, execute]);
 
   return {
     loadable,

@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'smartstyle-static-v9';
+const STATIC_CACHE = 'smartstyle-static-v10';
 const OFFLINE_FALLBACK_URL = '/offline.html';
 
 const IS_DEV = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
@@ -90,7 +90,19 @@ self.addEventListener('activate', (event) => {
 
 async function handleNavigation(event) {
   const { request } = event;
+  const url = new URL(request.url);
+  const isDynamicAuthenticatedRoute =
+    url.pathname.startsWith('/style-check') ||
+    url.pathname.startsWith('/likes') ||
+    url.pathname.startsWith('/wardrobe') ||
+    url.pathname.startsWith('/analytics') ||
+    url.pathname.startsWith('/account-settings');
+
   try {
+    if (isDynamicAuthenticatedRoute) {
+      return await fetch(request);
+    }
+
     const preloadResponse = await event.preloadResponse;
     if (preloadResponse) {
       const cache = await caches.open(STATIC_CACHE);
@@ -120,9 +132,10 @@ async function handleNavigation(event) {
     return new Response(
       '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SmartStyle Offline</title></head><body><h1>SmartStyle is temporarily offline</h1><p>Please check your connection and try again.</p></body></html>',
       {
-      status: 200,
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    });
+        status: 200,
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      }
+    );
   }
 }
 

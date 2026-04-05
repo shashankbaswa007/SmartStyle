@@ -27,20 +27,22 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
   const [likedOutfits, setLikedOutfits] = useState<LikedOutfit[]>([]);
   const hasTaskStartedRef = useRef(false);
   const hasTaskCompletedRef = useRef(false);
+  const currentAuthUidRef = useRef<string | null>(null);
 
   const loadLikedOutfits = useCallback(async () => {
-    if (!userId) return [];
+    const activeUid = currentAuthUidRef.current;
+    if (!activeUid) return [];
 
-    const outfits = await getLikedOutfits(userId);
+    const outfits = await getLikedOutfits(activeUid);
     return outfits
       .filter((outfit): outfit is LikedOutfit => Boolean(outfit.id))
       .map((outfit) => ({ ...outfit, id: outfit.id! }));
-  }, [userId]);
+  }, []);
 
   const handleLoadSuccess = useCallback((data: LikedOutfit[]) => {
     setLikedOutfits(data);
     hasTaskCompletedRef.current = true;
-    void logUxEvent(userId, 'task_completed', {
+    void logUxEvent(currentAuthUidRef.current, 'task_completed', {
       flow: 'likes_load',
       step: 'likes_loaded',
       success: true,
@@ -48,15 +50,15 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
         count: data.length,
       },
     });
-  }, [userId]);
+  }, []);
 
   const handleLoadError = useCallback((error: ReturnType<typeof categorizeError>) => {
-    void logUxEvent(userId, 'error_shown', {
+    void logUxEvent(currentAuthUidRef.current, 'error_shown', {
       flow: 'likes_load',
       step: 'likes_load_failed',
       reason: error.code,
     });
-  }, [userId]);
+  }, []);
 
   const {
     loadable,
@@ -76,19 +78,37 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
     onError: handleLoadError,
   });
 
+  const executeRef = useRef(execute);
+  const resetRef = useRef(reset);
+
+  useEffect(() => {
+    executeRef.current = execute;
+  }, [execute]);
+
+  useEffect(() => {
+    resetRef.current = reset;
+  }, [reset]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAuthChecked(true);
 
       if (!user) {
+        currentAuthUidRef.current = null;
         setUserId(null);
         setIsAuthenticated(false);
         setLikedOutfits([]);
         hasTaskStartedRef.current = false;
         hasTaskCompletedRef.current = false;
-        reset();
+        resetRef.current();
         return;
       }
+
+      if (currentAuthUidRef.current === user.uid) {
+        return;
+      }
+
+      currentAuthUidRef.current = user.uid;
 
       setUserId(user.uid);
       setIsAuthenticated(true);
@@ -98,11 +118,11 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
       });
       hasTaskStartedRef.current = true;
       hasTaskCompletedRef.current = false;
-      void execute();
+      void executeRef.current();
     });
 
     return () => unsubscribe();
-  }, [execute, reset]);
+  }, []);
 
   useEffect(() => {
     return () => {
