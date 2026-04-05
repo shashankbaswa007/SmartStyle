@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'smartstyle-static-v8';
+const STATIC_CACHE = 'smartstyle-static-v9';
 const OFFLINE_FALLBACK_URL = '/offline.html';
 
 const IS_DEV = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
@@ -76,16 +76,44 @@ self.addEventListener('activate', (event) => {
           .filter((name) => name !== STATIC_CACHE)
           .map((name) => caches.delete(name))
       );
+      if ('navigationPreload' in self.registration) {
+        try {
+          await self.registration.navigationPreload.enable();
+        } catch (error) {
+          debugError('Failed to enable navigation preload', error);
+        }
+      }
       await self.clients.claim();
     })()
   );
 });
 
-async function handleNavigation(request) {
+async function handleNavigation(event) {
+  const { request } = event;
   try {
-    return await fetch(request);
+    const preloadResponse = await event.preloadResponse;
+    if (preloadResponse) {
+      const cache = await caches.open(STATIC_CACHE);
+      cache.put(request, preloadResponse.clone()).catch(() => {});
+      return preloadResponse;
+    }
+
+    const networkResponse = await fetch(request);
+    if (networkResponse && networkResponse.ok) {
+      const cache = await caches.open(STATIC_CACHE);
+      cache.put(request, networkResponse.clone()).catch(() => {});
+    }
+
+    return networkResponse;
   } catch (error) {
     debugError('Navigation fetch failed', error);
+
+    const cachedPage = await caches.match(request, { ignoreSearch: true });
+    if (cachedPage) return cachedPage;
+
+    const rootFallback = await caches.match('/');
+    if (rootFallback) return rootFallback;
+
     const fallback = await caches.match(OFFLINE_FALLBACK_URL);
     if (fallback) return fallback;
 
@@ -161,7 +189,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   if (isNavigationRequest(request)) {
-    event.respondWith(handleNavigation(request));
+    event.respondWith(handleNavigation(event));
     return;
   }
 
