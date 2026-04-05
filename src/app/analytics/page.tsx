@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
+import { useMemo, lazy, Suspense } from 'react';
 import { motion } from 'framer-motion';
 import {
   TrendingUp,
@@ -26,17 +26,9 @@ import PageStatusAlert from '@/components/PageStatusAlert';
 import QuickStartEmptyState from '@/components/QuickStartEmptyState';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useAuth } from '@/components/auth/AuthProvider';
-import {
-  getUserPreferences,
-  getRecommendationHistory,
-} from '@/lib/personalization';
-import type { UserPreferences, RecommendationHistory } from '@/lib/personalization';
-import { getLikedOutfits } from '@/lib/likedOutfits';
-import type { LikedOutfitData } from '@/lib/likedOutfits';
-import { getWardrobeItems } from '@/lib/wardrobeService';
-import type { WardrobeItemData } from '@/lib/wardrobeService';
 import Link from 'next/link';
 import { useMounted } from '@/hooks/useMounted';
+import { useAnalyticsData } from '@/hooks/useAnalyticsData';
 
 // Lazy load heavy components for better performance
 const Particles = lazy(() => import('@/components/Particles'));
@@ -332,49 +324,16 @@ function EngagementRing({ score }: { score: number }) {
 export default function AnalyticsPage() {
   const { user } = useAuth();
   const isMounted = useMounted();
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
-  const [history, setHistory] = useState<RecommendationHistory[]>([]);
-  const [likedOutfits, setLikedOutfits] = useState<LikedOutfitData[]>([]);
-  const [wardrobeItems, setWardrobeItems] = useState<WardrobeItemData[]>([]);
-
-  // Load data from Firestore
-  const loadAnalytics = useCallback(async (isRefresh = false) => {
-    try {
-      if (isRefresh) setRefreshing(true);
-      else setLoading(true);
-      setError(null);
-
-      if (!user) {
-        setLoading(false);
-        setRefreshing(false);
-        return;
-      }
-
-      const [prefs, recs, liked, wardrobe] = await Promise.all([
-        getUserPreferences(user.uid),
-        getRecommendationHistory(user.uid, 100),
-        getLikedOutfits(user.uid),
-        getWardrobeItems(user.uid).catch(() => [] as WardrobeItemData[]),
-      ]);
-
-      setPreferences(prefs);
-      setHistory(recs);
-      setLikedOutfits(liked);
-      setWardrobeItems(wardrobe);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load analytics data');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (user) loadAnalytics();
-  }, [user, loadAnalytics]);
+  const {
+    loading,
+    refreshing,
+    error,
+    preferences,
+    history,
+    likedOutfits,
+    wardrobeItems,
+    loadAnalytics,
+  } = useAnalyticsData(user?.uid);
 
   // ── Compute insights from real data ───────────────────────────
   const insights = useMemo((): StyleInsights | null => {
