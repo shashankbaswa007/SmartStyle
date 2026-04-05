@@ -28,6 +28,36 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
   const hasTaskStartedRef = useRef(false);
   const hasTaskCompletedRef = useRef(false);
 
+  const loadLikedOutfits = useCallback(async () => {
+    if (!userId) return [];
+
+    const outfits = await getLikedOutfits(userId);
+    return outfits
+      .filter((outfit): outfit is LikedOutfit => Boolean(outfit.id))
+      .map((outfit) => ({ ...outfit, id: outfit.id! }));
+  }, [userId]);
+
+  const handleLoadSuccess = useCallback((data: LikedOutfit[]) => {
+    setLikedOutfits(data);
+    hasTaskCompletedRef.current = true;
+    void logUxEvent(userId, 'task_completed', {
+      flow: 'likes_load',
+      step: 'likes_loaded',
+      success: true,
+      metadata: {
+        count: data.length,
+      },
+    });
+  }, [userId]);
+
+  const handleLoadError = useCallback((error: ReturnType<typeof categorizeError>) => {
+    void logUxEvent(userId, 'error_shown', {
+      flow: 'likes_load',
+      step: 'likes_load_failed',
+      reason: error.code,
+    });
+  }, [userId]);
+
   const {
     loadable,
     execute,
@@ -36,38 +66,14 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
     isLoading,
     isRetrying,
   } = useAsyncFlow<LikedOutfit[]>({
-    operation: async () => {
-      if (!userId) return [];
-
-      const outfits = await getLikedOutfits(userId);
-      return outfits
-        .filter((outfit): outfit is LikedOutfit => Boolean(outfit.id))
-        .map((outfit) => ({ ...outfit, id: outfit.id! }));
-    },
+    operation: loadLikedOutfits,
     autoLoad: false,
     initialData: [],
     maxRetries: 1,
     timeoutMs: 10_000,
     mapError: (error) => categorizeError(error, { fallbackMessage: 'Failed to load your liked outfits' }),
-    onSuccess: (data) => {
-      setLikedOutfits(data);
-      hasTaskCompletedRef.current = true;
-      void logUxEvent(userId, 'task_completed', {
-        flow: 'likes_load',
-        step: 'likes_loaded',
-        success: true,
-        metadata: {
-          count: data.length,
-        },
-      });
-    },
-    onError: (error) => {
-      void logUxEvent(userId, 'error_shown', {
-        flow: 'likes_load',
-        step: 'likes_load_failed',
-        reason: error.code,
-      });
-    },
+    onSuccess: handleLoadSuccess,
+    onError: handleLoadError,
   });
 
   useEffect(() => {

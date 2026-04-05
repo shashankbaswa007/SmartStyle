@@ -117,9 +117,11 @@ async function handleNavigation(event) {
     const fallback = await caches.match(OFFLINE_FALLBACK_URL);
     if (fallback) return fallback;
 
-    return new Response('Offline', {
-      status: 503,
-      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    return new Response(
+      '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SmartStyle Offline</title></head><body><h1>SmartStyle is temporarily offline</h1><p>Please check your connection and try again.</p></body></html>',
+      {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
     });
   }
 }
