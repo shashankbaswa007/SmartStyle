@@ -1,13 +1,12 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { auth } from '@/lib/firebase';
-import { onAuthStateChanged, type User } from 'firebase/auth';
-import { getSavedPalettes, deleteColorPalette, type SavedColorPalette } from '@/lib/colorPaletteService';
+import type { SavedColorPalette } from '@/lib/colorPaletteService';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { Trash2, Calendar, Tag, Sparkles, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import PageStatusAlert from '@/components/PageStatusAlert';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,61 +18,36 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useSavedPalettesData } from '@/hooks/useSavedPalettesData';
+import { useSavedPaletteFilters } from '@/hooks/useSavedPaletteFilters';
 import Link from 'next/link';
 
 export default function SavedPalettesPage() {
-  const [user, setUser] = useState<User | null>(null);
-  const [palettes, setPalettes] = useState<SavedColorPalette[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [filterOccasion, setFilterOccasion] = useState<string>('all');
-  const [filterSeason, setFilterSeason] = useState<string>('all');
+  const { user, loading: isLoading, error, palettes, refreshPalettes, deletePalette } = useSavedPalettesData();
+  const {
+    filterOccasion,
+    setFilterOccasion,
+    filterSeason,
+    setFilterSeason,
+    filteredPalettes,
+    clearFilters,
+    occasions,
+    seasons,
+  } = useSavedPaletteFilters(palettes);
   const [palettePendingDelete, setPalettePendingDelete] = useState<SavedColorPalette | null>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
-    return () => unsubscribe();
-  }, []);
-
-  const loadPalettes = useCallback(async () => {
-    if (!user) {
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const data = await getSavedPalettes(user.uid);
-      setPalettes(data);
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to load saved palettes',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user, toast]);
-
-  useEffect(() => {
-    loadPalettes();
-  }, [loadPalettes]);
-
   const handleDelete = async (paletteId: string) => {
-    if (!user || !paletteId) return;
+    if (!paletteId) return;
 
     try {
-      const result = await deleteColorPalette(user.uid, paletteId);
+      const result = await deletePalette(paletteId);
       if (result.success) {
         toast({
           title: 'Palette Deleted',
           description: 'Color palette removed successfully',
         });
         setPalettePendingDelete(null);
-        loadPalettes();
       } else {
         throw new Error(result.message);
       }
@@ -85,15 +59,6 @@ export default function SavedPalettesPage() {
       });
     }
   };
-
-  const filteredPalettes = palettes.filter((palette) => {
-    const matchesOccasion = filterOccasion === 'all' || palette.occasions?.includes(filterOccasion);
-    const matchesSeason = filterSeason === 'all' || palette.seasons?.includes(filterSeason);
-    return matchesOccasion && matchesSeason;
-  });
-
-  const occasions = ['all', 'casual', 'formal', 'party', 'business', 'sports', 'date'];
-  const seasons = ['all', 'spring', 'summer', 'fall', 'winter'];
 
   return (
     <ProtectedRoute>
@@ -170,8 +135,19 @@ export default function SavedPalettesPage() {
             </div>
           )}
 
+          {!isLoading && error && (
+            <PageStatusAlert
+              className="mx-auto max-w-2xl"
+              title="Error loading saved palettes"
+              description={error}
+              onRetry={() => {
+                void refreshPalettes();
+              }}
+            />
+          )}
+
           {/* Empty State */}
-          {!isLoading && palettes.length === 0 && (
+          {!isLoading && !error && palettes.length === 0 && (
             <div className="bg-card/40 backdrop-blur-xl border border-border/20 rounded-2xl p-12 text-center">
               <Palette className="w-16 h-16 text-muted-foreground/50 mx-auto mb-4" />
               <h3 className="text-xl font-semibold mb-2">No Saved Palettes Yet</h3>
@@ -188,7 +164,7 @@ export default function SavedPalettesPage() {
           )}
 
           {/* Palettes Grid */}
-          {!isLoading && filteredPalettes.length > 0 && (
+          {!isLoading && !error && filteredPalettes.length > 0 && (
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredPalettes.map((palette) => (
                 <motion.div
@@ -290,7 +266,7 @@ export default function SavedPalettesPage() {
           )}
 
           {/* No Results After Filtering */}
-          {!isLoading && palettes.length > 0 && filteredPalettes.length === 0 && (
+          {!isLoading && !error && palettes.length > 0 && filteredPalettes.length === 0 && (
             <div className="bg-card/40 backdrop-blur-xl border border-border/20 rounded-2xl p-12 text-center">
               <p className="text-muted-foreground">
                 No palettes match your current filters. Try adjusting the filters above.
@@ -298,10 +274,7 @@ export default function SavedPalettesPage() {
               <Button
                 variant="outline"
                 className="mt-4"
-                onClick={() => {
-                  setFilterOccasion('all');
-                  setFilterSeason('all');
-                }}
+                onClick={clearFilters}
               >
                 Clear Filters
               </Button>
