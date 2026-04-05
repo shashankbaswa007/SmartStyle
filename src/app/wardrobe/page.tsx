@@ -1,8 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc } from 'firebase/firestore';
+import { useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shirt, Plus, Filter, Trash2, TrendingUp, Sparkles, Calendar, Loader2, Shield, Info, Undo2, LightbulbIcon, Clock, Heart, AlertCircle, ChevronDown, ChevronUp, Zap, Star, Briefcase, Coffee, Plane, CloudSun, PartyPopper, Home, Search, ArrowUpDown, Palette, Footprints, Watch, Gem, Package, RefreshCw, Flame, CheckCircle2 } from 'lucide-react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -20,8 +18,9 @@ import QuickStartEmptyState from '@/components/QuickStartEmptyState';
 import { useMounted } from '@/hooks/useMounted';
 import { CONTEXT_MODES, SORT_OPTIONS, useWardrobeFilters, type ContextMode } from '@/hooks/useWardrobeFilters';
 import { useWardrobeData } from '@/hooks/useWardrobeData';
+import { useWardrobeItemActions } from '@/hooks/useWardrobeItemActions';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { deleteWardrobeItem, markItemAsWorn, WardrobeItemData } from '@/lib/wardrobeService';
+import { WardrobeItemData } from '@/lib/wardrobeService';
 import { USAGE_LIMITS } from '@/lib/usage-limits';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -89,12 +88,6 @@ function WardrobePageContent() {
   const [selectedFilter, setSelectedFilter] = useState<ItemFilter>('all');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [imageLoadErrors, setImageLoadErrors] = useState<Set<string>>(new Set());
-  const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
-  const [lastDeletedItem, setLastDeletedItem] = useState<{item: WardrobeItemData, timestamp: number} | null>(null);
-  const [showUndoToast, setShowUndoToast] = useState(false);
-  const [isUndoing, setIsUndoing] = useState(false);
-  const markingAsWornRef = useRef<Set<string>>(new Set());
-  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showInsights, setShowInsights] = useState(true);
   
   // Respect reduced-motion preference for accessibility
@@ -113,12 +106,20 @@ function WardrobePageContent() {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
-  // Cleanup undo timer on unmount to prevent state updates after unmount
-  useEffect(() => {
-    return () => {
-      if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    };
-  }, []);
+  const {
+    deletingItemId,
+    lastDeletedItem,
+    showUndoToast,
+    isUndoing,
+    handleDeleteItem,
+    handleUndoDelete,
+    handleMarkAsWorn,
+  } = useWardrobeItemActions({
+    userId,
+    isOnline,
+    wardrobeItems,
+    setWardrobeItems,
+  });
   
   // Context mode for smart filtering
   const [contextMode, setContextMode] = useState<ContextMode>('all');
@@ -187,173 +188,6 @@ function WardrobePageContent() {
     }
   };
 
-  const handleDeleteItem = async (itemId: string, description: string) => {
-    if (!userId) return;
-    
-    // Prevent operations when offline
-    if (!isOnline) {
-      toast({
-        variant: 'default',
-        title: 'No internet connection',
-        description: 'Cannot delete items while offline. Please check your connection.',
-      });
-      return;
-    }
-
-    // Prevent concurrent deletes or undo operations
-    if (deletingItemId || isUndoing) {
-      toast({
-        variant: 'default',
-        title: 'Please wait',
-        description: deletingItemId ? 'Another item is being deleted.' : 'Undo operation in progress.',
-      });
-      return;
-    }
-
-    setDeletingItemId(itemId);
-
-    // Store the item being deleted for potential undo
-    const itemToDelete = wardrobeItems.find(item => item.id === itemId);
-
-    // Optimistic update - remove from UI immediately
-    const previousItems = [...wardrobeItems];
-    setWardrobeItems(prev => prev.filter(item => item.id !== itemId));
-
-    try {
-      const result = await deleteWardrobeItem(userId, itemId);
-      
-      if (result.success) {
-        // Store deleted item for undo (available for 10 seconds)
-        if (itemToDelete) {
-          setLastDeletedItem({ item: itemToDelete, timestamp: Date.now() });
-          setShowUndoToast(true);
-          
-          // Clear any existing undo timer
-          if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-          
-          // Auto-hide undo after 10 seconds
-          undoTimerRef.current = setTimeout(() => {
-            setShowUndoToast(false);
-            setLastDeletedItem(null);
-            undoTimerRef.current = null;
-          }, 10000);
-        }
-
-        toast({
-          title: 'Item removed',
-          description: `"${description}" has been removed from your wardrobe.`,
-        });
-      } else {
-        // Rollback on failure
-        setWardrobeItems(previousItems);
-        
-        toast({
-          variant: 'destructive',
-          title: 'Failed to remove',
-          description: result.message,
-        });
-      }
-    } catch (error) {
-      
-      // Rollback on error
-      setWardrobeItems(previousItems);
-      
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to remove item from wardrobe. Please try again.',
-      });
-    } finally {
-      setDeletingItemId(null);
-    }
-  };
-
-  const handleUndoDelete = async () => {
-    if (!lastDeletedItem || !userId || isUndoing || deletingItemId) return;
-    
-    // Check if undo window has expired (10 seconds)
-    const timeSinceDelete = Date.now() - lastDeletedItem.timestamp;
-    if (timeSinceDelete > 10000) {
-      toast({
-        variant: 'default',
-        title: 'Undo window expired',
-        description: 'This item can no longer be restored. Please re-add it manually if needed.',
-      });
-      setShowUndoToast(false);
-      setLastDeletedItem(null);
-      return;
-    }
-    
-    // Prevent undo when offline
-    if (!isOnline) {
-      toast({
-        variant: 'default',
-        title: 'No internet connection',
-        description: 'Cannot restore items while offline. Please check your connection.',
-      });
-      return;
-    }
-
-    // Prevent concurrent undo operations or deletes
-    if (deletingItemId) {
-      toast({
-        variant: 'default',
-        title: 'Please wait',
-        description: 'Delete operation in progress.',
-      });
-      return;
-    }
-
-    const itemToRestore = lastDeletedItem.item;
-    
-    // Hide toast immediately
-    setShowUndoToast(false);
-    setIsUndoing(true);
-    
-    try {
-      // Re-add the item to Firestore with the same ID and data
-      const itemsRef = collection(db, 'users', userId, 'wardrobeItems');
-      const docRef = doc(itemsRef, itemToRestore.id);
-      
-      await setDoc(docRef, {
-        imageUrl: itemToRestore.imageUrl,
-        images: itemToRestore.images || undefined,
-        itemType: itemToRestore.itemType,
-        category: itemToRestore.category || '',
-        brand: itemToRestore.brand || '',
-        description: itemToRestore.description,
-        dominantColors: itemToRestore.dominantColors || [],
-        season: itemToRestore.season || [],
-        occasions: itemToRestore.occasions || [],
-        purchaseDate: itemToRestore.purchaseDate || '',
-        addedDate: itemToRestore.addedDate,
-        wornCount: itemToRestore.wornCount || 0,
-        lastWornDate: itemToRestore.lastWornDate || null,
-        tags: itemToRestore.tags || [],
-        notes: itemToRestore.notes || '',
-        isActive: true,
-      });
-      
-      // Restore in UI
-      setWardrobeItems(prev => [...prev, itemToRestore].sort((a, b) => b.addedDate - a.addedDate));
-      setLastDeletedItem(null);
-      
-      toast({
-        title: 'Item Restored',
-        description: `"${itemToRestore.description}" has been restored to your wardrobe.`,
-      });
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Restore Failed',
-        description: 'Could not restore the item. Please try adding it again.',
-      });
-      setLastDeletedItem(null);
-    } finally {
-      setIsUndoing(false);
-    }
-  };
-
   // Calculate recommendation readiness
   const getRecommendationReadiness = () => {
     const itemCount = wardrobeItems.length;
@@ -362,67 +196,6 @@ function WardrobePageContent() {
     if (itemCount < 10) return { level: 2, message: 'Good progress - recommendations improving', color: 'text-violet-600' };
     if (itemCount < 20) return { level: 3, message: 'Great wardrobe - quality recommendations available', color: 'text-purple-600' };
     return { level: 4, message: 'Excellent wardrobe - best recommendations', color: 'text-green-600' };
-  };
-
-  const handleMarkAsWorn = async (itemId: string, description: string) => {
-    if (!userId) return;
-    
-    // Prevent operations when offline
-    if (!isOnline) {
-      toast({
-        variant: 'default',
-        title: 'No internet connection',
-        description: 'Cannot update wear count while offline.',
-      });
-      return;
-    }
-
-    // Prevent duplicate requests for the same item
-    if (markingAsWornRef.current.has(itemId)) {
-      return;
-    }
-
-    markingAsWornRef.current.add(itemId);
-
-    // Optimistic update
-    const previousItems = [...wardrobeItems];
-    setWardrobeItems(prev => prev.map(item => 
-      item.id === itemId 
-        ? { ...item, wornCount: (item.wornCount || 0) + 1, lastWornDate: Date.now() }
-        : item
-    ));
-
-    try {
-      const result = await markItemAsWorn(userId, itemId);
-      
-      if (result.success) {
-        toast({
-          title: 'Marked as worn',
-          description: `"${description}" wear count updated.`,
-        });
-      } else {
-        // Rollback on failure
-        setWardrobeItems(previousItems);
-        
-        toast({
-          variant: 'destructive',
-          title: 'Failed to update',
-          description: result.message,
-        });
-      }
-    } catch (error) {
-      
-      // Rollback on error
-      setWardrobeItems(previousItems);
-      
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to update item. Please try again.',
-      });
-    } finally {
-      markingAsWornRef.current.delete(itemId);
-    }
   };
 
   const getItemTypeIcon = (type: string) => {
