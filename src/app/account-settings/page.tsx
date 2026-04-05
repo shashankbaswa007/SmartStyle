@@ -10,13 +10,12 @@
  * - Delete account (with confirmation)
  */
 
-import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { updateUserProfile } from '@/lib/userService';
-import { updateProfile } from 'firebase/auth';
+import { useAccountProfileEditor } from '@/hooks/useAccountProfileEditor';
+import { useAccountDeletion } from '@/hooks/useAccountDeletion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,16 +47,8 @@ import {
 export default function AccountSettingsPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const [displayName, setDisplayName] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState(false);
-
-  // Initialize form with user data
-  useEffect(() => {
-    if (user) {
-      setDisplayName(user.displayName || '');
-    }
-  }, [user]);
+  const { displayName, setDisplayName, saving, saveProfile } = useAccountProfileEditor(user);
+  const { deleting, deleteAccount } = useAccountDeletion(user);
 
   /**
    * Handle profile update
@@ -65,39 +56,21 @@ export default function AccountSettingsPage() {
    * - Updates Firestore user document
    */
   const handleSaveProfile = async () => {
-    if (!user) return;
+    const result = await saveProfile();
 
-    setSaving(true);
-
-    try {
-      // Update Firebase Auth profile
-      await updateProfile(user, {
-        displayName: displayName.trim(),
-      });
-
-      // Update Firestore user document
-      await updateUserProfile(user.uid, {
-        displayName: displayName.trim(),
-        email: user.email || '',
-        photoURL: user.photoURL || '',
-        provider: 'google' as any, // This won't change
-        createdAt: '', // This won't change
-        lastLoginAt: new Date().toISOString(),
-      });
-
+    if (result.success) {
       toast({
         title: 'Profile Updated',
-        description: 'Your profile has been updated successfully',
+        description: result.message,
       });
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Update Failed',
-        description: error.message || 'Failed to update profile',
-      });
-    } finally {
-      setSaving(false);
+      return;
     }
+
+    toast({
+      variant: 'destructive',
+      title: 'Update Failed',
+      description: result.message,
+    });
   };
 
   /**
@@ -107,40 +80,31 @@ export default function AccountSettingsPage() {
    * Note: Firestore cleanup should be done via Cloud Function
    */
   const handleDeleteAccount = async () => {
-    if (!user) return;
+    const result = await deleteAccount();
 
-    setDeleting(true);
-
-    try {
-      // Delete user from Firebase Auth
-      await user.delete();
-
+    if (result.success) {
       toast({
         title: 'Account Deleted',
-        description: 'Your account has been permanently deleted',
+        description: result.message,
       });
-
-      // Redirect to auth page
       router.push('/auth');
-    } catch (error: any) {
-      
-      // If re-authentication is required
-      if (error.code === 'auth/requires-recent-login') {
-        toast({
-          variant: 'destructive',
-          title: 'Re-authentication Required',
-          description: 'Please sign out and sign in again to delete your account',
-        });
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Deletion Failed',
-          description: error.message || 'Failed to delete account',
-        });
-      }
-      
-      setDeleting(false);
+      return;
     }
+
+    if (result.requiresReauth) {
+      toast({
+        variant: 'destructive',
+        title: 'Re-authentication Required',
+        description: result.message,
+      });
+      return;
+    }
+
+    toast({
+      variant: 'destructive',
+      title: 'Deletion Failed',
+      description: result.message,
+    });
   };
 
   // Show loading state
