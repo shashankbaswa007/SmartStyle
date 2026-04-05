@@ -1,11 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
 import { 
   Palette, 
   Shirt, 
@@ -19,95 +15,22 @@ import {
   RefreshCw,
   Loader2,
   Heart,
-  Target,
-  Sparkles,
   Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import PageStatusAlert from "@/components/PageStatusAlert";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-
-interface UserPreferences {
-  colorProfiles: Record<string, number>;
-  styleProfiles: Record<string, number>;
-  occasionProfiles: Record<string, number>;
-  seasonalProfiles: Record<string, number>;
-  totalLikes: number;
-  totalWears: number;
-  totalShoppingClicks: number;
-  lastUpdated: number | null;
-}
-
-interface BlocklistData {
-  hardBlocklist: {
-    colors: string[];
-    styles: string[];
-    items: string[];
-  };
-  softBlocklist: {
-    colors: string[];
-    styles: string[];
-    items: string[];
-  };
-  temporaryBlocklist: Array<{
-    color?: string;
-    style?: string;
-    item?: string;
-    expiresAt: number | null;
-    reason: string;
-  }>;
-}
+import { usePreferencesData } from "@/hooks/usePreferencesData";
 
 export default function PreferencesPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [preferences, setPreferences] = useState<UserPreferences | null>(null);
-  const [blocklists, setBlocklists] = useState<BlocklistData | null>(null);
+  const { user, loading, error, preferences, blocklists, refreshData } = usePreferencesData();
   const { toast } = useToast();
-
-  const loadUserData = useCallback(async (userId: string) => {
-    try {
-      setLoading(true);
-      
-      // Load preferences
-      const prefDoc = await getDoc(doc(db, "userPreferences", userId));
-      if (prefDoc.exists()) {
-        setPreferences(prefDoc.data() as UserPreferences);
-      }
-
-      // Load blocklists
-      const blocklistDoc = await getDoc(doc(db, "userBlocklists", userId));
-      if (blocklistDoc.exists()) {
-        setBlocklists(blocklistDoc.data() as BlocklistData);
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to load your preferences",
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        loadUserData(currentUser.uid);
-      } else {
-        setLoading(false);
-      }
-    });
-    return () => unsubscribe();
-  }, [loadUserData]);
 
   const resetPreferences = async () => {
     if (!user) return;
@@ -175,6 +98,30 @@ export default function PreferencesPage() {
           </CardContent>
         </Card>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <ProtectedRoute>
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl space-y-3">
+            <PageStatusAlert
+              title="Error loading preferences"
+              description={error}
+              onRetry={() => {
+                void refreshData();
+              }}
+              isRetrying={loading}
+            />
+            <div className="flex justify-center">
+              <Button variant="outline" onClick={() => router.push('/style-check')}>
+                Go to Style Check
+              </Button>
+            </div>
+          </div>
+        </div>
+      </ProtectedRoute>
     );
   }
 
