@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { getWardrobeItems, type WardrobeItemData } from '@/lib/wardrobeService';
 import { RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
@@ -49,6 +49,7 @@ export function useWardrobeData(): UseWardrobeDataResult {
   const hasTaskStartedRef = useRef(false);
   const hasTaskCompletedRef = useRef(false);
   const lastForcedRefreshFailureAtRef = useRef(0);
+  const authUserRef = useRef<User | null>(null);
 
   const fetchWardrobeItems = useCallback(async (
     uid: string,
@@ -129,8 +130,9 @@ export function useWardrobeData(): UseWardrobeDataResult {
   }, []);
 
   const fetchUsageLimits = useCallback(async (uid?: string | null) => {
-    const activeUser = uid || auth.currentUser?.uid;
-    if (!activeUser || !auth.currentUser) {
+    const tokenUser = authUserRef.current || auth.currentUser;
+    const activeUser = uid || tokenUser?.uid;
+    if (!activeUser || !tokenUser) {
       setUsageLimits({});
       setUsageLoading(false);
       return;
@@ -139,7 +141,12 @@ export function useWardrobeData(): UseWardrobeDataResult {
     try {
       setUsageLoading(true);
       const fetchUsageStatus = async (forceRefreshToken = false) => {
-        const idToken = await auth.currentUser!.getIdToken(forceRefreshToken);
+        const freshTokenUser = authUserRef.current || auth.currentUser;
+        if (!freshTokenUser) {
+          throw new Error('AUTH_USER_NOT_READY');
+        }
+
+        const idToken = await freshTokenUser.getIdToken(forceRefreshToken);
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), 6000);
         try {
@@ -225,19 +232,23 @@ export function useWardrobeData(): UseWardrobeDataResult {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      authUserRef.current = user;
       if (user) {
         setUserId(user.uid);
         void fetchWardrobeItems(user.uid, { silent: false, preserveExistingOnError: true });
+        void fetchUsageLimits(user.uid);
       } else {
         setUserId(null);
         hasTaskStartedRef.current = false;
         hasTaskCompletedRef.current = false;
         setLoading(false);
+        setUsageLimits({});
+        setUsageLoading(false);
       }
     });
 
     return () => unsubscribe();
-  }, [fetchWardrobeItems]);
+  }, [fetchUsageLimits, fetchWardrobeItems]);
 
   useEffect(() => {
     if (!userId) return;

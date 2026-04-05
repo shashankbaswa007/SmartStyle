@@ -28,7 +28,12 @@ function isSameOrigin(url) {
 }
 
 function isNavigationRequest(request) {
-  return request.mode === 'navigate' || request.destination === 'document';
+  const accept = request.headers.get('accept') || '';
+  return (
+    request.mode === 'navigate' ||
+    request.destination === 'document' ||
+    accept.includes('text/html')
+  );
 }
 
 function isApiRequest(url) {

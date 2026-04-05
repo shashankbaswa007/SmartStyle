@@ -36,7 +36,20 @@ export async function GET(req: Request) {
 
   const job = await getRecommendJobStatus(jobId);
   if (!job) {
-    return errorResponse(404, 'JOB_NOT_FOUND', 'No recommendation job found for the provided id');
+    // In distributed/serverless environments, a freshly queued job may not be visible immediately.
+    // Return a processing state instead of 404 so clients can keep polling without surfacing noisy errors.
+    return NextResponse.json({
+      success: true,
+      status: 'processing',
+      jobId,
+      progress: {
+        stage: 'queued',
+        imagesReady: 0,
+        totalImages: 3,
+      },
+      partialPayload: null,
+      updatedAt: Date.now(),
+    });
   }
 
   if (job.status === 'queued' || job.status === 'processing') {
