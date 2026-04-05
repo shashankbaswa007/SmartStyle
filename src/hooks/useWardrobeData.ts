@@ -48,6 +48,7 @@ export function useWardrobeData(): UseWardrobeDataResult {
   const [usageLoading, setUsageLoading] = useState(true);
   const hasTaskStartedRef = useRef(false);
   const hasTaskCompletedRef = useRef(false);
+  const lastForcedRefreshFailureAtRef = useRef(0);
 
   const fetchWardrobeItems = useCallback(async (
     uid: string,
@@ -155,7 +156,21 @@ export function useWardrobeData(): UseWardrobeDataResult {
         }
       };
 
-      const response = await fetchUsageStatus(true);
+      let response = await fetchUsageStatus(false);
+      if (response.status === 401) {
+        if (Date.now() - lastForcedRefreshFailureAtRef.current < 120_000) {
+          setUsageLimits({});
+          return;
+        }
+
+        try {
+          response = await fetchUsageStatus(true);
+        } catch {
+          lastForcedRefreshFailureAtRef.current = Date.now();
+          setUsageLimits({});
+          return;
+        }
+      }
 
       if (!response.ok) {
         setUsageLimits({});

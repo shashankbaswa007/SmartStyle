@@ -32,6 +32,7 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
   const [authChecked, setAuthChecked] = useState(false);
   const hasTaskStartedRef = useRef(false);
   const hasTaskCompletedRef = useRef(false);
+  const lastForcedRefreshFailureAtRef = useRef(0);
 
   const fetchUsageOperation = useCallback(async ({ signal }: { signal: AbortSignal }) => {
     const user = auth.currentUser;
@@ -39,8 +40,8 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
       return null;
     }
 
-    const idToken = await user.getIdToken(true);
-    const response = await fetch('/api/usage-status', {
+    let idToken = await user.getIdToken();
+    let response = await fetch('/api/usage-status', {
       cache: 'no-store',
       headers: {
         Authorization: `Bearer ${idToken}`,
@@ -48,6 +49,36 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
       },
       signal,
     });
+
+    if (response.status === 401) {
+      if (Date.now() - lastForcedRefreshFailureAtRef.current < 120_000) {
+        throw {
+          status: 401,
+          message: 'Session refresh is cooling down. Please retry in a moment.',
+          retryAfter: '120',
+        } as HttpLikeError;
+      }
+
+      try {
+        idToken = await user.getIdToken(true);
+      } catch {
+        lastForcedRefreshFailureAtRef.current = Date.now();
+        throw {
+          status: 401,
+          message: 'Session refresh failed. Please sign in again.',
+          retryAfter: null,
+        } as HttpLikeError;
+      }
+
+      response = await fetch('/api/usage-status', {
+        cache: 'no-store',
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Cache-Control': 'no-cache',
+        },
+        signal,
+      });
+    }
 
     if (!response.ok) {
       const error: HttpLikeError = {

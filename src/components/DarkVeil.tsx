@@ -2,6 +2,7 @@
 
 import { useRef, useEffect } from 'react';
 import { Renderer, Program, Mesh, Triangle, Vec2 } from 'ogl';
+import { releaseWebGlContext, tryAcquireWebGlContext } from '@/lib/webgl-context-guard';
 
 const vertex = `
 attribute vec2 position;
@@ -98,12 +99,17 @@ export default function DarkVeil({
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
+    if (!tryAcquireWebGlContext()) return;
 
     const parent = canvas.parentElement;
-    if (!parent) return;
+    if (!parent) {
+      releaseWebGlContext();
+      return;
+    }
 
     let frame = 0;
     let resize: (() => void) | null = null;
+    let loseContext: (() => void) | null = null;
 
     try {
       const renderer = new Renderer({
@@ -112,6 +118,10 @@ export default function DarkVeil({
       });
 
       const gl = renderer.gl;
+      loseContext = () => {
+        const extension = gl.getExtension('WEBGL_lose_context');
+        extension?.loseContext();
+      };
       const geometry = new Triangle(gl);
 
       const program = new Program(gl, {
@@ -157,6 +167,7 @@ export default function DarkVeil({
     } catch {
       // Graceful fallback when WebGL is unavailable (e.g. CI/headless browsers).
       canvas.style.display = 'none';
+      releaseWebGlContext();
     }
 
     return () => {
@@ -164,6 +175,8 @@ export default function DarkVeil({
       if (resize) {
         window.removeEventListener('resize', resize);
       }
+      loseContext?.();
+      releaseWebGlContext();
     };
   }, [hueShift, noiseIntensity, scanlineIntensity, speed, scanlineFrequency, warpAmount, resolutionScale]);
   return <canvas ref={ref} className="w-full h-full block" />;

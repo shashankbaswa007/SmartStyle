@@ -1,5 +1,6 @@
 'use client';
 import React, { useEffect, useRef } from 'react';
+import { releaseWebGlContext, tryAcquireWebGlContext } from '@/lib/webgl-context-guard';
 
 interface ColorRGB {
   r: number;
@@ -69,10 +70,14 @@ export default function SplashCursor({
   TRANSPARENT = true
 }: SplashCursorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const backColorR = BACK_COLOR.r;
+  const backColorG = BACK_COLOR.g;
+  const backColorB = BACK_COLOR.b;
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    if (!tryAcquireWebGlContext()) return;
 
     let pointers: Pointer[] = [pointerPrototype()];
 
@@ -90,12 +95,24 @@ export default function SplashCursor({
       SHADING,
       COLOR_UPDATE_SPEED: COLOR_UPDATE_SPEED!,
       PAUSED: false,
-      BACK_COLOR,
+      BACK_COLOR: { r: backColorR, g: backColorG, b: backColorB },
       TRANSPARENT
     };
 
     const { gl, ext } = getWebGLContext(canvas);
-    if (!gl || !ext) return;
+    if (!gl || !ext) {
+      releaseWebGlContext();
+      return;
+    }
+
+    const loseContextExtension = gl.getExtension('WEBGL_lose_context');
+
+    if (!ext.formatRGBA || !ext.formatRG || !ext.formatR || !ext.halfFloatTexType) {
+      // Some devices fail to provide required float formats; bail out safely.
+      loseContextExtension?.loseContext();
+      releaseWebGlContext();
+      return;
+    }
 
     if (!ext.supportLinearFiltering) {
       config.DYE_RESOLUTION = 256;
@@ -1272,6 +1289,8 @@ export default function SplashCursor({
       window.removeEventListener('touchstart', handleTouchStart);
       window.removeEventListener('touchmove', handleTouchMove);
       window.removeEventListener('touchend', handleTouchEnd);
+      loseContextExtension?.loseContext();
+      releaseWebGlContext();
     };
   }, [
     SIM_RESOLUTION,
@@ -1286,7 +1305,9 @@ export default function SplashCursor({
     SPLAT_FORCE,
     SHADING,
     COLOR_UPDATE_SPEED,
-    BACK_COLOR,
+    backColorR,
+    backColorG,
+    backColorB,
     TRANSPARENT
   ]);
 

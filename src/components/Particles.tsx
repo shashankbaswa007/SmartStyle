@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from 'react';
 import { Renderer, Camera, Geometry, Program, Mesh } from 'ogl';
+import { releaseWebGlContext, tryAcquireWebGlContext } from '@/lib/webgl-context-guard';
 
 interface ParticlesProps {
   particleCount?: number;
@@ -117,16 +118,19 @@ const Particles: React.FC<ParticlesProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const particleColorsKey = particleColors && particleColors.length > 0 ? particleColors.join('|') : '';
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    if (!tryAcquireWebGlContext()) return;
 
     let renderer: Renderer;
     try {
       renderer = new Renderer({ depth: false, alpha: true });
     } catch {
       // Gracefully disable particles when WebGL context cannot be created.
+      releaseWebGlContext();
       return;
     }
 
@@ -161,7 +165,7 @@ const Particles: React.FC<ParticlesProps> = ({
     const positions = new Float32Array(count * 3);
     const randoms = new Float32Array(count * 4);
     const colors = new Float32Array(count * 3);
-    const palette = particleColors && particleColors.length > 0 ? particleColors : defaultColors;
+    const palette = particleColorsKey ? particleColorsKey.split('|') : defaultColors;
 
     for (let i = 0; i < count; i++) {
       let x: number, y: number, z: number, len: number;
@@ -237,9 +241,13 @@ const Particles: React.FC<ParticlesProps> = ({
         container.removeEventListener('mousemove', handleMouseMove);
       }
       cancelAnimationFrame(animationFrameId);
+      // Explicitly release GPU resources to avoid accumulating WebGL contexts.
+      const loseContext = gl.getExtension('WEBGL_lose_context');
+      loseContext?.loseContext();
       if (container.contains(gl.canvas)) {
         container.removeChild(gl.canvas);
       }
+      releaseWebGlContext();
     };
   }, [
     particleCount,
@@ -253,7 +261,7 @@ const Particles: React.FC<ParticlesProps> = ({
     cameraDistance,
     disableRotation
     ,
-    particleColors
+    particleColorsKey
   ]);
 
   return <div ref={containerRef} className={`relative w-full h-full ${className}`} />;
