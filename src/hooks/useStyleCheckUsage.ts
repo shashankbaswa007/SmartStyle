@@ -6,6 +6,7 @@ import { auth } from '@/lib/firebase';
 import { RATE_LIMIT_SCOPES } from '@/lib/usage-limits';
 import { categorizeError } from '@/lib/error-handler';
 import { useAsyncFlow } from '@/hooks/useAsyncFlow';
+import { logUxEvent } from '@/lib/ux-events';
 
 type UsageWindow = {
   remaining: number;
@@ -73,6 +74,20 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
     maxRetries: 1,
     timeoutMs: 6_000,
     mapError: (error) => categorizeError(error, { fallbackMessage: 'Unable to load usage status. Please try again.' }),
+    onSuccess: () => {
+      void logUxEvent(auth.currentUser?.uid, 'task_completed', {
+        flow: 'style_check_usage',
+        step: 'usage_loaded',
+        success: true,
+      });
+    },
+    onError: (error) => {
+      void logUxEvent(auth.currentUser?.uid, 'error_shown', {
+        flow: 'style_check_usage',
+        step: 'usage_load_failed',
+        reason: error.code,
+      });
+    },
   });
 
   useEffect(() => {
@@ -82,6 +97,10 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
         reset();
         return;
       }
+      void logUxEvent(user.uid, 'task_started', {
+        flow: 'style_check_usage',
+        step: 'usage_load_requested',
+      });
       void execute();
     });
 
@@ -106,7 +125,19 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
   const isStyleCheckLimitReached = !usageLoading && !!usage && usage.remaining <= 0;
 
   const fetchUsage = useCallback(async () => {
-    await execute();
+    const uid = auth.currentUser?.uid;
+    void logUxEvent(uid, 'retry_clicked', {
+      flow: 'style_check_usage',
+      step: 'manual_retry',
+    });
+    const result = await execute();
+    if (result !== null) {
+      void logUxEvent(uid, 'recovered_from_error', {
+        flow: 'style_check_usage',
+        step: 'manual_retry_success',
+        success: true,
+      });
+    }
   }, [execute]);
 
   return {

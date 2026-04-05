@@ -332,6 +332,7 @@ export default function AnalyticsPage() {
     history,
     likedOutfits,
     wardrobeItems,
+    uxMetrics,
     loadAnalytics,
   } = useAnalyticsData(user?.uid);
 
@@ -632,6 +633,40 @@ export default function AnalyticsPage() {
                 <StatCard title="Wardrobe Items" value={insights.wardrobeTotal} subtitle={`${insights.wardrobeBreakdown.length} categories`} icon={Shirt} color="blue" />
                 <StatCard title="Most Active" value={insights.mostActiveMonth} subtitle={insights.totalFeedback > 0 ? `${insights.totalFeedback} ratings given` : 'Keep exploring!'} icon={Calendar} color="emerald" />
               </div>
+
+              {/* ─── UX Funnel Metrics ─────────────────────────── */}
+              {uxMetrics && (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <StatCard
+                    title="Flow Completion"
+                    value={`${uxMetrics.completionRate}%`}
+                    subtitle={`${uxMetrics.taskCompleted}/${uxMetrics.taskStarted} tasks completed`}
+                    icon={Target}
+                    color="violet"
+                  />
+                  <StatCard
+                    title="Recovery Rate"
+                    value={`${uxMetrics.recoveryRate}%`}
+                    subtitle={`${uxMetrics.recoveredFromError}/${uxMetrics.errorShown} errors recovered`}
+                    icon={RefreshCw}
+                    color="emerald"
+                  />
+                  <StatCard
+                    title="Retry Success"
+                    value={`${uxMetrics.retrySuccessRate}%`}
+                    subtitle={`${uxMetrics.recoveredFromError}/${uxMetrics.retryClicked} retries recovered`}
+                    icon={Zap}
+                    color="blue"
+                  />
+                  <StatCard
+                    title="Drop-offs"
+                    value={uxMetrics.dropOff}
+                    subtitle="Tracked abandoned flow events"
+                    icon={BarChart3}
+                    color="pink"
+                  />
+                </div>
+              )}
 
               {/* ─── Activity & Engagement Row ──────────────────── */}
               <motion.div variants={itemVariants} className="grid gap-6 md:grid-cols-2">

@@ -10,6 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useMounted } from "@/hooks/useMounted";
 import { useClipboardActions } from "@/hooks/useClipboardActions";
 import { usePaletteExport } from "@/hooks/usePaletteExport";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { logUxEvent } from "@/lib/ux-events";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { generateColorMatches, type ColorResponse } from "@/lib/colorMatching";
 import { SaveColorPalette } from "@/components/SaveColorPalette";
@@ -44,6 +46,7 @@ const itemVariants = {
 };
 
 export default function ColorMatchPage() {
+  const { user } = useAuth();
   const [color, setColor] = useState("");
   const [harmonyType, setHarmonyType] = useState("recommended");
   const [loading, setLoading] = useState(false);
@@ -77,17 +80,39 @@ export default function ColorMatchPage() {
       return;
     }
 
+    void logUxEvent(user?.uid, 'task_started', {
+      flow: 'color_match',
+      step: 'search_requested',
+      metadata: {
+        harmonyType,
+      },
+    });
+
     setLoading(true);
     try {
       // Generate color matches entirely on the client
       const data = generateColorMatches(color.trim(), harmonyType);
 
       setColorData(data);
+      void logUxEvent(user?.uid, 'task_completed', {
+        flow: 'color_match',
+        step: 'search_completed',
+        success: true,
+        metadata: {
+          harmonyType: data.harmonyType,
+          matchCount: data.matches.length,
+        },
+      });
       toast({
         title: "Success!",
         description: `Found ${data.matches.length} harmonious colors for ${data.inputColor.name || data.inputColor.hex}`,
       });
     } catch (error) {
+      void logUxEvent(user?.uid, 'error_shown', {
+        flow: 'color_match',
+        step: 'search_failed',
+        reason: error instanceof Error ? error.name : 'unknown',
+      });
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "An unexpected error occurred",
@@ -402,6 +427,10 @@ export default function ColorMatchPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
+                        void logUxEvent(user?.uid, 'step_viewed', {
+                          flow: 'color_match',
+                          step: 'quick_copy_all_clicked',
+                        });
                         void quickCopyAllHex(colorData);
                       }}
                       className="gap-2"

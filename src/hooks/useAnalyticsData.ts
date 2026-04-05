@@ -10,6 +10,7 @@ import { getLikedOutfits } from '@/lib/likedOutfits';
 import type { LikedOutfitData } from '@/lib/likedOutfits';
 import { getWardrobeItems } from '@/lib/wardrobeService';
 import type { WardrobeItemData } from '@/lib/wardrobeService';
+import { getUxEventMetrics, type UxEventMetrics } from '@/lib/ux-events';
 
 interface AnalyticsDataResult {
   loading: boolean;
@@ -19,6 +20,7 @@ interface AnalyticsDataResult {
   history: RecommendationHistory[];
   likedOutfits: LikedOutfitData[];
   wardrobeItems: WardrobeItemData[];
+  uxMetrics: UxEventMetrics | null;
   loadAnalytics: (isRefresh?: boolean) => Promise<void>;
 }
 
@@ -30,6 +32,7 @@ export function useAnalyticsData(userId?: string): AnalyticsDataResult {
   const [history, setHistory] = useState<RecommendationHistory[]>([]);
   const [likedOutfits, setLikedOutfits] = useState<LikedOutfitData[]>([]);
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItemData[]>([]);
+  const [uxMetrics, setUxMetrics] = useState<UxEventMetrics | null>(null);
 
   const loadAnalytics = useCallback(async (isRefresh = false) => {
     try {
@@ -42,20 +45,23 @@ export function useAnalyticsData(userId?: string): AnalyticsDataResult {
         setHistory([]);
         setLikedOutfits([]);
         setWardrobeItems([]);
+        setUxMetrics(null);
         return;
       }
 
-      const [prefs, recs, liked, wardrobe] = await Promise.all([
+      const [prefs, recs, liked, wardrobe, ux] = await Promise.all([
         getUserPreferences(userId),
         getRecommendationHistory(userId, 100),
         getLikedOutfits(userId),
         getWardrobeItems(userId).catch(() => [] as WardrobeItemData[]),
+        getUxEventMetrics(userId, 30),
       ]);
 
       setPreferences(prefs);
       setHistory(recs);
       setLikedOutfits(liked);
       setWardrobeItems(wardrobe);
+      setUxMetrics(ux);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load analytics data');
     } finally {
@@ -76,6 +82,7 @@ export function useAnalyticsData(userId?: string): AnalyticsDataResult {
     history,
     likedOutfits,
     wardrobeItems,
+    uxMetrics,
     loadAnalytics,
   };
 }

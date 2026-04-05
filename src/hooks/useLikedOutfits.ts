@@ -6,6 +6,7 @@ import { auth } from '@/lib/firebase';
 import { getLikedOutfits, type LikedOutfitData } from '@/lib/likedOutfits';
 import { categorizeError } from '@/lib/error-handler';
 import { useAsyncFlow } from '@/hooks/useAsyncFlow';
+import { logUxEvent } from '@/lib/ux-events';
 
 export type LikedOutfit = LikedOutfitData & { id: string };
 
@@ -48,6 +49,21 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
     mapError: (error) => categorizeError(error, { fallbackMessage: 'Failed to load your liked outfits' }),
     onSuccess: (data) => {
       setLikedOutfits(data);
+      void logUxEvent(userId, 'task_completed', {
+        flow: 'likes_load',
+        step: 'likes_loaded',
+        success: true,
+        metadata: {
+          count: data.length,
+        },
+      });
+    },
+    onError: (error) => {
+      void logUxEvent(userId, 'error_shown', {
+        flow: 'likes_load',
+        step: 'likes_load_failed',
+        reason: error.code,
+      });
     },
   });
 
@@ -65,6 +81,10 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
 
       setUserId(user.uid);
       setIsAuthenticated(true);
+      void logUxEvent(user.uid, 'task_started', {
+        flow: 'likes_load',
+        step: 'likes_load_requested',
+      });
       void execute();
     });
 
@@ -73,7 +93,18 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
 
   const refreshLikedOutfits = useCallback(async () => {
     if (!userId) return;
-    await retry();
+    void logUxEvent(userId, 'retry_clicked', {
+      flow: 'likes_load',
+      step: 'manual_retry',
+    });
+    const result = await retry();
+    if (result !== null) {
+      void logUxEvent(userId, 'recovered_from_error', {
+        flow: 'likes_load',
+        step: 'manual_retry_success',
+        success: true,
+      });
+    }
   }, [retry, userId]);
 
   return {

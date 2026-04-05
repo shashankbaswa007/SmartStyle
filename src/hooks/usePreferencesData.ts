@@ -6,6 +6,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { categorizeError } from '@/lib/error-handler';
 import { useAsyncFlow } from '@/hooks/useAsyncFlow';
+import { logUxEvent } from '@/lib/ux-events';
 
 export interface UserPreferences {
   colorProfiles: Record<string, number>;
@@ -80,6 +81,24 @@ export function usePreferencesData(): UsePreferencesDataResult {
     timeoutMs: 10_000,
     initialData: { preferences: null, blocklists: null },
     mapError: (error) => categorizeError(error, { fallbackMessage: 'Failed to load your preferences' }),
+    onSuccess: (data) => {
+      void logUxEvent(user?.uid, 'task_completed', {
+        flow: 'preferences_load',
+        step: 'preferences_loaded',
+        success: true,
+        metadata: {
+          hasPreferences: Boolean(data.preferences),
+          hasBlocklists: Boolean(data.blocklists),
+        },
+      });
+    },
+    onError: (error) => {
+      void logUxEvent(user?.uid, 'error_shown', {
+        flow: 'preferences_load',
+        step: 'preferences_load_failed',
+        reason: error.code,
+      });
+    },
   });
 
   useEffect(() => {
@@ -92,6 +111,10 @@ export function usePreferencesData(): UsePreferencesDataResult {
         return;
       }
 
+      void logUxEvent(currentUser.uid, 'task_started', {
+        flow: 'preferences_load',
+        step: 'preferences_load_requested',
+      });
       void execute();
     });
 
@@ -100,7 +123,18 @@ export function usePreferencesData(): UsePreferencesDataResult {
 
   const refreshData = useCallback(async () => {
     if (!user) return;
-    await retry();
+    void logUxEvent(user.uid, 'retry_clicked', {
+      flow: 'preferences_load',
+      step: 'manual_retry',
+    });
+    const result = await retry();
+    if (result !== null) {
+      void logUxEvent(user.uid, 'recovered_from_error', {
+        flow: 'preferences_load',
+        step: 'manual_retry_success',
+        success: true,
+      });
+    }
   }, [retry, user]);
 
   return {
