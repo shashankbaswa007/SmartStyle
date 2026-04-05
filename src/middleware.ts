@@ -19,6 +19,7 @@ import { isProtectedPath } from '@/lib/protected-routes';
 import { logger } from '@/lib/logger';
 
 const SESSION_COOKIE_NAME = 'smartstyle-session';
+const E2E_AUTH_BYPASS_COOKIE = 'smartstyle-e2e-auth';
 const DEMO_DISABLED_ROUTES = new Set([
   '/test-analytics',
   '/saved-palettes',
@@ -90,6 +91,8 @@ async function verifyFirebaseSessionCookie(sessionCookie: string): Promise<{ sub
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const e2eBypassEnabled = process.env.E2E_AUTH_BYPASS === '1';
+  const hasE2EBypassCookie = request.cookies.get(E2E_AUTH_BYPASS_COOKIE)?.value === 'enabled';
 
   const isDemoDisabledRoute = Array.from(DEMO_DISABLED_ROUTES).some(
     (route) => pathname === route || pathname.startsWith(`${route}/`)
@@ -104,7 +107,10 @@ export async function middleware(request: NextRequest) {
   const verifiedSession = sessionCookie ? await verifyFirebaseSessionCookie(sessionCookie) : null;
   const hasSessionCookie = !!sessionCookie;
   const hasFreshFallbackClaims = sessionCookie ? hasFreshFirebaseLikeClaims(sessionCookie) : false;
-  const isAuthenticated = !!verifiedSession?.sub || hasFreshFallbackClaims;
+  const isAuthenticated =
+    (e2eBypassEnabled && hasE2EBypassCookie) ||
+    !!verifiedSession?.sub ||
+    hasFreshFallbackClaims;
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
 
   logger.info('Auth middleware evaluation', {
@@ -113,6 +119,7 @@ export async function middleware(request: NextRequest) {
     hasSessionCookie,
     hasVerifiedSession: !!verifiedSession?.sub,
     hasFreshFallbackClaims,
+    hasE2EBypassCookie,
     isAuthenticated,
   });
 

@@ -122,7 +122,14 @@ const Particles: React.FC<ParticlesProps> = ({
     const container = containerRef.current;
     if (!container) return;
 
-    const renderer = new Renderer({ depth: false, alpha: true });
+    let renderer: Renderer;
+    try {
+      renderer = new Renderer({ depth: false, alpha: true });
+    } catch {
+      // Gracefully disable particles when WebGL context cannot be created.
+      return;
+    }
+
     const gl = renderer.gl;
     container.appendChild(gl.canvas);
     gl.clearColor(0, 0, 0, 0);

@@ -5,6 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { getWardrobeItems, type WardrobeItemData } from '@/lib/wardrobeService';
 import { RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
+import { logUxEvent } from '@/lib/ux-events';
 
 type UsageWindow = { remaining: number; limit: number; resetAt?: string };
 
@@ -45,15 +46,26 @@ export function useWardrobeData(): UseWardrobeDataResult {
     wardrobeUpload?: UsageWindow;
   }>({});
   const [usageLoading, setUsageLoading] = useState(true);
+  const hasTaskStartedRef = useRef(false);
+  const hasTaskCompletedRef = useRef(false);
 
   const fetchWardrobeItems = useCallback(async (
     uid: string,
     options?: { silent?: boolean; preserveExistingOnError?: boolean }
-  ) => {
+  ): Promise<boolean> => {
     const silent = options?.silent ?? false;
     const preserveExistingOnError = options?.preserveExistingOnError ?? false;
 
     try {
+      if (!silent) {
+        hasTaskStartedRef.current = true;
+        hasTaskCompletedRef.current = false;
+        void logUxEvent(uid, 'task_started', {
+          flow: 'wardrobe_load',
+          step: 'wardrobe_load_requested',
+        });
+      }
+
       if (!silent) setLoading(true);
       setIsSyncing(true);
       isSyncingRef.current = true;
@@ -68,6 +80,18 @@ export function useWardrobeData(): UseWardrobeDataResult {
 
       setWardrobeItems(items);
       setLastUpdated(Date.now());
+      if (!silent) {
+        hasTaskCompletedRef.current = true;
+        void logUxEvent(uid, 'task_completed', {
+          flow: 'wardrobe_load',
+          step: 'wardrobe_loaded',
+          success: true,
+          metadata: {
+            count: items.length,
+          },
+        });
+      }
+      return true;
     } catch (fetchError) {
       let errorMessage = 'Failed to load your wardrobe';
       if (!navigator.onLine) {
@@ -85,9 +109,17 @@ export function useWardrobeData(): UseWardrobeDataResult {
       }
 
       setError(errorMessage);
+      if (!silent) {
+        void logUxEvent(uid, 'error_shown', {
+          flow: 'wardrobe_load',
+          step: 'wardrobe_load_failed',
+          reason: fetchError instanceof Error ? fetchError.message : 'unknown',
+        });
+      }
       if (!preserveExistingOnError) {
         setWardrobeItems([]);
       }
+      return false;
     } finally {
       setLoading(false);
       setIsSyncing(false);
@@ -183,6 +215,8 @@ export function useWardrobeData(): UseWardrobeDataResult {
         void fetchWardrobeItems(user.uid, { silent: false, preserveExistingOnError: true });
       } else {
         setUserId(null);
+        hasTaskStartedRef.current = false;
+        hasTaskCompletedRef.current = false;
         setLoading(false);
       }
     });
@@ -209,6 +243,18 @@ export function useWardrobeData(): UseWardrobeDataResult {
   }, [fetchUsageLimits, userId]);
 
   useEffect(() => {
+    return () => {
+      if (!userId || !hasTaskStartedRef.current || hasTaskCompletedRef.current) return;
+
+      void logUxEvent(userId, 'drop_off', {
+        flow: 'wardrobe_load',
+        step: 'abandoned_before_completion',
+        reason: 'navigation_or_unmount',
+      });
+    };
+  }, [userId]);
+
+  useEffect(() => {
     const onUsageConsumed = (event: Event) => {
       const customEvent = event as CustomEvent<{ scope?: string }>;
       if (customEvent.detail?.scope === RATE_LIMIT_SCOPES.wardrobeOutfit || customEvent.detail?.scope === RATE_LIMIT_SCOPES.wardrobeUpload) {
@@ -225,7 +271,18 @@ export function useWardrobeData(): UseWardrobeDataResult {
 
   const refreshWardrobe = useCallback(async (options?: { silent?: boolean; preserveExistingOnError?: boolean }) => {
     if (!userId) return;
-    await fetchWardrobeItems(userId, options);
+    void logUxEvent(userId, 'retry_clicked', {
+      flow: 'wardrobe_load',
+      step: 'manual_retry',
+    });
+    const recovered = await fetchWardrobeItems(userId, options);
+    if (recovered) {
+      void logUxEvent(userId, 'recovered_from_error', {
+        flow: 'wardrobe_load',
+        step: 'manual_retry_success',
+        success: true,
+      });
+    }
   }, [fetchWardrobeItems, userId]);
 
   return {

@@ -11,6 +11,7 @@
  */
 
 import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/components/auth/AuthProvider';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
@@ -19,6 +20,7 @@ import { useAccountDeletion } from '@/hooks/useAccountDeletion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import PageStatusAlert from '@/components/PageStatusAlert';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { toast } from '@/hooks/use-toast';
@@ -49,6 +51,8 @@ export default function AccountSettingsPage() {
   const router = useRouter();
   const { displayName, setDisplayName, saving, saveProfile } = useAccountProfileEditor(user);
   const { deleting, deleteAccount } = useAccountDeletion(user);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [retryAction, setRetryAction] = useState<'save-profile' | 'delete-account' | null>(null);
 
   /**
    * Handle profile update
@@ -56,6 +60,8 @@ export default function AccountSettingsPage() {
    * - Updates Firestore user document
    */
   const handleSaveProfile = async () => {
+    setActionError(null);
+    setRetryAction(null);
     const result = await saveProfile();
 
     if (result.success) {
@@ -71,6 +77,8 @@ export default function AccountSettingsPage() {
       title: 'Update Failed',
       description: result.message,
     });
+    setActionError(result.message);
+    setRetryAction('save-profile');
   };
 
   /**
@@ -80,6 +88,8 @@ export default function AccountSettingsPage() {
    * Note: Firestore cleanup should be done via Cloud Function
    */
   const handleDeleteAccount = async () => {
+    setActionError(null);
+    setRetryAction(null);
     const result = await deleteAccount();
 
     if (result.success) {
@@ -97,6 +107,7 @@ export default function AccountSettingsPage() {
         title: 'Re-authentication Required',
         description: result.message,
       });
+      setActionError(result.message);
       return;
     }
 
@@ -105,6 +116,19 @@ export default function AccountSettingsPage() {
       title: 'Deletion Failed',
       description: result.message,
     });
+    setActionError(result.message);
+    setRetryAction('delete-account');
+  };
+
+  const handleRetryAction = async () => {
+    if (retryAction === 'save-profile') {
+      await handleSaveProfile();
+      return;
+    }
+
+    if (retryAction === 'delete-account') {
+      await handleDeleteAccount();
+    }
   };
 
   // Show loading state
@@ -177,6 +201,17 @@ export default function AccountSettingsPage() {
             Manage your profile and account preferences
           </p>
         </motion.div>
+
+        {actionError && (
+          <PageStatusAlert
+            title="Action could not be completed"
+            description={actionError}
+            onRetry={retryAction ? handleRetryAction : undefined}
+            isRetrying={saving || deleting}
+            retryLabel="Try Again"
+            className="mb-6"
+          />
+        )}
 
         <div className="grid gap-6">
           {/* Profile Information Card */}

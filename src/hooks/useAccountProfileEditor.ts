@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { updateProfile, type User } from 'firebase/auth';
 import { updateUserProfile } from '@/lib/userService';
+import { logUxEvent } from '@/lib/ux-events';
 
 interface SaveProfileResult {
   success: boolean;
@@ -46,6 +47,11 @@ export function useAccountProfileEditor(user: User | null): UseAccountProfileEdi
     }
 
     setSaving(true);
+    let wasSuccessful = false;
+    void logUxEvent(user.uid, 'task_started', {
+      flow: 'account_profile_update',
+      step: 'profile_update_requested',
+    });
 
     try {
       await updateProfile(user, {
@@ -61,16 +67,28 @@ export function useAccountProfileEditor(user: User | null): UseAccountProfileEdi
         lastLoginAt: new Date().toISOString(),
       });
 
+      wasSuccessful = true;
+
       return {
         success: true,
         message: 'Your profile has been updated successfully.',
       };
     } catch (error) {
+      void logUxEvent(user.uid, 'error_shown', {
+        flow: 'account_profile_update',
+        step: 'profile_update_failed',
+        reason: error instanceof Error ? error.message : 'unknown',
+      });
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to update profile',
       };
     } finally {
+      void logUxEvent(user.uid, 'task_completed', {
+        flow: 'account_profile_update',
+        step: 'profile_update_finished',
+        success: wasSuccessful,
+      });
       setSaving(false);
     }
   };

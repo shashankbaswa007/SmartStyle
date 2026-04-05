@@ -17,6 +17,7 @@ import { useAuth } from '@/components/auth/AuthProvider';
 import { Loader2 } from 'lucide-react';
 
 const LOGIN_GRACE_KEY = 'smartstyle_login_grace_ts';
+const E2E_AUTH_BYPASS_COOKIE = 'smartstyle-e2e-auth=enabled';
 
 function hasRecentLoginGraceWindow(maxAgeMs = 15000): boolean {
   if (typeof window === 'undefined') return false;
@@ -38,6 +39,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [resolvingSession, setResolvingSession] = useState(false);
   const checkedServerSessionRef = useRef(false);
   const userRef = useRef(user);
+  const e2eBypassEnabled = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === 'true';
+  const hasE2EBypassCookie =
+    typeof document !== 'undefined' && document.cookie.includes(E2E_AUTH_BYPASS_COOKIE);
+  const shouldBypassAuth = e2eBypassEnabled && hasE2EBypassCookie;
 
   useEffect(() => {
     userRef.current = user;
@@ -116,7 +121,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }, [initialized, user, loading, pathname, router]);
 
   // Show loading state while checking authentication state and initialization
-  if (!initialized || loading || resolvingSession) {
+  if (!shouldBypassAuth && (!initialized || loading || resolvingSession)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-4">
@@ -128,7 +133,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   }
 
   // Don't render content if user is not authenticated (will redirect)
-  if (!user) {
+  if (!shouldBypassAuth && !user) {
     return null;
   }
 
