@@ -13,7 +13,7 @@
 import Link from 'next/link';
 import { UserProfileDropdown } from '@/components/auth/UserProfileDropdown';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { Wand2, Heart, Palette, Shirt } from 'lucide-react';
+import { Wand2, Heart, Palette, Shirt, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import dynamic from 'next/dynamic';
 import AnimatedLogo from '@/components/AnimatedLogo';
@@ -92,6 +92,24 @@ export function Header() {
                 
                 <StarBorder
                   as={Link}
+                  href="/analytics"
+                  className={`group cursor-pointer rounded-full px-4 py-1.5 hover:bg-white/3 ${navMotionClass}`}
+                  color="#8b5cf6"
+                  speed="8s"
+                  thickness={1}
+                >
+                  <div className="flex flex-row items-center justify-center gap-2">
+                    <BarChart3
+                      className="h-4 w-4 text-violet-400/80 transition-[transform,color] duration-500 ease-out will-change-transform group-hover:-translate-y-0.5 group-hover:scale-105 group-hover:text-violet-300/95"
+                    />
+                    <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
+                      Analytics
+                    </span>
+                  </div>
+                </StarBorder>
+
+                <StarBorder
+                  as={Link}
                   href="/likes"
                   className={`group cursor-pointer rounded-full px-4 py-1.5 hover:bg-white/3 ${navMotionClass}`}
                   color="#8b5cf6"
@@ -156,6 +174,17 @@ export function Header() {
                   </Link>
                 </Button>
                 
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="icon"
+                  className={`h-9 w-9 hover:bg-violet-500/10 ${mobileMotionClass}`}
+                >
+                  <Link href="/analytics" title="Analytics">
+                    <BarChart3 className="w-4 h-4 text-violet-500" />
+                  </Link>
+                </Button>
+
                 <Button
                   asChild
                   variant="ghost"
