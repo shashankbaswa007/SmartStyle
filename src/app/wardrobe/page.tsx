@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
-import { auth, db } from '@/lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { db } from '@/lib/firebase';
 import { collection, doc, setDoc } from 'firebase/firestore';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Shirt, Plus, Filter, Trash2, TrendingUp, Sparkles, Calendar, Loader2, Shield, Info, Undo2, LightbulbIcon, Clock, Heart, AlertCircle, ChevronDown, ChevronUp, Zap, Star, Briefcase, Coffee, Plane, CloudSun, PartyPopper, Home, Search, ArrowUpDown, Palette, Footprints, Watch, Gem, Package, RefreshCw, Flame, CheckCircle2 } from 'lucide-react';
@@ -20,8 +19,9 @@ import PageStatusAlert from '@/components/PageStatusAlert';
 import QuickStartEmptyState from '@/components/QuickStartEmptyState';
 import { useMounted } from '@/hooks/useMounted';
 import { CONTEXT_MODES, SORT_OPTIONS, useWardrobeFilters, type ContextMode } from '@/hooks/useWardrobeFilters';
+import { useWardrobeData } from '@/hooks/useWardrobeData';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { getWardrobeItems, deleteWardrobeItem, markItemAsWorn, WardrobeItemData } from '@/lib/wardrobeService';
+import { deleteWardrobeItem, markItemAsWorn, WardrobeItemData } from '@/lib/wardrobeService';
 import { USAGE_LIMITS } from '@/lib/usage-limits';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -67,11 +67,23 @@ function WardrobePageContent() {
   const isMounted = useMounted();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [wardrobeItems, setWardrobeItems] = useState<WardrobeItemData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    wardrobeItems,
+    setWardrobeItems,
+    loading,
+    userId,
+    error,
+    setError,
+    isOnline,
+    lastUpdated,
+    isSyncing,
+    usageLimits,
+    usageLoading,
+    isOutfitLimitReached,
+    isUploadLimitReached,
+    refreshWardrobe,
+    fetchUsageLimits,
+  } = useWardrobeData();
   const ITEM_FILTERS = ['all', 'top', 'bottom', 'dress', 'shoes', 'accessory', 'outerwear'] as const;
   type ItemFilter = typeof ITEM_FILTERS[number];
   const [selectedFilter, setSelectedFilter] = useState<ItemFilter>('all');
@@ -156,201 +168,9 @@ function WardrobePageContent() {
     contextMode,
   });
   
-  // Network and sync state management
-  const [isOnline, setIsOnline] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const isSyncingRef = useRef(false);
-  const [usageLimits, setUsageLimits] = useState<{
-    wardrobeOutfit?: { remaining: number; limit: number; resetAt?: string };
-    wardrobeUpload?: { remaining: number; limit: number; resetAt?: string };
-  }>({});
-  const [usageLoading, setUsageLoading] = useState(true);
-  const FETCH_TIMEOUT_MS = 10000;
-  
   // Scale awareness for large wardrobes
   const LARGE_WARDROBE_THRESHOLD = 100;
   const isLargeWardrobe = wardrobeItems.length >= LARGE_WARDROBE_THRESHOLD;
-
-  // Network connectivity detection
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      // Auto-refresh when coming back online
-      if (userId) {
-        fetchWardrobeItems(userId, false, true);
-      }
-    };
-    const handleOffline = () => {
-      setIsOnline(false);
-    };
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
-    // Check initial state
-    setIsOnline(navigator.onLine);
-    
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [userId]);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserId(user.uid);
-        setIsAuthenticated(true);
-        fetchWardrobeItems(user.uid, false, true);
-      } else {
-        setUserId(null);
-        setIsAuthenticated(false);
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Optimized: Use polling instead of real-time subscriptions
-  // Fetches data every 45 seconds or on user action
-  useEffect(() => {
-    if (!userId) return;
-
-    // Initial fetch
-    fetchWardrobeItems(userId, false, true);
-
-    // Set up polling every 45 seconds (skip if a fetch is already in progress)
-    const pollInterval = setInterval(() => {
-      if (!isSyncingRef.current && navigator.onLine) {
-        fetchWardrobeItems(userId, true, true);
-      }
-    }, 45000); // 45 seconds
-
-    return () => clearInterval(pollInterval);
-  }, [userId]);
-
-  const fetchWardrobeItems = async (uid: string, silent = false, preserveExistingOnError = false) => {
-    try {
-      if (!silent) setLoading(true);
-      setIsSyncing(true);
-      isSyncingRef.current = true;
-      setError(null);
-      const items = await Promise.race([
-        getWardrobeItems(uid),
-        new Promise<WardrobeItemData[]>((_, reject) =>
-          window.setTimeout(() => reject(new Error('WARDROBE_FETCH_TIMEOUT')), FETCH_TIMEOUT_MS)
-        ),
-      ]);
-      
-      setWardrobeItems(items);
-      setLastUpdated(Date.now());
-    } catch (error) {
-      let errorMessage = 'Failed to load your wardrobe';
-      if (!navigator.onLine) {
-        errorMessage = 'You are offline. Reconnect and tap Retry.';
-      } else if (error instanceof Error && error.message === 'WARDROBE_FETCH_TIMEOUT') {
-        errorMessage = 'Wardrobe request timed out. Please retry.';
-      }
-      if (error && typeof error === 'object' && 'code' in error) {
-        if (error.code === 'permission-denied') {
-          errorMessage = 'Permission denied. Please sign in again.';
-        } else if (error.code === 'unavailable') {
-          errorMessage = 'Service temporarily unavailable. Please try again.';
-        }
-      }
-      
-      setError(errorMessage);
-      if (!preserveExistingOnError) {
-        setWardrobeItems([]);
-      }
-    } finally {
-      setLoading(false);
-      setIsSyncing(false);
-      isSyncingRef.current = false;
-    }
-  };
-
-  const fetchUsageLimits = useCallback(async (uid?: string | null) => {
-    const activeUser = uid || auth.currentUser?.uid;
-    if (!activeUser || !auth.currentUser) {
-      setUsageLimits({});
-      setUsageLoading(false);
-      return;
-    }
-
-    try {
-      setUsageLoading(true);
-      const fetchUsageStatus = async (forceRefreshToken = false) => {
-        const idToken = await auth.currentUser!.getIdToken(forceRefreshToken);
-        const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), 6000);
-        try {
-          return await fetch('/api/usage-status', {
-            cache: 'no-store',
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-              'Cache-Control': 'no-cache',
-            },
-            signal: controller.signal,
-          });
-        } finally {
-          window.clearTimeout(timeoutId);
-        }
-      };
-
-      const response = await fetchUsageStatus(true);
-
-      if (!response.ok) {
-        setUsageLimits({});
-        return;
-      }
-      const data = await response.json();
-
-      setUsageLimits({
-        wardrobeOutfit: data?.usage?.wardrobeOutfit
-          ? {
-              remaining: data.usage.wardrobeOutfit.remaining,
-              limit: data.usage.wardrobeOutfit.limit,
-              resetAt: data.usage.wardrobeOutfit.resetAt,
-            }
-          : undefined,
-        wardrobeUpload: data?.usage?.wardrobeUpload
-          ? {
-              remaining: data.usage.wardrobeUpload.remaining,
-              limit: data.usage.wardrobeUpload.limit,
-              resetAt: data.usage.wardrobeUpload.resetAt,
-            }
-          : undefined,
-      });
-    } catch {
-      // Non-blocking for wardrobe browsing.
-      setUsageLimits({});
-    } finally {
-      setUsageLoading(false);
-    }
-  }, []);
-
-  const isOutfitLimitReached = !usageLoading && !!usageLimits.wardrobeOutfit && usageLimits.wardrobeOutfit.remaining <= 0;
-  const isUploadLimitReached = !usageLoading && !!usageLimits.wardrobeUpload && usageLimits.wardrobeUpload.remaining <= 0;
-
-  useEffect(() => {
-    if (!userId) return;
-    fetchUsageLimits(userId);
-  }, [userId, fetchUsageLimits]);
-
-  useEffect(() => {
-    const onUsageConsumed = (event: Event) => {
-      const customEvent = event as CustomEvent<{ scope?: string }>;
-      if (customEvent.detail?.scope === 'wardrobe-outfit' || customEvent.detail?.scope === 'wardrobe-upload') {
-        fetchUsageLimits(userId);
-      }
-    };
-
-    window.addEventListener('usage:consumed', onUsageConsumed as EventListener);
-    return () => window.removeEventListener('usage:consumed', onUsageConsumed as EventListener);
-  }, [fetchUsageLimits, userId]);
 
   const handleRefresh = () => {
     if (userId) {
@@ -363,8 +183,7 @@ function WardrobePageContent() {
         return;
       }
       setError(null);
-      setLoading(true);
-      fetchWardrobeItems(userId, false, false);
+      void refreshWardrobe({ silent: false, preserveExistingOnError: false });
     }
   };
 
@@ -2095,9 +1914,9 @@ function WardrobePageContent() {
                   description: 'Item saved. Syncing wardrobe view...',
                 });
                 if (userId) {
-                  fetchWardrobeItems(userId, true, true);
+                  void refreshWardrobe({ silent: true, preserveExistingOnError: true });
                 }
-                fetchUsageLimits(userId);
+                void fetchUsageLimits(userId);
               }}
             />
           </Suspense>
