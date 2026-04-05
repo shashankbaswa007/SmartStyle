@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
@@ -56,6 +56,8 @@ interface UsePreferencesDataResult {
 export function usePreferencesData(): UsePreferencesDataResult {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const hasTaskStartedRef = useRef(false);
+  const hasTaskCompletedRef = useRef(false);
 
   const { loadable, execute, retry, reset, isLoading, isRetrying } = useAsyncFlow<PreferencesDataPayload>({
     operation: async () => {
@@ -82,6 +84,7 @@ export function usePreferencesData(): UsePreferencesDataResult {
     initialData: { preferences: null, blocklists: null },
     mapError: (error) => categorizeError(error, { fallbackMessage: 'Failed to load your preferences' }),
     onSuccess: (data) => {
+      hasTaskCompletedRef.current = true;
       void logUxEvent(user?.uid, 'task_completed', {
         flow: 'preferences_load',
         step: 'preferences_loaded',
@@ -107,6 +110,8 @@ export function usePreferencesData(): UsePreferencesDataResult {
       setUser(currentUser);
 
       if (!currentUser) {
+        hasTaskStartedRef.current = false;
+        hasTaskCompletedRef.current = false;
         reset();
         return;
       }
@@ -115,11 +120,25 @@ export function usePreferencesData(): UsePreferencesDataResult {
         flow: 'preferences_load',
         step: 'preferences_load_requested',
       });
+      hasTaskStartedRef.current = true;
+      hasTaskCompletedRef.current = false;
       void execute();
     });
 
     return () => unsubscribe();
   }, [execute, reset]);
+
+  useEffect(() => {
+    return () => {
+      if (!user?.uid || !hasTaskStartedRef.current || hasTaskCompletedRef.current) return;
+
+      void logUxEvent(user.uid, 'drop_off', {
+        flow: 'preferences_load',
+        step: 'abandoned_before_completion',
+        reason: 'navigation_or_unmount',
+      });
+    };
+  }, [user]);
 
   const refreshData = useCallback(async () => {
     if (!user) return;

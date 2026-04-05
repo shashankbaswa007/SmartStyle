@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { deleteColorPalette, getSavedPalettes, type SavedColorPalette } from '@/lib/colorPaletteService';
@@ -22,6 +22,8 @@ export function useSavedPalettesData(): UseSavedPalettesDataResult {
   const [user, setUser] = useState<User | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [palettes, setPalettes] = useState<SavedColorPalette[]>([]);
+  const hasTaskStartedRef = useRef(false);
+  const hasTaskCompletedRef = useRef(false);
 
   const { loadable, execute, retry, reset, isLoading, isRetrying } = useAsyncFlow<SavedColorPalette[]>({
     operation: async () => {
@@ -35,6 +37,7 @@ export function useSavedPalettesData(): UseSavedPalettesDataResult {
     mapError: (error) => categorizeError(error, { fallbackMessage: 'Failed to load saved palettes' }),
     onSuccess: (data) => {
       setPalettes(data);
+      hasTaskCompletedRef.current = true;
       void logUxEvent(user?.uid, 'task_completed', {
         flow: 'saved_palettes_load',
         step: 'saved_palettes_loaded',
@@ -58,6 +61,8 @@ export function useSavedPalettesData(): UseSavedPalettesDataResult {
 
       if (!currentUser) {
         setPalettes([]);
+        hasTaskStartedRef.current = false;
+        hasTaskCompletedRef.current = false;
         reset();
         return;
       }
@@ -66,11 +71,25 @@ export function useSavedPalettesData(): UseSavedPalettesDataResult {
         flow: 'saved_palettes_load',
         step: 'saved_palettes_load_requested',
       });
+      hasTaskStartedRef.current = true;
+      hasTaskCompletedRef.current = false;
       void execute();
     });
 
     return () => unsubscribe();
   }, [execute, reset]);
+
+  useEffect(() => {
+    return () => {
+      if (!user?.uid || !hasTaskStartedRef.current || hasTaskCompletedRef.current) return;
+
+      void logUxEvent(user.uid, 'drop_off', {
+        flow: 'saved_palettes_load',
+        step: 'abandoned_before_completion',
+        reason: 'navigation_or_unmount',
+      });
+    };
+  }, [user]);
 
   const refreshPalettes = useCallback(async () => {
     if (!user) return;

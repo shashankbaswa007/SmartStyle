@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { getLikedOutfits, type LikedOutfitData } from '@/lib/likedOutfits';
@@ -25,6 +25,8 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [likedOutfits, setLikedOutfits] = useState<LikedOutfit[]>([]);
+  const hasTaskStartedRef = useRef(false);
+  const hasTaskCompletedRef = useRef(false);
 
   const {
     loadable,
@@ -49,6 +51,7 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
     mapError: (error) => categorizeError(error, { fallbackMessage: 'Failed to load your liked outfits' }),
     onSuccess: (data) => {
       setLikedOutfits(data);
+      hasTaskCompletedRef.current = true;
       void logUxEvent(userId, 'task_completed', {
         flow: 'likes_load',
         step: 'likes_loaded',
@@ -75,6 +78,8 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
         setUserId(null);
         setIsAuthenticated(false);
         setLikedOutfits([]);
+        hasTaskStartedRef.current = false;
+        hasTaskCompletedRef.current = false;
         reset();
         return;
       }
@@ -85,11 +90,25 @@ export function useLikedOutfits(): UseLikedOutfitsResult {
         flow: 'likes_load',
         step: 'likes_load_requested',
       });
+      hasTaskStartedRef.current = true;
+      hasTaskCompletedRef.current = false;
       void execute();
     });
 
     return () => unsubscribe();
   }, [execute, reset]);
+
+  useEffect(() => {
+    return () => {
+      if (!userId || !hasTaskStartedRef.current || hasTaskCompletedRef.current) return;
+
+      void logUxEvent(userId, 'drop_off', {
+        flow: 'likes_load',
+        step: 'abandoned_before_completion',
+        reason: 'navigation_or_unmount',
+      });
+    };
+  }, [userId]);
 
   const refreshLikedOutfits = useCallback(async () => {
     if (!userId) return;

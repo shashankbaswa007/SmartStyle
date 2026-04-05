@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { RATE_LIMIT_SCOPES } from '@/lib/usage-limits';
@@ -30,6 +30,8 @@ interface UseStyleCheckUsageResult {
 
 export function useStyleCheckUsage(): UseStyleCheckUsageResult {
   const [authChecked, setAuthChecked] = useState(false);
+  const hasTaskStartedRef = useRef(false);
+  const hasTaskCompletedRef = useRef(false);
 
   const fetchUsageOperation = useCallback(async ({ signal }: { signal: AbortSignal }) => {
     const user = auth.currentUser;
@@ -75,6 +77,7 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
     timeoutMs: 6_000,
     mapError: (error) => categorizeError(error, { fallbackMessage: 'Unable to load usage status. Please try again.' }),
     onSuccess: () => {
+      hasTaskCompletedRef.current = true;
       void logUxEvent(auth.currentUser?.uid, 'task_completed', {
         flow: 'style_check_usage',
         step: 'usage_loaded',
@@ -94,6 +97,8 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setAuthChecked(true);
       if (!user) {
+        hasTaskStartedRef.current = false;
+        hasTaskCompletedRef.current = false;
         reset();
         return;
       }
@@ -101,6 +106,8 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
         flow: 'style_check_usage',
         step: 'usage_load_requested',
       });
+      hasTaskStartedRef.current = true;
+      hasTaskCompletedRef.current = false;
       void execute();
     });
 
@@ -118,6 +125,18 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
     window.addEventListener('usage:consumed', onUsageConsumed as EventListener);
     return () => window.removeEventListener('usage:consumed', onUsageConsumed as EventListener);
   }, [execute]);
+
+  useEffect(() => {
+    return () => {
+      if (!hasTaskStartedRef.current || hasTaskCompletedRef.current) return;
+
+      void logUxEvent(auth.currentUser?.uid, 'drop_off', {
+        flow: 'style_check_usage',
+        step: 'abandoned_before_completion',
+        reason: 'navigation_or_unmount',
+      });
+    };
+  }, []);
 
   const usage = loadable.data;
   const usageLoading = !authChecked || isLoading || isRetrying;
