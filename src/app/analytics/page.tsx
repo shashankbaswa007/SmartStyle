@@ -527,14 +527,17 @@ export default function AnalyticsPage() {
       : 0;
 
     const issues: string[] = [];
+    const hasCompletionSample = uxMetrics.taskStarted > 0;
+    const hasRecoverySample = uxMetrics.errorShown > 0;
+    const hasRetrySample = uxMetrics.retryClicked > 0;
 
-    if (uxMetrics.completionRate < UX_HEALTH_THRESHOLDS.minCompletionRate) {
+    if (hasCompletionSample && uxMetrics.completionRate < UX_HEALTH_THRESHOLDS.minCompletionRate) {
       issues.push(`Completion is ${uxMetrics.completionRate}% (target ${UX_HEALTH_THRESHOLDS.minCompletionRate}%+)`);
     }
-    if (uxMetrics.recoveryRate < UX_HEALTH_THRESHOLDS.minRecoveryRate) {
+    if (hasRecoverySample && uxMetrics.recoveryRate < UX_HEALTH_THRESHOLDS.minRecoveryRate) {
       issues.push(`Recovery is ${uxMetrics.recoveryRate}% (target ${UX_HEALTH_THRESHOLDS.minRecoveryRate}%+)`);
     }
-    if (uxMetrics.retrySuccessRate < UX_HEALTH_THRESHOLDS.minRetrySuccessRate) {
+    if (hasRetrySample && uxMetrics.retrySuccessRate < UX_HEALTH_THRESHOLDS.minRetrySuccessRate) {
       issues.push(`Retry success is ${uxMetrics.retrySuccessRate}% (target ${UX_HEALTH_THRESHOLDS.minRetrySuccessRate}%+)`);
     }
     if (dropOffRate > UX_HEALTH_THRESHOLDS.maxDropOffRate) {
@@ -542,8 +545,8 @@ export default function AnalyticsPage() {
     }
 
     const isCritical =
-      uxMetrics.completionRate < UX_HEALTH_THRESHOLDS.criticalCompletionRate ||
-      uxMetrics.recoveryRate < UX_HEALTH_THRESHOLDS.criticalRecoveryRate ||
+      (hasCompletionSample && uxMetrics.completionRate < UX_HEALTH_THRESHOLDS.criticalCompletionRate) ||
+      (hasRecoverySample && uxMetrics.recoveryRate < UX_HEALTH_THRESHOLDS.criticalRecoveryRate) ||
       dropOffRate > UX_HEALTH_THRESHOLDS.criticalDropOffRate;
 
     return {
@@ -827,9 +830,15 @@ export default function AnalyticsPage() {
                       )}
 
                       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-xs text-muted-foreground">
-                        <p>Completion: {uxHealthSnapshot.completionRate}%</p>
-                        <p>Recovery: {uxHealthSnapshot.recoveryRate}%</p>
-                        <p>Retry Success: {uxHealthSnapshot.retrySuccessRate}%</p>
+                        <p>
+                          Completion: {uxMetrics?.taskStarted ? `${uxHealthSnapshot.completionRate}%` : 'N/A'}
+                        </p>
+                        <p>
+                          Recovery: {uxMetrics?.errorShown ? `${uxHealthSnapshot.recoveryRate}%` : 'N/A'}
+                        </p>
+                        <p>
+                          Retry Success: {uxMetrics?.retryClicked ? `${uxHealthSnapshot.retrySuccessRate}%` : 'N/A'}
+                        </p>
                         <p>Drop-off Rate: {uxHealthSnapshot.dropOffRate}%</p>
                       </div>
                     </CardContent>

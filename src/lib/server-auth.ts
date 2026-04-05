@@ -1,5 +1,11 @@
 import admin from '@/lib/firebase-admin';
 import type { NextRequest } from 'next/server';
+import { createRemoteJWKSet } from 'jose/jwks/remote';
+import { jwtVerify } from 'jose/jwt/verify';
+
+const GOOGLE_JWKS = createRemoteJWKSet(
+  new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com')
+);
 
 export class AuthError extends Error {
   status: number;
@@ -45,6 +51,29 @@ function canUseDevAuthFallback() {
   return process.env.NODE_ENV !== 'production';
 }
 
+async function verifyWithGoogleJwks(token: string): Promise<string | null> {
+  try {
+    const { payload } = await jwtVerify(token, GOOGLE_JWKS);
+
+    const audience = typeof payload.aud === 'string' ? payload.aud : '';
+    const issuer = typeof payload.iss === 'string' ? payload.iss : '';
+    const subject = typeof payload.sub === 'string' ? payload.sub : '';
+
+    if (!audience || !issuer || !subject) {
+      return null;
+    }
+
+    const expectedIssuer = `https://securetoken.google.com/${audience}`;
+    if (issuer !== expectedIssuer) {
+      return null;
+    }
+
+    return subject;
+  } catch {
+    return null;
+  }
+}
+
 export async function verifyBearerToken(request: Request | NextRequest): Promise<string> {
   const token = extractBearerToken(request);
   if (!token) {
@@ -55,6 +84,11 @@ export async function verifyBearerToken(request: Request | NextRequest): Promise
     const decoded = await admin.auth().verifyIdToken(token);
     return decoded.uid;
   } catch {
+    const jwksUid = await verifyWithGoogleJwks(token);
+    if (jwksUid) {
+      return jwksUid;
+    }
+
     if (canUseDevAuthFallback()) {
       const fallbackUid = extractUidFromUnverifiedToken(token);
       if (fallbackUid) {
