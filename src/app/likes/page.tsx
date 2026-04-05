@@ -1,8 +1,5 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { auth } from '@/lib/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
 import { motion } from 'framer-motion';
 import { AlertCircle, Heart, Loader2, ShoppingCart, Sparkles, Trash2, Shirt } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,40 +9,17 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { lazy, Suspense } from 'react';
 import dynamic from 'next/dynamic';
+import PageStatusAlert from '@/components/PageStatusAlert';
 const Particles = dynamic(() => import('@/components/Particles'), { ssr: false });
 const ShinyText = lazy(() => import('@/components/ShinyText'));
 const TextPressure = lazy(() => import('@/components/TextPressure'));
 import { useMounted } from '@/hooks/useMounted';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { getLikedOutfits, markLikedOutfitAsWorn, removeLikedOutfit } from '@/lib/likedOutfits';
-import { toast } from '@/hooks/use-toast';
+import { useLikedOutfitActions } from '@/hooks/useLikedOutfitActions';
+import { useLikedOutfits } from '@/hooks/useLikedOutfits';
+import { useOutfitImageLoading } from '@/hooks/useOutfitImageLoading';
 import Link from 'next/link';
 import Image from 'next/image';
-import { updatePreferencesFromWear } from '@/lib/preference-engine';
-
-interface LikedOutfit {
-  id: string;
-  imageUrl: string;
-  title: string;
-  description: string;
-  items: string[];
-  occasion?: string;
-  styleType?: string;
-  colorPalette: string[];
-  shoppingLinks: {
-    amazon: string | null;
-    tatacliq: string | null;
-    myntra: string | null;
-  };
-  itemShoppingLinks?: Array<{
-    item: string;
-    amazon: string;
-    tatacliq: string;
-    myntra: string;
-  }>;
-  likedAt: number;
-  wornAt?: number;
-}
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -72,235 +46,15 @@ const itemVariants = {
 
 export default function LikesPage() {
   const isMounted = useMounted();
-  const [likedOutfits, setLikedOutfits] = useState<LikedOutfit[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [markingWornId, setMarkingWornId] = useState<string | null>(null);
-  const [imageStates, setImageStates] = useState<Map<string, 'loading' | 'loaded' | 'error' | 'placeholder'>>(new Map());
-  const [imageRetryCount, setImageRetryCount] = useState<Map<string, number>>(new Map());
-
-  const PLACEHOLDER_IMAGE = 'https://via.placeholder.com/800x1000/6366f1/ffffff?text=Outfit+Preview';
-
-  const getSafeImageUrl = (url: string | undefined): string => {
-    if (!url) return PLACEHOLDER_IMAGE;
-    if (url.startsWith('data:')) return url;
-    try {
-      const parsed = new URL(url);
-      return parsed.toString();
-    } catch {
-      return PLACEHOLDER_IMAGE;
-    }
-  };
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserId(user.uid);
-        setIsAuthenticated(true);
-        fetchLikedOutfits(user.uid);
-      } else {
-        setUserId(null);
-        setIsAuthenticated(false);
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const states = new Map<string, 'loading' | 'loaded' | 'error' | 'placeholder'>();
-    likedOutfits.forEach((outfit) => {
-      const safeUrl = getSafeImageUrl(outfit.imageUrl);
-      if (safeUrl === PLACEHOLDER_IMAGE) {
-        states.set(outfit.id, 'placeholder');
-      } else if (safeUrl.startsWith('data:')) {
-        states.set(outfit.id, 'loaded');
-      } else {
-        states.set(outfit.id, 'loading');
-      }
-    });
-    setImageStates(states);
-    setImageRetryCount(new Map());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [likedOutfits]);
-
-  useEffect(() => {
-    const hasLoadingImages = Array.from(imageStates.values()).some((state) => state === 'loading');
-    if (!hasLoadingImages) return;
-
-    const timeoutId = setTimeout(() => {
-      setImageStates((prev) => {
-        let changed = false;
-        const next = new Map(prev);
-        prev.forEach((state, outfitId) => {
-          if (state === 'loading') {
-            next.set(outfitId, 'error');
-            changed = true;
-          }
-        });
-        return changed ? next : prev;
-      });
-    }, 15000);
-
-    return () => clearTimeout(timeoutId);
-  }, [imageStates]);
-
-  const markImageLoaded = (outfitId: string) => {
-    setImageStates((prev) => {
-      const next = new Map(prev);
-      next.set(outfitId, 'loaded');
-      return next;
-    });
-  };
-
-  const markImageError = (outfitId: string) => {
-    setImageStates((prev) => {
-      const next = new Map(prev);
-      next.set(outfitId, 'error');
-      return next;
-    });
-  };
-
-  const retryImageLoad = (outfitId: string) => {
-    const currentRetries = imageRetryCount.get(outfitId) || 0;
-    if (currentRetries >= 1) {
-      markImageError(outfitId);
-      return;
-    }
-
-    setImageRetryCount((prev) => {
-      const next = new Map(prev);
-      next.set(outfitId, currentRetries + 1);
-      return next;
-    });
-
-    setImageStates((prev) => {
-      const next = new Map(prev);
-      next.set(outfitId, 'loading');
-      return next;
-    });
-  };
+  const { userId, isAuthenticated, loading, error, likedOutfits, setLikedOutfits, refreshLikedOutfits } = useLikedOutfits();
+  const { markingWornId, handleRemoveLike, handleMarkAsWorn } = useLikedOutfitActions({
+    userId,
+    setLikedOutfits,
+  });
+  const { imageStates, imageRetryCount, getSafeImageUrl, markImageLoaded, markImageError, retryImageLoad } = useOutfitImageLoading(likedOutfits);
 
   const handleRefresh = () => {
-    if (userId) {
-      setError(null);
-      setLoading(true);
-      fetchLikedOutfits(userId);
-    }
-  };
-
-  const handleRemoveLike = async (outfitId: string, outfitTitle: string) => {
-    if (!userId) return;
-
-    try {
-      const result = await removeLikedOutfit(userId, outfitId);
-      
-      if (result.success) {
-        // Remove from local state immediately for better UX
-        setLikedOutfits(prev => prev.filter(outfit => outfit.id !== outfitId));
-        
-        toast({
-          title: 'Removed from likes',
-          description: `"${outfitTitle}" has been removed from your favorites.`,
-        });
-      } else {
-        toast({
-          variant: 'destructive',
-          title: 'Failed to remove',
-          description: result.message,
-        });
-      }
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to remove outfit from likes',
-      });
-    }
-  };
-
-  const fetchLikedOutfits = async (uid: string) => {
-    try {
-      setLoading(true);
-      setError(null);
-      // Use the centralized getLikedOutfits function
-      const outfitsData = await getLikedOutfits(uid);
-      
-      // Data already has the id field from getLikedOutfits
-      setLikedOutfits(outfitsData as LikedOutfit[]);
-    } catch (error) {
-      
-      // Set user-friendly error message
-      let errorMessage = 'Failed to load your liked outfits';
-      if ((error as any)?.code === 'permission-denied') {
-        errorMessage = 'Permission denied. Please sign in again.';
-      } else if ((error as any)?.code === 'unavailable') {
-        errorMessage = 'Database temporarily unavailable. Please try again later.';
-      } else if (error instanceof Error) {
-        errorMessage = error.message;
-      }
-      
-      setError(errorMessage);
-      setLikedOutfits([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getCurrentSeason = (): 'summer' | 'winter' | 'monsoon' => {
-    const month = new Date().getMonth() + 1;
-    if (month >= 6 && month <= 9) return 'monsoon';
-    if (month >= 11 || month <= 2) return 'winter';
-    return 'summer';
-  };
-
-  const handleMarkAsWorn = async (outfit: LikedOutfit) => {
-    if (!userId || !outfit.id || outfit.wornAt) return;
-
-    setMarkingWornId(outfit.id);
-    try {
-      const season = getCurrentSeason();
-      const prefResult = await updatePreferencesFromWear(userId, {
-        colorPalette: outfit.colorPalette,
-        items: outfit.items,
-        styleType: outfit.styleType,
-        occasion: outfit.occasion,
-        description: outfit.description,
-        title: outfit.title,
-      }, {
-        occasion: outfit.occasion || 'casual',
-        season,
-      });
-
-      if (!prefResult.success) {
-        throw new Error(prefResult.message || 'Failed to update preferences');
-      }
-
-      const wearResult = await markLikedOutfitAsWorn(userId, outfit.id);
-      if (!wearResult.success) {
-        throw new Error(wearResult.message || 'Failed to save worn state');
-      }
-
-      setLikedOutfits(prev => prev.map(item =>
-        item.id === outfit.id ? { ...item, wornAt: Date.now() } : item
-      ));
-
-      toast({
-        title: 'Marked as worn',
-        description: `We'll use ${outfit.title} as a strong preference signal for future recommendations.`,
-      });
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Update failed',
-        description: error instanceof Error ? error.message : 'Failed to mark outfit as worn',
-      });
-    } finally {
-      setMarkingWornId(null);
-    }
+    void refreshLikedOutfits();
   };
 
   // Helper to convert color name/hex to pure hex
@@ -421,29 +175,19 @@ export default function LikesPage() {
             </AlertDescription>
           </Alert>
         ) : error ? (
-          <Alert className="max-w-2xl mx-auto bg-red-500/10 dark:bg-red-500/10 backdrop-blur-xl border-red-500/30" variant="destructive">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            <AlertTitle>Error Loading Likes</AlertTitle>
-            <AlertDescription>
-              <p className="mb-4">{error}</p>
-              <div className="flex gap-3">
-                <Button 
-                  variant="outline" 
-                  onClick={handleRefresh}
-                  className="bg-background"
-                >
-                  Try Again
-                </Button>
-                <Button asChild variant="outline" className="bg-background">
-                  <Link href="/style-check">Get New Recommendations</Link>
-                </Button>
-              </div>
-            </AlertDescription>
-          </Alert>
+          <div className="mx-auto max-w-2xl space-y-3">
+            <PageStatusAlert
+              title="Error Loading Likes"
+              description={error}
+              onRetry={handleRefresh}
+              isRetrying={loading}
+            />
+            <div className="flex justify-center">
+              <Button asChild variant="outline" className="bg-background">
+                <Link href="/style-check">Get New Recommendations</Link>
+              </Button>
+            </div>
+          </div>
         ) : likedOutfits.length === 0 ? (
           <Alert className="max-w-2xl mx-auto bg-card/60 dark:bg-card/40 backdrop-blur-xl border-border/20">
             <Sparkles className="h-4 w-4" />
@@ -456,7 +200,7 @@ export default function LikesPage() {
                 </Button>
                 <Button 
                   variant="outline" 
-                  onClick={() => userId && fetchLikedOutfits(userId)}
+                  onClick={handleRefresh}
                 >
                   Refresh
                 </Button>
