@@ -1,8 +1,6 @@
 'use client';
 
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { Loader2 } from 'lucide-react';
+import AsyncFlowState from '@/components/AsyncFlowState';
 
 interface PageStatusAlertProps {
   title: string;
@@ -24,25 +22,15 @@ export default function PageStatusAlert({
   className,
 }: PageStatusAlertProps) {
   return (
-    <div className={className}>
-      <Alert variant="destructive">
-        <AlertTitle>{title}</AlertTitle>
-        <AlertDescription>{description}</AlertDescription>
-      </Alert>
-      {onRetry && (
-        <div className="mt-3 flex justify-center">
-          <Button onClick={onRetry} disabled={retryDisabled || isRetrying}>
-            {isRetrying ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Retrying...
-              </>
-            ) : (
-              retryLabel
-            )}
-          </Button>
-        </div>
-      )}
-    </div>
+    <AsyncFlowState
+      status="error"
+      title={title}
+      description={description}
+      onRetry={onRetry}
+      isRetrying={isRetrying}
+      retryDisabled={retryDisabled}
+      retryLabel={retryLabel}
+      className={className}
+    />
   );
 }

@@ -1,11 +1,10 @@
 
 'use client';
 
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { lazy, Suspense } from 'react';
 import { useMounted } from '@/hooks/useMounted';
+import { useStyleCheckUsage } from '@/hooks/useStyleCheckUsage';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
-import { auth } from '@/lib/firebase';
 import UsageLimitMeter from '@/components/UsageLimitMeter';
 import FirstTimeTip from '@/components/FirstTimeTip';
 import PageStatusAlert from '@/components/PageStatusAlert';
@@ -22,91 +21,7 @@ const Particles = lazy(() => import('@/components/Particles'));
 
 export default function StyleCheckPage() {
   const isMounted = useMounted();
-  const [usage, setUsage] = useState<{ remaining: number; limit: number; resetAt?: string } | null>(null);
-  const [usageLoading, setUsageLoading] = useState(true);
-  const [usageError, setUsageError] = useState<string | null>(null);
-
-  const fetchUsage = useCallback(async () => {
-    const user = auth.currentUser;
-    if (!user) {
-      setUsage(null);
-      setUsageLoading(false);
-      return;
-    }
-
-    try {
-      setUsageLoading(true);
-      setUsageError(null);
-      const fetchUsageStatus = async (forceRefreshToken = false) => {
-        const idToken = await user.getIdToken(forceRefreshToken);
-        const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), 6000);
-        try {
-          return await fetch('/api/usage-status', {
-            cache: 'no-store',
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-              'Cache-Control': 'no-cache',
-            },
-            signal: controller.signal,
-          });
-        } finally {
-          window.clearTimeout(timeoutId);
-        }
-      };
-
-      const response = await fetchUsageStatus(true);
-
-      if (!response.ok) {
-        setUsage(null);
-        setUsageError('Could not refresh your daily limit right now.');
-        return;
-      }
-      const data = await response.json();
-      const recommendUsage = data?.usage?.recommend;
-      if (recommendUsage) {
-        setUsage({
-          remaining: recommendUsage.remaining,
-          limit: recommendUsage.limit,
-          resetAt: recommendUsage.resetAt,
-        });
-      } else {
-        setUsage(null);
-      }
-    } catch {
-      setUsage(null);
-      setUsageError('Unable to load usage status. Please try again.');
-    } finally {
-      setUsageLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (!user) {
-        setUsage(null);
-        setUsageLoading(false);
-        return;
-      }
-      void fetchUsage();
-    });
-
-    return () => unsubscribe();
-  }, [fetchUsage]);
-
-  useEffect(() => {
-    const onUsageConsumed = (event: Event) => {
-      const customEvent = event as CustomEvent<{ scope?: string }>;
-      if (customEvent.detail?.scope === 'recommend') {
-        fetchUsage();
-      }
-    };
-
-    window.addEventListener('usage:consumed', onUsageConsumed as EventListener);
-    return () => window.removeEventListener('usage:consumed', onUsageConsumed as EventListener);
-  }, [fetchUsage]);
-
-  const isStyleCheckLimitReached = !usageLoading && !!usage && usage.remaining <= 0;
+  const { usage, usageLoading, usageError, fetchUsage, isStyleCheckLimitReached } = useStyleCheckUsage();
 
   return (
     <ProtectedRoute>
