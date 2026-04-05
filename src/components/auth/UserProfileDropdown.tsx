@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { BarChart3, LogOut, Loader2 } from 'lucide-react';
+import { BarChart3, LogOut, Loader2, Settings } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
 export function UserProfileDropdown() {
@@ -152,6 +152,20 @@ export function UserProfileDropdown() {
                   </div>
                 </div>
               </DropdownMenuLabel>
+
+              <DropdownMenuSeparator />
+
+              {/* Settings */}
+              <DropdownMenuItem
+                onClick={() => {
+                  router.push('/account-settings');
+                  setDropdownOpen(false);
+                }}
+                className="cursor-pointer gap-2 px-3 py-2.5 text-sm"
+              >
+                <Settings className="h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 

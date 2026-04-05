@@ -24,7 +24,6 @@ const DEMO_DISABLED_ROUTES = new Set([
   '/test-analytics',
   '/saved-palettes',
   '/preferences',
-  '/account-settings',
 ]);
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 
