@@ -19,6 +19,7 @@ import FirstTimeTip from '@/components/FirstTimeTip';
 import PageStatusAlert from '@/components/PageStatusAlert';
 import QuickStartEmptyState from '@/components/QuickStartEmptyState';
 import { useMounted } from '@/hooks/useMounted';
+import { CONTEXT_MODES, SORT_OPTIONS, useWardrobeFilters, type ContextMode } from '@/hooks/useWardrobeFilters';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { getWardrobeItems, deleteWardrobeItem, markItemAsWorn, WardrobeItemData } from '@/lib/wardrobeService';
 import { USAGE_LIMITS } from '@/lib/usage-limits';
@@ -67,7 +68,6 @@ function WardrobePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItemData[]>([]);
-  const [filteredItems, setFilteredItems] = useState<WardrobeItemData[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -109,8 +109,6 @@ function WardrobePageContent() {
   }, []);
   
   // Context mode for smart filtering
-  const CONTEXT_MODES = ['all', 'work', 'casual', 'travel', 'weather', 'occasion'] as const;
-  type ContextMode = typeof CONTEXT_MODES[number];
   const [contextMode, setContextMode] = useState<ContextMode>('all');
 
   // Hydrate context mode from URL/sessionStorage after mount
@@ -142,12 +140,21 @@ function WardrobePageContent() {
     window.history.replaceState(null, '', newUrl);
   }, [contextMode, searchParams]);
   
-  // Search and discovery features
-  const [searchQuery, setSearchQuery] = useState('');
-  const SORT_OPTIONS = ['recent', 'most-worn', 'least-worn', 'never-worn', 'alphabetical'] as const;
-  type SortOption = typeof SORT_OPTIONS[number];
-  const [sortBy, setSortBy] = useState<SortOption>('recent');
-  const [groupByColor, setGroupByColor] = useState(false);
+  const {
+    searchQuery,
+    setSearchQuery,
+    sortBy,
+    setSortBy,
+    groupByColor,
+    setGroupByColor,
+    filteredItems,
+    applyContextFilter,
+    groupItemsByColor,
+  } = useWardrobeFilters({
+    wardrobeItems,
+    selectedFilter,
+    contextMode,
+  });
   
   // Network and sync state management
   const [isOnline, setIsOnline] = useState(true);
@@ -223,112 +230,6 @@ function WardrobePageContent() {
 
     return () => clearInterval(pollInterval);
   }, [userId]);
-
-  // Apply context-aware filtering
-  const applyContextFilter = (items: WardrobeItemData[]) => {
-    if (contextMode === 'all') return items;
-
-    return items.filter(item => {
-      const occasions = item.occasions || [];
-      const season = item.season || [];
-
-      switch (contextMode) {
-        case 'work':
-          return occasions.includes('business') || occasions.includes('formal');
-        case 'casual':
-          return occasions.includes('casual');
-        case 'travel':
-          // Prioritize versatile items and comfortable clothing
-          return occasions.includes('casual') || item.itemType === 'shoes' || item.itemType === 'outerwear';
-        case 'weather':
-          // Show seasonal items based on current season (simplified: use all seasonal items)
-          return season.length > 0;
-        case 'occasion':
-          return occasions.includes('formal') || occasions.includes('party');
-        default:
-          return true;
-      }
-    });
-  };
-
-  // Natural-language search filter
-  const applySearchFilter = (items: WardrobeItemData[]) => {
-    if (!searchQuery.trim()) return items;
-
-    const query = searchQuery.toLowerCase().trim();
-    return items.filter(item => {
-      const searchableFields = [
-        item.description,
-        item.itemType,
-        item.category,
-        item.brand,
-        item.notes,
-        ...(item.occasions || []),
-        ...(item.season || [])
-      ].filter(Boolean).map(field => field?.toLowerCase() || '');
-
-      return searchableFields.some(field => field.includes(query));
-    });
-  };
-
-  // Usage-based sorting
-  const applySorting = (items: WardrobeItemData[]) => {
-    const sorted = [...items];
-
-    switch (sortBy) {
-      case 'most-worn':
-        return sorted.sort((a, b) => (b.wornCount || 0) - (a.wornCount || 0));
-      case 'least-worn':
-        return sorted.sort((a, b) => (a.wornCount || 0) - (b.wornCount || 0));
-      case 'never-worn':
-        return sorted.filter(item => !item.wornCount || item.wornCount === 0)
-          .concat(sorted.filter(item => item.wornCount && item.wornCount > 0));
-      case 'alphabetical':
-        return sorted.sort((a, b) => 
-          (a.description || '').localeCompare(b.description || '')
-        );
-      case 'recent':
-      default:
-        return sorted.sort((a, b) => {
-          const dateA = typeof a.addedDate === 'number' ? a.addedDate : 0;
-          const dateB = typeof b.addedDate === 'number' ? b.addedDate : 0;
-          return dateB - dateA; // Most recent first
-        });
-    }
-  };
-
-  // Color-based grouping
-  const groupItemsByColor = (items: WardrobeItemData[]) => {
-    const colorGroups: { [key: string]: WardrobeItemData[] } = {};
-    
-    items.forEach(item => {
-      const primaryColor = item.dominantColors?.[0] || '#808080';
-      if (!colorGroups[primaryColor]) {
-        colorGroups[primaryColor] = [];
-      }
-      colorGroups[primaryColor].push(item);
-    });
-
-    return Object.entries(colorGroups).map(([color, items]) => ({
-      color,
-      items,
-      count: items.length
-    })).sort((a, b) => b.count - a.count); // Sort by group size
-  };
-
-  useEffect(() => {
-    // Apply filters in order: type → context → search → sort
-    let items = selectedFilter === 'all' 
-      ? wardrobeItems 
-      : wardrobeItems.filter(item => item.itemType === selectedFilter);
-    
-    items = applyContextFilter(items);
-    items = applySearchFilter(items);
-    items = applySorting(items);
-    
-    setFilteredItems(items);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFilter, wardrobeItems, contextMode, searchQuery, sortBy]);
 
   const fetchWardrobeItems = async (uid: string, silent = false, preserveExistingOnError = false) => {
     try {
