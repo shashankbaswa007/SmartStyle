@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { motion } from "framer-motion";
 import { Palette, Search, Sparkles, Info, Copy, Check, Pipette, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import PageStatusAlert from "@/components/PageStatusAlert";
 import { useToast } from "@/hooks/use-toast";
 import { useMounted } from "@/hooks/useMounted";
 import { useClipboardActions } from "@/hooks/useClipboardActions";
@@ -51,6 +52,7 @@ export default function ColorMatchPage() {
   const [harmonyType, setHarmonyType] = useState("recommended");
   const [loading, setLoading] = useState(false);
   const [colorData, setColorData] = useState<ColorResponse | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showAllColors, setShowAllColors] = useState(false);
@@ -58,6 +60,20 @@ export default function ColorMatchPage() {
   const isMounted = useMounted();
   const { copiedValue: copiedColor, copyToClipboard } = useClipboardActions();
   const { quickCopyAllHex } = usePaletteExport();
+  const hasTaskStartedRef = useRef(false);
+  const hasTaskCompletedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      if (!hasTaskStartedRef.current || hasTaskCompletedRef.current) return;
+
+      void logUxEvent(user?.uid, 'drop_off', {
+        flow: 'color_match',
+        step: 'abandoned_before_completion',
+        reason: 'navigation_or_unmount',
+      });
+    };
+  }, [user?.uid]);
 
   // Respect reduced-motion preference for accessibility
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -72,6 +88,12 @@ export default function ColorMatchPage() {
 
   const handleSearch = () => {
     if (!color.trim()) {
+      setSearchError('Please enter a color name, hex code, or RGB value before searching.');
+      void logUxEvent(user?.uid, 'error_shown', {
+        flow: 'color_match',
+        step: 'validation_error',
+        reason: 'missing_color_input',
+      });
       toast({
         title: "Input Required",
         description: "Please enter a color name (turquoise, chartreuse), hex code (#40E0D0), or RGB value",
@@ -87,6 +109,7 @@ export default function ColorMatchPage() {
         harmonyType,
       },
     });
+    hasTaskStartedRef.current = true;
 
     setLoading(true);
     try {
@@ -94,6 +117,8 @@ export default function ColorMatchPage() {
       const data = generateColorMatches(color.trim(), harmonyType);
 
       setColorData(data);
+      setSearchError(null);
+      hasTaskCompletedRef.current = true;
       void logUxEvent(user?.uid, 'task_completed', {
         flow: 'color_match',
         step: 'search_completed',
@@ -108,6 +133,8 @@ export default function ColorMatchPage() {
         description: `Found ${data.matches.length} harmonious colors for ${data.inputColor.name || data.inputColor.hex}`,
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : "An unexpected error occurred";
+      setSearchError(message);
       void logUxEvent(user?.uid, 'error_shown', {
         flow: 'color_match',
         step: 'search_failed',
@@ -115,7 +142,7 @@ export default function ColorMatchPage() {
       });
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "An unexpected error occurred",
+        description: message,
         variant: "destructive",
       });
     } finally {
@@ -393,6 +420,27 @@ export default function ColorMatchPage() {
           </div>
         </motion.div>
 
+        {searchError && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-4xl mx-auto mb-8"
+          >
+            <PageStatusAlert
+              title="Unable to generate palette"
+              description={searchError}
+              onRetry={() => {
+                void logUxEvent(user?.uid, 'retry_clicked', {
+                  flow: 'color_match',
+                  step: 'retry_after_error',
+                });
+                handleSearch();
+              }}
+              isRetrying={loading}
+            />
+          </motion.div>
+        )}
+
         {/* Results Section */}
         {colorData && (
           <motion.div
@@ -426,12 +474,20 @@ export default function ColorMatchPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => {
+                      onClick={async () => {
                         void logUxEvent(user?.uid, 'step_viewed', {
                           flow: 'color_match',
                           step: 'quick_copy_all_clicked',
                         });
-                        void quickCopyAllHex(colorData);
+                        const copied = await quickCopyAllHex(colorData);
+                        if (copied && searchError) {
+                          setSearchError(null);
+                          void logUxEvent(user?.uid, 'recovered_from_error', {
+                            flow: 'color_match',
+                            step: 'copy_after_error',
+                            success: true,
+                          });
+                        }
                       }}
                       className="gap-2"
                     >
