@@ -5,6 +5,26 @@
 
 import { z } from 'zod';
 
+const weatherForecastDaySchema = z.object({
+  date: z.string().min(1),
+  dayLabel: z.string().min(1),
+  tempMin: z.number(),
+  tempMax: z.number(),
+  tempAvg: z.number(),
+  condition: z.string().min(1),
+  description: z.string().min(1),
+  humidity: z.number().min(0).max(100),
+  precipitationProbability: z.number().min(0).max(100),
+  windSpeed: z.number().min(0),
+});
+
+const weatherForecastSchema = z.object({
+  location: z.string().optional(),
+  generatedAt: z.string().optional(),
+  trendSummary: z.string().min(1),
+  days: z.array(weatherForecastDaySchema).min(1).max(7),
+});
+
 // ========================================
 // RECOMMEND API VALIDATION
 // ========================================
@@ -70,6 +90,10 @@ export const recommendRequestSchema = z.object({
   weather: z.string()
     .optional()
     .describe('Weather condition (e.g., sunny, rainy)'),
+
+  weatherForecast: weatherForecastSchema
+    .optional()
+    .describe('Structured 7-day forecast data for planning recommendations ahead.'),
   
   skinTone: z.string()
     .optional()

@@ -32,6 +32,14 @@ const aiResponseCache = new Map<string, CachedAIResponse>();
 const AI_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 const REDIS_AI_CACHE_TTL_SECONDS = 2 * 60 * 60; // 2 hours
 
+function createForecastSignature(input: AnalyzeImageAndProvideRecommendationsInput): string {
+  if (!input.weatherForecast?.days?.length) return 'none';
+  return input.weatherForecast.days
+    .slice(0, 7)
+    .map((day) => `${day.date}:${day.condition}:${day.tempMin}-${day.tempMax}:${day.precipitationProbability}`)
+    .join('|');
+}
+
 function generateCacheKey(input: AnalyzeImageAndProvideRecommendationsInput): string {
   // Generate cache key from image hash + context (not full personalization to allow sharing)
   const imageHash = crypto
@@ -40,7 +48,7 @@ function generateCacheKey(input: AnalyzeImageAndProvideRecommendationsInput): st
     .digest('hex')
     .substring(0, 16);
   
-  return `ai:${imageHash}:${input.occasion}:${input.gender}:${input.weather}:${input.genre}:${input.skinTone}`;
+  return `ai:${imageHash}:${input.occasion}:${input.gender}:${input.weather}:${createForecastSignature(input)}:${input.genre}:${input.skinTone}`;
 }
 
 function getCachedAIResponse(key: string): AnalyzeImageAndProvideRecommendationsOutput | null {
@@ -79,6 +87,24 @@ const AnalyzeImageAndProvideRecommendationsInputSchema = z.object({
   genre: z.string().describe('The preferred style genre (e.g., Formal, Casual, Streetwear).'),
   gender: z.string().describe('The gender of the person in the photo (male/female/neutral).'),
   weather: z.string().describe("The weather conditions at the person's current location."),
+  weatherForecast: z.object({
+    location: z.string().optional(),
+    generatedAt: z.string().optional(),
+    trendSummary: z.string(),
+    days: z.array(z.object({
+      date: z.string(),
+      dayLabel: z.string(),
+      tempMin: z.number(),
+      tempMax: z.number(),
+      tempAvg: z.number(),
+      condition: z.string(),
+      description: z.string(),
+      humidity: z.number(),
+      precipitationProbability: z.number(),
+      windSpeed: z.number(),
+    })).min(1).max(7),
+  }).optional().describe('Optional structured weekly weather forecast for planning outfits ahead.'),
+  weeklyWeatherSummary: z.string().optional().describe('Optional human-readable summary of the 7-day weather trend.'),
   skinTone: z.string().describe("The person's estimated skin tone (extracted client-side from the photo)."),
   dressColors: z.string().describe('A comma-separated list of the primary colors of the outfit (extracted client-side from the photo).'),
   previousRecommendation: z.string().optional().describe('A JSON string of a previous recommendation that the user was not satisfied with. If provided, generate a different recommendation.'),
@@ -188,6 +214,13 @@ const prompt = ai.definePrompt({
   - **Genre Preference:** {{{genre}}}
   - **Gender:** {{{gender}}}
   - **Current Weather:** {{{weather}}}
+  - **7-Day Weather Trend Summary:** {{{weeklyWeatherSummary}}}
+  {{#if weatherForecast.days}}
+  - **7-Day Forecast Data (for forward planning):**
+  {{#each weatherForecast.days}}
+    - {{dayLabel}} ({{date}}): {{tempMin}}-{{tempMax}}C, {{condition}}, {{precipitationProbability}}% rain chance, {{humidity}}% humidity, wind {{windSpeed}} m/s
+  {{/each}}
+  {{/if}}
   - **User's Skin Tone:** {{{skinTone}}} (extracted client-side from photo)
   - **User's Current Outfit Colors:** {{{dressColors}}} (extracted client-side from photo)
 
@@ -257,6 +290,7 @@ const prompt = ai.definePrompt({
   
   **Weather Consideration:**
   - Evaluate if colors are seasonally appropriate for "{{{weather}}}"
+  - Use the 7-day trend to avoid recommendations that only work for one day unless clearly marked
   - Consider psychological impact of colors in different weather conditions
   
   **Professional Verdict:**
@@ -292,6 +326,7 @@ const prompt = ai.definePrompt({
   - 🚫 NEVER suggest disliked colors - this is non-negotiable
   - ✅ If selectedOutfitHistory exists, 2 of 3 recommendations should heavily reference those color combinations and styles
   - ✅ All suggestions must be weather-appropriate for "{{{weather}}}"
+  - ✅ Recommendations must remain practical across the 7-day forecast variation (temperature, rain, humidity)
   - ✅ Each outfit should include specific styling details (textures, patterns, accessories)
   - ✅ Provide expert reasoning for why each color choice flatters their {{{skinTone}}} skin tone
   - ✅ Include one "safe" recommendation, one "elevated" recommendation, and one "fashion-forward" recommendation
@@ -629,7 +664,10 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
   },
   async (input: AnalyzeImageAndProvideRecommendationsInput) => {
     // Fetch personalization data if userId is provided
-    let enhancedInput = { ...input } as any;
+    let enhancedInput = {
+      ...input,
+      weeklyWeatherSummary: input.weeklyWeatherSummary || input.weather,
+    } as any;
     
     if (input.userId) {
       try {

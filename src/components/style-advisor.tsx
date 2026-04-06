@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { getWeatherData } from "@/app/actions";
+import type { WeeklyWeatherForecast } from "@/lib/weather-service";
 import { cn } from "@/lib/utils";
 import { StyleAdvisorResults } from "./style-advisor-results";
 import { auth } from "@/lib/firebase";
@@ -318,6 +319,7 @@ function getColorName(r: number, g: number, b: number): string {
 export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   const { toast } = useToast();
   const [weather, setWeather] = React.useState<string | null>(null);
+  const [weatherForecast, setWeatherForecast] = React.useState<WeeklyWeatherForecast | null>(null);
   const [isFetchingWeather, setIsFetchingWeather] = React.useState(true);
   const [analysisResult, setAnalysisResult] = React.useState<AnalyzeImageAndProvideRecommendationsOutput | null>(null);
   const [generatedImageUrls, setGeneratedImageUrls] = React.useState<string[]>([]);
@@ -397,10 +399,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           
           
           const weatherData = await getWeatherData({ lat, lon });
-          
-          setWeather(weatherData);
+
+          setWeather(weatherData.currentSummary);
+          setWeatherForecast(weatherData.weeklyForecast);
         } catch (error) {
           setWeather("Clear skies, around 25°C");
+          setWeatherForecast(null);
           toast({
             variant: "default",
             title: "Could not fetch weather",
@@ -415,6 +419,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       (geoError) => {
         
         setWeather("Clear skies, around 25°C");
+        setWeatherForecast(null);
         toast({
           variant: "default",
           title: "Location access needed",
@@ -1311,6 +1316,8 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           genre: request.genre,
           gender: request.gender,
           weather: request.weather,
+          weatherForecast: request.weatherForecast,
+          weeklyWeatherSummary: request.weeklyWeatherSummary,
           skinTone: skinToneValue,
           dressColors: dressColorsValue,
           userId: request.userId,
@@ -1807,6 +1814,8 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           genre: values.genre,
           gender: values.gender,
           weather: weather,
+          weatherForecast: weatherForecast || undefined,
+          weeklyWeatherSummary: weatherForecast?.trendSummary,
           skinTone: '',
           dressColors: '',
           userId,

@@ -153,6 +153,18 @@ function buildInputVector(input: RecommendRequest): Set<string> {
   pushToken(input.weather);
   pushToken(input.skinTone);
 
+  if (input.weatherForecast?.trendSummary) {
+    pushToken(input.weatherForecast.trendSummary);
+  }
+
+  if (Array.isArray(input.weatherForecast?.days)) {
+    input.weatherForecast.days.forEach((day) => {
+      pushToken(day.condition);
+      pushToken(day.description);
+      pushToken(day.dayLabel);
+    });
+  }
+
   if (Array.isArray(input.dressColors)) {
     input.dressColors.forEach((color) => pushToken(color));
   }
@@ -321,6 +333,7 @@ async function buildFallbackResultWithRecovery(
         genre: job.input.genre,
         gender: job.input.gender,
         weather: job.input.weather,
+        weatherForecast: job.input.weatherForecast,
         skinTone: job.input.skinTone,
         dressColors: job.input.dressColors,
         sessionId: generateSessionId(),
@@ -339,6 +352,7 @@ function createFallbackAnalysis(input: RecommendRequest): AnalyzeImageAndProvide
   const occasion = input.occasion || 'casual outing';
   const genre = input.genre || 'smart casual';
   const weather = input.weather || 'moderate weather';
+  const weeklySummary = input.weatherForecast?.trendSummary || 'mixed weather through the week';
 
   const colors = Array.isArray(input.dressColors) && input.dressColors.length > 0
     ? input.dressColors
@@ -401,9 +415,17 @@ function createFallbackAnalysis(input: RecommendRequest): AnalyzeImageAndProvide
       },
     ],
     notes: 'Use two neutrals and one accent for the most consistent results.',
-    imagePrompt: `A curated ${input.gender} ${genre} wardrobe board for ${occasion} in ${weather}`,
+    imagePrompt: `A curated ${input.gender} ${genre} wardrobe board for ${occasion} in ${weather}. Weekly planning context: ${weeklySummary}`,
     provider: 'gemini',
   };
+}
+
+function getWeatherForecastSignature(input: RecommendRequest): string {
+  if (!input.weatherForecast?.days?.length) return 'none';
+  return input.weatherForecast.days
+    .slice(0, 7)
+    .map((day) => `${day.date}:${day.condition}:${day.tempMin}-${day.tempMax}:${day.precipitationProbability}`)
+    .join('|');
 }
 
 function buildDedupeKey(input: RecommendRequest, userId: string): string {
@@ -416,6 +438,8 @@ function buildDedupeKey(input: RecommendRequest, userId: string): string {
     genre: (input.genre || '').toLowerCase().trim(),
     gender: input.gender,
     weather: (input.weather || '').toLowerCase().trim(),
+    weatherForecastSignature: getWeatherForecastSignature(input),
+    weatherTrend: (input.weatherForecast?.trendSummary || '').toLowerCase().trim(),
     skinTone: (input.skinTone || '').toLowerCase().trim(),
     dressColors: Array.isArray(input.dressColors)
       ? [...input.dressColors].map((c) => c.toLowerCase().trim()).sort()
@@ -599,6 +623,8 @@ async function runWorkflow(job: RecommendJobRecord): Promise<any> {
       genre: job.input.genre || '',
       gender: job.input.gender,
       weather: job.input.weather || '',
+      weatherForecast: job.input.weatherForecast,
+      weeklyWeatherSummary: job.input.weatherForecast?.trendSummary,
       skinTone: job.input.skinTone || '',
       dressColors: Array.isArray(job.input.dressColors)
         ? job.input.dressColors.join(', ')
@@ -693,6 +719,7 @@ async function runWorkflow(job: RecommendJobRecord): Promise<any> {
     genre: job.input.genre,
     gender: job.input.gender,
     weather: job.input.weather,
+    weatherForecast: job.input.weatherForecast,
     skinTone: job.input.skinTone,
     dressColors: job.input.dressColors,
     sessionId: generateSessionId(),

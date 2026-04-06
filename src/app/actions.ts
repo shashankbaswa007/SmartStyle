@@ -4,6 +4,11 @@ import { z } from 'zod';
 import admin from '@/lib/firebase-admin';
 import { executeWithTimeoutAndRetry } from '@/lib/external-request';
 import { featureFlags } from '@/lib/feature-flags';
+import {
+  buildWeeklyWeatherSummary,
+  fetchWeeklyWeatherForecast,
+  type WeeklyWeatherForecast,
+} from '@/lib/weather-service';
 
 type ExternalFetchOptions = {
   operationName: string;
@@ -58,10 +63,18 @@ const WeatherSchema = z.object({
   lon: z.number(),
 });
 
+export interface StyleCheckWeatherPayload {
+  currentSummary: string;
+  weeklyForecast: WeeklyWeatherForecast | null;
+}
+
 export async function getWeatherData(coords: z.infer<typeof WeatherSchema>) {
   const parsedCoords = WeatherSchema.safeParse(coords);
   if (!parsedCoords.success) {
-    return 'Weather data not available for the selected location.';
+    return {
+      currentSummary: 'Weather data not available for the selected location.',
+      weeklyForecast: null,
+    } satisfies StyleCheckWeatherPayload;
   }
 
   const { lat, lon } = parsedCoords.data;
@@ -69,28 +82,43 @@ export async function getWeatherData(coords: z.infer<typeof WeatherSchema>) {
 
 
   if (!apiKey) {
-    return 'Weather data not available. API key missing.';
+    return {
+      currentSummary: 'Weather data not available. API key missing.',
+      weeklyForecast: null,
+    } satisfies StyleCheckWeatherPayload;
   }
 
   try {
     const url = `https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${apiKey}&units=metric`;
-    const response = await fetchExternal(url, { method: 'GET' }, {
+    const [response, weeklyForecast] = await Promise.all([
+      fetchExternal(url, { method: 'GET' }, {
       operationName: 'weather.current',
       timeoutMs: 10000,
       retries: 1,
-    });
+      }),
+      fetchWeeklyWeatherForecast(lat, lon),
+    ]);
     
     if (!response.ok) {
-      return `Could not fetch weather. Status: ${response.status}`;
+      return {
+        currentSummary: `Could not fetch weather. Status: ${response.status}`,
+        weeklyForecast,
+      } satisfies StyleCheckWeatherPayload;
     }
     
     const data = await response.json();
-    const result = `The weather in ${data.name} is ${data.main.temp}°C with ${data.weather[0].description}.`;
+    const currentSummary = `The weather in ${data.name} is ${Math.round(data.main.temp)}C with ${data.weather[0].description}.`;
+    const weeklySummary = weeklyForecast ? buildWeeklyWeatherSummary(weeklyForecast) : 'Weekly forecast unavailable.';
     
-    
-    return result;
+    return {
+      currentSummary: `${currentSummary} ${weeklySummary}`,
+      weeklyForecast,
+    } satisfies StyleCheckWeatherPayload;
   } catch (error) {
-    return 'Failed to fetch weather data.';
+    return {
+      currentSummary: 'Failed to fetch weather data.',
+      weeklyForecast: null,
+    } satisfies StyleCheckWeatherPayload;
   }
 }
 
