@@ -146,6 +146,32 @@ function getFallbackFriendlyMessage(
   return null;
 }
 
+function buildDemoFallbackImageDataUris(): string[] {
+  const cards = [
+    { title: 'Demo Look 1', bgA: '#1e3a8a', bgB: '#312e81', chip: '#f8f5f0' },
+    { title: 'Demo Look 2', bgA: '#1f2937', bgB: '#334155', chip: '#d6c7b0' },
+    { title: 'Demo Look 3', bgA: '#64748b', bgB: '#475569', chip: '#f8f5f0' },
+  ];
+
+  return cards.map((card) => {
+    const svg = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1365" viewBox="0 0 1024 1365" role="img" aria-label="${card.title}">
+        <defs>
+          <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="${card.bgA}" />
+            <stop offset="100%" stop-color="${card.bgB}" />
+          </linearGradient>
+        </defs>
+        <rect width="1024" height="1365" fill="url(#bg)" />
+        <circle cx="512" cy="580" r="170" fill="${card.chip}" fill-opacity="0.22" />
+        <rect x="230" y="845" width="564" height="154" rx="26" fill="${card.chip}" fill-opacity="0.14" />
+        <text x="512" y="923" text-anchor="middle" font-family="Arial, sans-serif" font-size="54" font-weight="700" fill="#ffffff">${card.title}</text>
+      </svg>
+    `;
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  });
+}
+
 function buildDemoFallbackAnalysis(): AnalyzeImageAndProvideRecommendationsOutput {
   return {
     feedback:
@@ -1653,17 +1679,13 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       }
       
       const fallbackAnalysis = buildDemoFallbackAnalysis();
-      const fallbackImages = [
-        'https://via.placeholder.com/1024x1365/1e3a8a/f8f5f0?text=Demo+Look+1',
-        'https://via.placeholder.com/1024x1365/1f2937/d6c7b0?text=Demo+Look+2',
-        'https://via.placeholder.com/1024x1365/64748b/f8f5f0?text=Demo+Look+3',
-      ];
+      const fallbackImages = buildDemoFallbackImageDataUris();
 
       setAnalysisResult(fallbackAnalysis);
       setGeneratedImageUrls(fallbackImages);
       setImageSources(['placeholder', 'placeholder', 'placeholder']);
       setRecommendationId(`demo_fallback_${Date.now()}`);
-      setFallbackMessage('Live demo fallback enabled: showing a stable sample result.');
+      setFallbackMessage(null);
       setResultMeta({ isFresh: true, usedFallback: true });
       setStagedPreview(null);
       setLoadingMessage('');
