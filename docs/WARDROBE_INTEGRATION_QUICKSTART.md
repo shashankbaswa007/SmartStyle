@@ -186,7 +186,7 @@ Try it out:
 ## Need Help?
 
 - Read the full documentation: `docs/COLOR_WARDROBE_INTEGRATION.md`
-- Check the color-match documentation: `color-match.md`
+- Check the color-match documentation: `docs/features/color-match.md`
 - Review the code comments in the service files
 
 ---
