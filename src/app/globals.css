@@ -181,6 +181,27 @@
   animation: atelier-light-sweep 14s ease-in-out infinite;
 }
 
+.auth-matte-card {
+  background:
+    radial-gradient(140% 120% at 12% 0%, rgba(148, 163, 184, 0.12) 0%, rgba(10, 10, 15, 0.88) 45%, rgba(8, 9, 14, 0.94) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.01) 100%);
+  box-shadow:
+    0 26px 48px rgba(2, 6, 23, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(148, 163, 184, 0.08);
+  backdrop-filter: blur(8px) saturate(82%);
+}
+
+.auth-matte-grain {
+  opacity: 0.2;
+  mix-blend-mode: soft-light;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.09) 0.55px, transparent 0.55px),
+    radial-gradient(rgba(0, 0, 0, 0.24) 0.55px, transparent 0.55px);
+  background-size: 3px 3px, 4px 4px;
+  background-position: 0 0, 1px 1px;
+}
+
 /* Shimmer Animation for Skeleton Loaders - GPU Accelerated */
 @keyframes shimmer {
   0% {

@@ -483,108 +483,113 @@ export default function AuthPage() {
       >
         {/* Auth Card */}
         <div className="w-full max-w-md sm:max-w-sm">
-          {/* Logo at top */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.5,
-              delay: prefersReducedMotion ? 0 : 0.5,
-              ease: MOTION_EASING.graceful,
-            }}
-            className="flex justify-center mb-5 sm:mb-6"
-          >
-            <AnimatedLogo size={72} className="scale-90 sm:scale-100" />
-          </motion.div>
+          <div className="auth-matte-card relative overflow-hidden rounded-[26px] border border-slate-200/10 px-6 py-7 sm:px-7 sm:py-8">
+            <div className="auth-matte-grain pointer-events-none absolute inset-0" aria-hidden="true" />
+            <div className="relative z-10">
+              {/* Logo at top */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.5,
+                  delay: prefersReducedMotion ? 0 : 0.5,
+                  ease: MOTION_EASING.graceful,
+                }}
+                className="flex justify-center mb-5 sm:mb-6"
+              >
+                <AnimatedLogo size={72} className="scale-90 sm:scale-100" />
+              </motion.div>
 
-          {/* Title and subtitle */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.5,
-              delay: prefersReducedMotion ? 0 : 0.55,
-              ease: MOTION_EASING.graceful,
-            }}
-            className="text-center mb-8 sm:mb-10"
-          >
-            <h2 className="font-headline text-2xl font-semibold tracking-wide text-white">SmartStyle</h2>
-            <p className="text-xs tracking-widest text-gray-500 uppercase mt-1.5">Your Personal Style Assistant</p>
-          </motion.div>
+              {/* Title and subtitle */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.5,
+                  delay: prefersReducedMotion ? 0 : 0.55,
+                  ease: MOTION_EASING.graceful,
+                }}
+                className="text-center mb-8 sm:mb-10"
+              >
+                <h2 className="font-headline text-2xl font-semibold tracking-wide text-white">SmartStyle</h2>
+                <p className="text-xs tracking-widest text-slate-400 uppercase mt-1.5">Your Personal Style Assistant</p>
+              </motion.div>
 
-          {/* Google Sign-In Button */}
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.5,
-              delay: prefersReducedMotion ? 0 : 0.6,
-              ease: MOTION_EASING.graceful,
-            }}
-            onClick={handleGoogleSignIn}
-            disabled={googleLoading}
-            className="group relative w-full h-[52px] rounded-full bg-gradient-to-r from-purple-700 via-purple-600 to-purple-700 text-white font-medium text-base flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-[0_8px_32px_rgba(147,51,234,0.5)] hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden"
-          >
-            {/* Shimmer effect on hover */}
-            <motion.div
-              className="absolute inset-0 opacity-0 group-hover:opacity-100"
-              initial={{ x: '-100%' }}
-              whileHover={{
-                x: '100%',
-              }}
-              transition={{
-                duration: 0.6,
-                ease: 'easeInOut',
-              }}
-              style={{
-                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
-              }}
-            />
+              {/* Google Sign-In Button */}
+              <motion.button
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.5,
+                  delay: prefersReducedMotion ? 0 : 0.6,
+                  ease: MOTION_EASING.graceful,
+                }}
+                onClick={handleGoogleSignIn}
+                disabled={googleLoading}
+                className="group relative w-full h-[52px] rounded-full bg-gradient-to-r from-purple-700 via-purple-600 to-purple-700 text-white font-medium text-base flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-[0_8px_32px_rgba(147,51,234,0.5)] hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden"
+              >
+                {/* Shimmer effect on hover */}
+                <motion.div
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100"
+                  initial={{ x: '-100%' }}
+                  whileHover={{
+                    x: '100%',
+                  }}
+                  transition={{
+                    duration: 0.6,
+                    ease: 'easeInOut',
+                  }}
+                  style={{
+                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
+                  }}
+                />
 
-            <span className="relative flex items-center gap-2 z-10">
-              {googleLoading ? (
-                <>
-                  <span className="flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-white/90 animate-pulse [animation-delay:-0.3s]" />
-                    <span className="h-1.5 w-1.5 rounded-full bg-white/90 animate-pulse [animation-delay:-0.15s]" />
-                    <span className="h-1.5 w-1.5 rounded-full bg-white/90 animate-pulse" />
-                  </span>
-                  <span>Preparing workspace...</span>
-                </>
-              ) : (
-                <>
-                  <GoogleGlyph />
-                  <span>Continue with Google</span>
-                </>
-              )}
-            </span>
-          </motion.button>
+                <span className="relative flex items-center gap-2 z-10">
+                  {googleLoading ? (
+                    <>
+                      <span className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-white/90 animate-pulse [animation-delay:-0.3s]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-white/90 animate-pulse [animation-delay:-0.15s]" />
+                        <span className="h-1.5 w-1.5 rounded-full bg-white/90 animate-pulse" />
+                      </span>
+                      <span>Preparing workspace...</span>
+                    </>
+                  ) : (
+                    <>
+                      <GoogleGlyph />
+                      <span>Continue with Google</span>
+                    </>
+                  )}
+                </span>
+              </motion.button>
 
-          {/* Legal text */}
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.5,
-              delay: prefersReducedMotion ? 0 : 0.65,
-              ease: MOTION_EASING.graceful,
-            }}
-            className="mt-6 text-center text-[11px] leading-relaxed text-slate-400"
-          >
-            By signing in you agree to our{' '}
-            <Link href="/terms" className="text-purple-400 underline underline-offset-1 hover:text-purple-300 transition-colors">
-              Terms of Service
-            </Link>{' '}
-            and{' '}
-            <Link href="/privacy" className="text-purple-400 underline underline-offset-1 hover:text-purple-300 transition-colors">
-              Privacy Policy
-            </Link>
-            . Learn more in the{' '}
-            <Link href="/trust" className="text-purple-400 underline underline-offset-1 hover:text-purple-300 transition-colors">
-              Trust Center
-            </Link>
-            .
-          </motion.p>
+              {/* Legal text */}
+              <motion.p
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.5,
+                  delay: prefersReducedMotion ? 0 : 0.65,
+                  ease: MOTION_EASING.graceful,
+                }}
+                className="mt-6 text-center text-[11px] leading-relaxed text-slate-400"
+              >
+                By signing in you agree to our{' '}
+                <Link href="/terms" className="text-purple-400 underline underline-offset-1 hover:text-purple-300 transition-colors">
+                  Terms of Service
+                </Link>{' '}
+                and{' '}
+                <Link href="/privacy" className="text-purple-400 underline underline-offset-1 hover:text-purple-300 transition-colors">
+                  Privacy Policy
+                </Link>
+                . Learn more in the{' '}
+                <Link href="/trust" className="text-purple-400 underline underline-offset-1 hover:text-purple-300 transition-colors">
+                  Trust Center
+                </Link>
+                .
+              </motion.p>
+            </div>
+          </div>
         </div>
       </motion.section>
 
