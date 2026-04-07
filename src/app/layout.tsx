@@ -43,7 +43,6 @@ export const metadata: Metadata = {
       { url: '/icons/icon-192x192.png', type: 'image/png', sizes: '192x192' },
     ],
     apple: [
-      { url: '/icons/icon-152x152.png', sizes: '152x152', type: 'image/png' },
       { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
     ],
   },
@@ -93,12 +92,6 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="SmartStyle" />
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-        <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
-        <link rel="icon" type="image/svg+xml" href="/icons/brand-icon.svg" />
-        <link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
-        <link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
       </head>
       <body className={`${inter.variable} ${playfairDisplay.variable} font-body antialiased bg-background`}>
         <ErrorBoundary>

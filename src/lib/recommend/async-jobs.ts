@@ -11,10 +11,11 @@ import { generateShoppingLinks } from '@/lib/shopping-query-optimizer';
 import { generateSessionId } from '@/lib/interaction-tracker';
 import saveRecommendation from '@/lib/firestoreRecommendations';
 import { getRedisClient } from '@/lib/redis';
+import { enforceAdaptive701020 } from '@/lib/recommend/diversification';
 
 const JOB_TTL_SECONDS = 4 * 60 * 60;
 const DEDUPE_TTL_SECONDS = 2 * 60 * 60;
-const JOB_TIMEOUT_MS = 60_000;
+export const RECOMMEND_JOB_TIMEOUT_MS = 60_000;
 const METRIC_PREFIX = 'smartstyle:v1:metrics:recommend';
 const RECENT_JOB_LIST_SIZE = 20;
 const UX_VARIANTS = ['A', 'B'] as const;
@@ -32,6 +33,12 @@ export interface RecommendPartialOutfit {
   styleType?: string;
   occasion?: string;
   items?: string[];
+  matchScore?: number;
+  matchCategory?: 'perfect' | 'great' | 'exploring';
+  strategyBucket?: '70' | '20' | '10';
+  strategyLabel?: string;
+  explanation?: string;
+  position?: number;
 }
 
 export interface RecommendPartialPayload {
@@ -56,6 +63,7 @@ export interface RecommendProgress {
 
 export interface RecommendJobRecord {
   jobId: string;
+  requestId?: string;
   status: RecommendJobStatus;
   dedupeKey: string;
   createdAt: number;
@@ -68,6 +76,24 @@ export interface RecommendJobRecord {
   result?: any;
   fallbackSource?: 'cache' | 'similar' | 'simplified';
   error?: string;
+}
+
+type RecommendFailureCode =
+  | 'ANALYSIS_TIMEOUT'
+  | 'ML_FAILED'
+  | 'ML_EMPTY_RESPONSE'
+  | 'INVALID_RESPONSE'
+  | 'IMAGE_GENERATION_FAILED'
+  | 'JOB_PROCESSING_FAILED';
+
+class RecommendJobError extends Error {
+  code: RecommendFailureCode;
+
+  constructor(code: RecommendFailureCode, message: string) {
+    super(message);
+    this.name = 'RecommendJobError';
+    this.code = code;
+  }
 }
 
 function now(): number {
@@ -199,6 +225,12 @@ function buildPartialPayload(analysis: AnalyzeImageAndProvideRecommendationsOutp
           styleType: outfit.styleType,
           occasion: outfit.occasion,
           items: outfit.items,
+          matchScore: outfit.matchScore,
+          matchCategory: outfit.matchCategory,
+          strategyBucket: outfit.strategyBucket,
+          strategyLabel: outfit.strategyLabel,
+          explanation: outfit.explanation,
+          position: outfit.position,
         };
       }),
       notes: analysis.notes,
@@ -294,7 +326,8 @@ async function recordRecentJob(userId: string, jobId: string): Promise<void> {
 
 async function buildFallbackResultWithRecovery(
   job: RecommendJobRecord,
-  fallbackCode: 'JOB_FALLBACK' | 'JOB_TIMEOUT_FALLBACK'
+  fallbackCode: 'JOB_FALLBACK' | 'JOB_TIMEOUT_FALLBACK',
+  errorClass?: RecommendFailureCode
 ): Promise<{ result: any; source: 'cache' | 'similar' | 'simplified' }> {
   const exactCached = await getExactCachedCompletedResult(job.dedupeKey, job.jobId);
   if (exactCached) {
@@ -303,7 +336,8 @@ async function buildFallbackResultWithRecovery(
         ...exactCached.result,
         cached: true,
         cacheSource: 'exact-cache-recovery',
-        code: fallbackCode,
+        code: errorClass || fallbackCode,
+        fallbackCode,
       },
       source: 'cache',
     };
@@ -316,13 +350,14 @@ async function buildFallbackResultWithRecovery(
         ...similar.result,
         cached: true,
         cacheSource: 'similar-recovery',
-        code: fallbackCode,
+        code: errorClass || fallbackCode,
+        fallbackCode,
       },
       source: 'similar',
     };
   }
 
-  const fallbackAnalysis = createFallbackAnalysis(job.input);
+  const fallbackAnalysis = enforceAdaptive701020(createFallbackAnalysis(job.input), job.input);
   return {
     result: {
       success: true,
@@ -342,10 +377,68 @@ async function buildFallbackResultWithRecovery(
       recommendationId: null,
       cached: false,
       cacheSource: 'fallback',
-      code: fallbackCode,
+      code: errorClass || fallbackCode,
+      fallbackCode,
     },
     source: 'simplified',
   };
+}
+
+function isValidHexColor(value: string): boolean {
+  return /^#[0-9A-Fa-f]{6}$/.test(value);
+}
+
+function validateAnalysisResponse(analysis: AnalyzeImageAndProvideRecommendationsOutput): void {
+  if (!analysis || !Array.isArray(analysis.outfitRecommendations)) {
+    throw new RecommendJobError('INVALID_RESPONSE', 'AI response missing outfit recommendations.');
+  }
+
+  if (analysis.outfitRecommendations.length < 3) {
+    throw new RecommendJobError('ML_EMPTY_RESPONSE', 'AI returned insufficient outfit recommendations.');
+  }
+
+  if (!Array.isArray(analysis.colorSuggestions) || analysis.colorSuggestions.length < 3) {
+    throw new RecommendJobError('ML_EMPTY_RESPONSE', 'AI returned insufficient color suggestions.');
+  }
+
+  for (const color of analysis.colorSuggestions) {
+    if (!color?.hex || !isValidHexColor(color.hex)) {
+      throw new RecommendJobError('INVALID_RESPONSE', 'AI returned invalid color suggestions.');
+    }
+  }
+
+  for (const outfit of analysis.outfitRecommendations.slice(0, 3)) {
+    if (!outfit?.title || !outfit?.description || !Array.isArray(outfit.items) || outfit.items.length === 0) {
+      throw new RecommendJobError('INVALID_RESPONSE', 'AI returned incomplete outfit recommendation data.');
+    }
+  }
+}
+
+function validateDiversificationConformance(analysis: AnalyzeImageAndProvideRecommendationsOutput): void {
+  const topThree = analysis.outfitRecommendations.slice(0, 3);
+  if (topThree.length < 3) {
+    throw new RecommendJobError('INVALID_RESPONSE', 'Diversification requires three outfit recommendations.');
+  }
+
+  const uniqueTitles = new Set(topThree.map((outfit) => normalizeText(outfit.title)));
+  if (uniqueTitles.size < 3) {
+    throw new RecommendJobError('INVALID_RESPONSE', 'Outfit recommendations are too repetitive.');
+  }
+
+  const uniqueStyles = new Set(topThree.map((outfit) => normalizeText(outfit.styleType || '')));
+  if (uniqueStyles.size < 2) {
+    throw new RecommendJobError('INVALID_RESPONSE', 'Outfit recommendations lack style diversity.');
+  }
+}
+
+function normalizeText(value: string): string {
+  return (value || '').toLowerCase().trim();
+}
+
+function buildImageFallbackDataUri(title: string): string {
+  const safeTitle = (title || 'Outfit Preview').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1E1B4B"/><stop offset="1" stop-color="#312E81"/></linearGradient></defs><rect width="1024" height="1024" fill="url(#g)"/><rect x="96" y="120" width="832" height="784" rx="52" fill="rgba(255,255,255,0.08)" stroke="rgba(255,255,255,0.2)"/><text x="512" y="478" text-anchor="middle" fill="#E9D5FF" font-size="42" font-family="Inter,Arial,sans-serif" font-weight="700">${safeTitle}</text><text x="512" y="548" text-anchor="middle" fill="#C4B5FD" font-size="28" font-family="Inter,Arial,sans-serif">Preview unavailable, retry recommended</text></svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function createFallbackAnalysis(input: RecommendRequest): AnalyzeImageAndProvideRecommendationsOutput {
@@ -460,7 +553,7 @@ async function saveJob(job: RecommendJobRecord): Promise<void> {
 export async function enqueueRecommendJob(
   input: RecommendRequest,
   userId: string,
-  options?: { autoStart?: boolean }
+  options?: { autoStart?: boolean; requestId?: string }
 ): Promise<{ jobId: string; deduped: boolean; status: RecommendJobStatus }> {
   const dedupeKey = buildDedupeKey(input, userId || 'anonymous');
   const redis = getRedisClient();
@@ -509,6 +602,7 @@ export async function enqueueRecommendJob(
     const jobId = crypto.randomUUID();
     const record: RecommendJobRecord = {
       jobId,
+      requestId: options?.requestId,
       status: 'queued',
       dedupeKey,
       createdAt: now(),
@@ -616,28 +710,41 @@ export async function findExistingRecommendJob(
 }
 
 async function runWorkflow(job: RecommendJobRecord): Promise<any> {
-  const analysis = await executeWithTimeoutAndRetry(
-    () => analyzeImageAndProvideRecommendations({
-      photoDataUri: job.input.photoDataUri,
-      occasion: job.input.occasion || '',
-      genre: job.input.genre || '',
-      gender: job.input.gender,
-      weather: job.input.weather || '',
-      weatherForecast: job.input.weatherForecast,
-      weeklyWeatherSummary: job.input.weatherForecast?.trendSummary,
-      skinTone: job.input.skinTone || '',
-      dressColors: Array.isArray(job.input.dressColors)
-        ? job.input.dressColors.join(', ')
-        : (job.input.dressColors || ''),
-      previousRecommendation: job.input.previousRecommendation || '',
-      userId: job.input.userId || '',
-    }),
-    {
-      timeoutMs: 12000,
-      retries: 1,
-      operationName: 'recommend.job.analysis',
+  let analysis: AnalyzeImageAndProvideRecommendationsOutput;
+  try {
+    analysis = await executeWithTimeoutAndRetry(
+      () => analyzeImageAndProvideRecommendations({
+        photoDataUri: job.input.photoDataUri,
+        occasion: job.input.occasion || '',
+        genre: job.input.genre || '',
+        gender: job.input.gender,
+        weather: job.input.weather || '',
+        weatherForecast: job.input.weatherForecast,
+        weeklyWeatherSummary: job.input.weatherForecast?.trendSummary,
+        skinTone: job.input.skinTone || '',
+        dressColors: Array.isArray(job.input.dressColors)
+          ? job.input.dressColors.join(', ')
+          : (job.input.dressColors || ''),
+        previousRecommendation: job.input.previousRecommendation || '',
+        userId: job.input.userId || '',
+      }),
+      {
+        timeoutMs: 12000,
+        retries: 1,
+        operationName: 'recommend.job.analysis',
+      }
+    );
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new RecommendJobError('ANALYSIS_TIMEOUT', 'Analysis timed out while contacting AI service.');
     }
-  );
+
+    throw new RecommendJobError('ML_FAILED', error?.message || 'AI analysis failed.');
+  }
+
+  validateAnalysisResponse(analysis);
+  analysis = enforceAdaptive701020(analysis, job.input);
+  validateDiversificationConformance(analysis);
 
   job.partialPayload = buildPartialPayload(analysis);
   job.progress = {
@@ -660,6 +767,7 @@ async function runWorkflow(job: RecommendJobRecord): Promise<any> {
 
   const outfits = analysis.outfitRecommendations.slice(0, 3);
   const imageUrls: string[] = [];
+  let failedImageCount = 0;
   const enrichedOutfits: Array<AnalyzeImageAndProvideRecommendationsOutput['outfitRecommendations'][number] & {
     imageUrl: string;
     generatedImageColors: null;
@@ -687,7 +795,13 @@ async function runWorkflow(job: RecommendJobRecord): Promise<any> {
       };
 
       const imagePrompt = outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`;
-      const imageUrl = await generateImageWithRetry(imagePrompt, colorHexCodes, 16_000);
+      let imageUrl: string;
+      try {
+        imageUrl = await generateImageWithRetry(imagePrompt, colorHexCodes, 16_000);
+      } catch {
+        failedImageCount += 1;
+        imageUrl = buildImageFallbackDataUri(outfit.title);
+      }
       imageUrls.push(imageUrl);
 
       if (job.partialPayload) {
@@ -710,6 +824,10 @@ async function runWorkflow(job: RecommendJobRecord): Promise<any> {
         shoppingLinks,
         generatedImageColors: null,
       });
+  }
+
+  if (failedImageCount >= outfits.length) {
+    throw new RecommendJobError('IMAGE_GENERATION_FAILED', 'Image generation failed for all recommendations.');
   }
 
   const payload = {
@@ -749,7 +867,14 @@ export async function processRecommendJob(jobId: string): Promise<void> {
   if (!existing) return;
   if (existing.status === 'completed') return;
 
-  const lock = await acquireDistributedLock(`recommend:job:lock:${jobId}`, 45);
+  let lock: DistributedLock | null = null;
+  for (let attempt = 0; attempt < 3 && !lock; attempt += 1) {
+    lock = await acquireDistributedLock(`recommend:job:lock:${jobId}`, 45);
+    if (!lock && attempt < 2) {
+      const backoffMs = 80 * (attempt + 1);
+      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    }
+  }
   if (!lock) return;
 
   const start = now();
@@ -813,7 +938,12 @@ export async function processRecommendJob(jobId: string): Promise<void> {
     if (!failed) return;
     const uxVariant = normalizeVariant(failed.input.uxVariant);
 
-    const fallback = await buildFallbackResultWithRecovery(failed, 'JOB_FALLBACK');
+    const errorCode: RecommendFailureCode =
+      typeof error?.code === 'string'
+        ? (error.code as RecommendFailureCode)
+        : 'JOB_PROCESSING_FAILED';
+
+    const fallback = await buildFallbackResultWithRecovery(failed, 'JOB_FALLBACK', errorCode);
 
     failed.status = 'failed';
     failed.error = error?.message || 'Job processing failed';
@@ -850,8 +980,8 @@ export async function getRecommendJobStatus(jobId: string): Promise<RecommendJob
     void processRecommendJob(jobId);
   }
 
-  if ((job.status === 'queued' || job.status === 'processing') && now() - job.createdAt > JOB_TIMEOUT_MS) {
-    const timeoutFallback = await buildFallbackResultWithRecovery(job, 'JOB_TIMEOUT_FALLBACK');
+  if ((job.status === 'queued' || job.status === 'processing') && now() - job.createdAt > RECOMMEND_JOB_TIMEOUT_MS) {
+    const timeoutFallback = await buildFallbackResultWithRecovery(job, 'JOB_TIMEOUT_FALLBACK', 'ANALYSIS_TIMEOUT');
 
     const timedOut: RecommendJobRecord = {
       ...job,

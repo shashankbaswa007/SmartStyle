@@ -211,6 +211,19 @@ This user has no interaction history yet. Focus on:
 
 function buildStrategySection(confidence: number, interactions: number): string {
   let section = `\n**PERSONALIZATION STRATEGY:**\n\n`;
+  const interestWeights = getInterestWeights(interactions);
+
+  section += `**INTEREST WEIGHT MODEL (apply in this order):**\n`;
+  section += `- Historical behavior (liked/worn/selected outfits): ${interestWeights.historical}%\n`;
+  section += `- Explicit profile preferences (favorite/disliked colors/styles): ${interestWeights.explicit}%\n`;
+  section += `- Current session context (occasion/genre/weather/current colors): ${interestWeights.session}%\n`;
+  section += `Use these weights to resolve conflicts between signals.\n\n`;
+
+  section += `**ADAPTIVE 70-20-10 RECOMMENDATION STRATEGY:**\n`;
+  section += `- Position 1 (70): Safe recommendation, strongest preference fit\n`;
+  section += `- Position 2 (20): Adjacent recommendation, slight stretch from proven taste\n`;
+  section += `- Position 3 (10): Exploratory recommendation, controlled boundary test\n`;
+  section += `Always return exactly one recommendation for each position.\n\n`;
 
   if (confidence >= 75) {
     // HIGH CONFIDENCE (50+ interactions)
@@ -274,6 +287,22 @@ function buildStrategySection(confidence: number, interactions: number): string 
   section += `- Each recommendation should offer something unique\n\n`;
 
   return section;
+}
+
+function getInterestWeights(interactions: number): {
+  historical: number;
+  explicit: number;
+  session: number;
+} {
+  if (interactions >= 50) {
+    return { historical: 60, explicit: 25, session: 15 };
+  }
+
+  if (interactions >= 10) {
+    return { historical: 45, explicit: 30, session: 25 };
+  }
+
+  return { historical: 30, explicit: 30, session: 40 };
 }
 
 // ============================================

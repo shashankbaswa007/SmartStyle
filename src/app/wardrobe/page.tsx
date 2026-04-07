@@ -11,12 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import UsageLimitMeter from '@/components/UsageLimitMeter';
 import FirstTimeTip from '@/components/FirstTimeTip';
 import PageStatusAlert from '@/components/PageStatusAlert';
 import QuickStartEmptyState from '@/components/QuickStartEmptyState';
 import { useMounted } from '@/hooks/useMounted';
-import { CONTEXT_MODES, SORT_OPTIONS, useWardrobeFilters, type ContextMode } from '@/hooks/useWardrobeFilters';
+import { CONTEXT_MODES, SORT_OPTIONS, useWardrobeFilters, type ContextMode, type SortOption } from '@/hooks/useWardrobeFilters';
 import { useWardrobeData } from '@/hooks/useWardrobeData';
 import { useWardrobeItemActions } from '@/hooks/useWardrobeItemActions';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
@@ -78,6 +79,7 @@ function WardrobePageContent() {
     isSyncing,
     usageLimits,
     usageLoading,
+    usageError,
     isOutfitLimitReached,
     isUploadLimitReached,
     refreshWardrobe,
@@ -89,6 +91,7 @@ function WardrobePageContent() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [imageLoadErrors, setImageLoadErrors] = useState<Set<string>>(new Set());
   const [showInsights, setShowInsights] = useState(true);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   
   // Respect reduced-motion preference for accessibility
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -172,6 +175,39 @@ function WardrobePageContent() {
   // Scale awareness for large wardrobes
   const LARGE_WARDROBE_THRESHOLD = 100;
   const isLargeWardrobe = wardrobeItems.length >= LARGE_WARDROBE_THRESHOLD;
+
+  const sortLabels: Record<SortOption, string> = {
+    recent: 'Recent',
+    'most-worn': 'Most Worn',
+    'least-worn': 'Least Worn',
+    'never-worn': 'Never Worn',
+    alphabetical: 'A-Z',
+  };
+
+  const contextOptions: Array<{ value: ContextMode; label: string; icon: typeof Home; description: string }> = [
+    { value: 'all', label: 'All', icon: Home, description: 'Show all wardrobe items' },
+    { value: 'work', label: 'Work', icon: Briefcase, description: 'Business and formal attire' },
+    { value: 'casual', label: 'Casual', icon: Coffee, description: 'Everyday wear' },
+    { value: 'travel', label: 'Travel', icon: Plane, description: 'Versatile travel items' },
+    { value: 'weather', label: 'Seasonal', icon: CloudSun, description: 'Season-specific items' },
+    { value: 'occasion', label: 'Special', icon: PartyPopper, description: 'Formal and party wear' },
+  ];
+
+  const activeFilterCount = useMemo(() => {
+    return Number(Boolean(searchQuery.trim()))
+      + Number(sortBy !== 'recent')
+      + Number(groupByColor)
+      + Number(contextMode !== 'all')
+      + Number(selectedFilter !== 'all');
+  }, [contextMode, groupByColor, searchQuery, selectedFilter, sortBy]);
+
+  const clearAllFilters = useCallback(() => {
+    setSearchQuery('');
+    setSortBy('recent');
+    setGroupByColor(false);
+    setContextMode('all');
+    setSelectedFilter('all');
+  }, [setContextMode, setGroupByColor, setSearchQuery, setSortBy]);
 
   const handleRefresh = () => {
     if (userId) {
@@ -566,12 +602,6 @@ function WardrobePageContent() {
   return (
     <ProtectedRoute>
       <TooltipProvider delayDuration={300}>
-      <a 
-        href="#main-content" 
-        className="sr-only focus:not-sr-only focus:fixed focus:top-24 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-violet-600 focus:text-white focus:rounded-lg focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-violet-400 focus:ring-offset-2 focus:ring-offset-background"
-      >
-        Skip to main content
-      </a>
       <section id="main-content" className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8" aria-label="Wardrobe management">
         {/* Offline Notification Banner */}
         {!isOnline && (
@@ -608,7 +638,7 @@ function WardrobePageContent() {
           )}
         </div>
 
-        <div className="relative z-10 max-w-6xl mx-auto" id="main-content">
+        <div className="relative z-10 max-w-6xl mx-auto">
           {/* Header */}
           <header className="text-center mb-8 sm:mb-12 md:mb-16 relative" role="banner">
             <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto" aria-label="Page title">
@@ -849,6 +879,18 @@ function WardrobePageContent() {
                   />
                 </div>
               </div>
+
+              {usageError && (
+                <PageStatusAlert
+                  className="mx-auto mt-3 w-full max-w-4xl"
+                  title="Usage status unavailable"
+                  description={usageError}
+                  onRetry={() => {
+                    void fetchUsageLimits(userId);
+                  }}
+                  isRetrying={usageLoading}
+                />
+              )}
             </motion.div>
             )}
           </header>
@@ -892,20 +934,42 @@ function WardrobePageContent() {
                 )}
               </div>
 
+              {/* Mobile filter entrypoint */}
+              <div className="md:hidden max-w-2xl mx-auto rounded-xl border border-violet-200 bg-white/80 backdrop-blur-sm p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <Button
+                    onClick={() => setShowMobileFilters(true)}
+                    className="h-11 flex-1 justify-between bg-violet-600 hover:bg-violet-700 text-white"
+                    aria-label={`Open filters${activeFilterCount > 0 ? `, ${activeFilterCount} active` : ''}`}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <Filter className="h-4 w-4" />
+                      <span>Filters</span>
+                    </span>
+                    {activeFilterCount > 0 && (
+                      <Badge className="bg-white/20 text-white border-white/25">{activeFilterCount}</Badge>
+                    )}
+                  </Button>
+                  {activeFilterCount > 0 && (
+                    <Button
+                      variant="outline"
+                      onClick={clearAllFilters}
+                      className="h-11 border-violet-300 text-violet-700"
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
+                <p className="mt-2 text-xs text-gray-600">Sort, context, and category filters are grouped in one place for easier mobile filtering.</p>
+              </div>
+
               {/* Sort and Group Controls */}
-              <div className="flex flex-wrap items-center justify-center gap-3">
+              <div className="hidden md:flex flex-wrap items-center justify-center gap-3">
                 <div className="flex items-center gap-2">
                   <ArrowUpDown className="h-4 w-4 text-gray-500" />
                   <span className="text-sm text-gray-600">Sort:</span>
                   <div className="flex gap-1">
                     {SORT_OPTIONS.map((option) => {
-                      const labels = {
-                        'recent': 'Recent',
-                        'most-worn': 'Most Worn',
-                        'least-worn': 'Least Worn',
-                        'never-worn': 'Never Worn',
-                        'alphabetical': 'A-Z'
-                      };
                       return (
                         <Button
                           key={option}
@@ -916,7 +980,7 @@ function WardrobePageContent() {
                             ? 'bg-violet-600 text-white h-8 px-3' 
                             : 'border-gray-300 text-gray-700 hover:bg-gray-50 h-8 px-3'}
                         >
-                          {labels[option]}
+                          {sortLabels[option]}
                         </Button>
                       );
                     })}
@@ -946,7 +1010,7 @@ function WardrobePageContent() {
               </div>
 
               {/* Active Filters Summary */}
-              {(searchQuery || sortBy !== 'recent' || groupByColor) && (
+              {(searchQuery || sortBy !== 'recent' || groupByColor || contextMode !== 'all' || selectedFilter !== 'all') && (
                 <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
                   <span className="text-gray-500">Active:</span>
                   {searchQuery && (
@@ -964,6 +1028,16 @@ function WardrobePageContent() {
                       Color Groups
                     </Badge>
                   )}
+                  {contextMode !== 'all' && (
+                    <Badge variant="secondary" className="bg-violet-100 text-violet-700">
+                      Context: {contextOptions.find((option) => option.value === contextMode)?.label || contextMode}
+                    </Badge>
+                  )}
+                  {selectedFilter !== 'all' && (
+                    <Badge variant="secondary" className="bg-violet-100 text-violet-700">
+                      Type: {selectedFilter.charAt(0).toUpperCase() + selectedFilter.slice(1)}
+                    </Badge>
+                  )}
                 </div>
               )}
             </motion.div>
@@ -974,94 +1048,29 @@ function WardrobePageContent() {
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="mb-6"
+              className="mb-6 hidden md:block"
             >
               <div className="flex flex-wrap items-center justify-center gap-2">
                 <span className="text-sm text-gray-600 mr-2">Context:</span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={contextMode === 'all' ? 'default' : 'outline'}
-                      onClick={() => setContextMode('all')}
-                      className={contextMode === 'all' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
-                    >
-                      <Home className="h-4 w-4 mr-1" />
-                      All
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Show all wardrobe items</p></TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={contextMode === 'work' ? 'default' : 'outline'}
-                      onClick={() => setContextMode('work')}
-                      className={contextMode === 'work' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
-                    >
-                      <Briefcase className="h-4 w-4 mr-1" />
-                      Work
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Business and formal attire</p></TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={contextMode === 'casual' ? 'default' : 'outline'}
-                      onClick={() => setContextMode('casual')}
-                      className={contextMode === 'casual' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
-                    >
-                      <Coffee className="h-4 w-4 mr-1" />
-                      Casual
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Everyday wear</p></TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={contextMode === 'travel' ? 'default' : 'outline'}
-                      onClick={() => setContextMode('travel')}
-                      className={contextMode === 'travel' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
-                    >
-                      <Plane className="h-4 w-4 mr-1" />
-                      Travel
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Versatile travel items</p></TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={contextMode === 'weather' ? 'default' : 'outline'}
-                      onClick={() => setContextMode('weather')}
-                      className={contextMode === 'weather' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
-                    >
-                      <CloudSun className="h-4 w-4 mr-1" />
-                      Seasonal
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Season-specific items</p></TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant={contextMode === 'occasion' ? 'default' : 'outline'}
-                      onClick={() => setContextMode('occasion')}
-                      className={contextMode === 'occasion' ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
-                    >
-                      <PartyPopper className="h-4 w-4 mr-1" />
-                      Special
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Formal and party wear</p></TooltipContent>
-                </Tooltip>
+                {contextOptions.map((option) => {
+                  const Icon = option.icon;
+                  return (
+                    <Tooltip key={option.value}>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant={contextMode === option.value ? 'default' : 'outline'}
+                          onClick={() => setContextMode(option.value)}
+                          className={contextMode === option.value ? 'bg-violet-600 text-white' : 'border-violet-300 text-violet-700 hover:bg-violet-50'}
+                        >
+                          <Icon className="h-4 w-4 mr-1" />
+                          {option.label}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>{option.description}</p></TooltipContent>
+                    </Tooltip>
+                  );
+                })}
               </div>
             </motion.div>
           )}
@@ -1140,7 +1149,7 @@ function WardrobePageContent() {
 
           {/* Filter Buttons */}
           {wardrobeItems.length > 0 && (
-            <div className="space-y-3 mb-8">
+            <div className="space-y-3 mb-8 hidden md:block">
               {contextMode !== 'all' && (
                 <div className="flex justify-center">
                   <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-violet-50 border border-violet-200 rounded-full text-sm text-violet-700">
@@ -1179,6 +1188,115 @@ function WardrobePageContent() {
               ))}
               </div>
             </div>
+          )}
+
+          {/* Mobile Filters Bottom Sheet */}
+          {wardrobeItems.length > 0 && (
+            <Sheet open={showMobileFilters} onOpenChange={setShowMobileFilters}>
+              <SheetContent
+                side="bottom"
+                className="md:hidden max-h-[86svh] overflow-hidden rounded-t-2xl border-violet-200 px-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+              >
+                <SheetHeader className="text-left pb-2 border-b border-violet-100">
+                  <SheetTitle className="flex items-center gap-2">
+                    <Filter className="h-4 w-4 text-violet-600" />
+                    Filters
+                  </SheetTitle>
+                  <SheetDescription>
+                    Refine wardrobe items by sort, context, and category.
+                  </SheetDescription>
+                </SheetHeader>
+
+                <div className="mt-4 space-y-5 overflow-y-auto pr-1 max-h-[calc(86svh-170px)]">
+                  <section className="space-y-3" aria-label="Sort and grouping filters">
+                    <h3 className="text-sm font-semibold text-gray-700">Sort & Grouping</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {SORT_OPTIONS.map((option) => (
+                        <Button
+                          key={option}
+                          variant={sortBy === option ? 'default' : 'outline'}
+                          onClick={() => setSortBy(option)}
+                          className={sortBy === option
+                            ? 'h-11 bg-violet-600 text-white'
+                            : 'h-11 border-violet-300 text-violet-700 hover:bg-violet-50'}
+                        >
+                          {sortLabels[option]}
+                        </Button>
+                      ))}
+                    </div>
+                    <Button
+                      variant={groupByColor ? 'default' : 'outline'}
+                      onClick={() => setGroupByColor(!groupByColor)}
+                      className={groupByColor
+                        ? 'h-11 w-full bg-violet-600 text-white'
+                        : 'h-11 w-full border-violet-300 text-violet-700 hover:bg-violet-50'}
+                    >
+                      <Palette className="h-4 w-4 mr-2" />
+                      Group by Color
+                    </Button>
+                  </section>
+
+                  <section className="space-y-3" aria-label="Context filters">
+                    <h3 className="text-sm font-semibold text-gray-700">Context</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {contextOptions.map((option) => {
+                        const Icon = option.icon;
+                        return (
+                          <Button
+                            key={option.value}
+                            variant={contextMode === option.value ? 'default' : 'outline'}
+                            onClick={() => setContextMode(option.value)}
+                            className={contextMode === option.value
+                              ? 'h-11 bg-violet-600 text-white justify-start'
+                              : 'h-11 border-violet-300 text-violet-700 hover:bg-violet-50 justify-start'}
+                          >
+                            <Icon className="h-4 w-4 mr-2" />
+                            {option.label}
+                          </Button>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <section className="space-y-3" aria-label="Category filters">
+                    <h3 className="text-sm font-semibold text-gray-700">Category</h3>
+                    <div className="grid grid-cols-2 gap-2">
+                      {ITEM_FILTERS.map((filter) => (
+                        <Button
+                          key={filter}
+                          variant={selectedFilter === filter ? 'default' : 'outline'}
+                          onClick={() => setSelectedFilter(filter)}
+                          className={selectedFilter === filter
+                            ? 'h-11 bg-violet-600 text-white justify-start'
+                            : 'h-11 border-violet-300 text-violet-700 hover:bg-violet-50 justify-start'}
+                        >
+                          <span className="flex items-center gap-2">
+                            {getItemTypeIcon(filter)}
+                            <span>{filter.charAt(0).toUpperCase() + filter.slice(1)}</span>
+                          </span>
+                        </Button>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+
+                <SheetFooter className="mt-4 border-t border-violet-100 pt-3 gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={clearAllFilters}
+                    className="h-11 border-violet-300 text-violet-700"
+                  >
+                    Clear Filters
+                  </Button>
+                  <Button
+                    onClick={() => setShowMobileFilters(false)}
+                    className="h-11 bg-violet-600 hover:bg-violet-700 text-white"
+                  >
+                    Apply Filters
+                  </Button>
+                </SheetFooter>
+              </SheetContent>
+            </Sheet>
           )}
 
           {/* Loading State */}

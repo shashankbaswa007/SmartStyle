@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
-import { recommendRequestSchema, validateRequest, formatValidationError } from '@/lib/validation';
+import crypto from 'crypto';
+import {
+  recommendRequestSchema,
+  validateRequest,
+  formatValidationError,
+  sanitizePromptText,
+  MAX_IMAGE_DATA_URI_CHARS,
+} from '@/lib/validation';
 import { quickValidateImageDataUri } from '@/lib/server-image-validation';
 import { enforceRecommendAuth, enforceRecommendRateLimit, AuthError } from '@/lib/recommend/request-guard';
 import {
@@ -7,12 +14,14 @@ import {
   markRecommendJobRateLimited,
   startRecommendJob,
   awaitRecommendJobTerminalState,
+  RECOMMEND_JOB_TIMEOUT_MS,
 } from '@/lib/recommend/async-jobs';
 
 function buildErrorResponse(
   status: number,
   code: string,
   message: string,
+  requestId: string,
   extra: Record<string, unknown> = {}
 ) {
   return NextResponse.json(
@@ -21,37 +30,54 @@ function buildErrorResponse(
       error: message,
       message,
       code,
+      requestId,
       ...extra,
     },
-    { status }
+    {
+      status,
+      headers: {
+        'X-Request-Id': requestId,
+      },
+    }
   );
 }
 
 export async function POST(req: Request) {
-  const MAX_IMAGE_DATA_URI_CHARS = 10_000_000;
-  const TERMINAL_WAIT_MS = 22_000;
+  const TERMINAL_WAIT_MS = Math.min(22_000, RECOMMEND_JOB_TIMEOUT_MS - 5_000);
+  const requestId = req.headers.get('x-request-id') || crypto.randomUUID();
 
   let body: unknown;
   try {
     body = await req.json();
   } catch {
-    return buildErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body');
+    return buildErrorResponse(400, 'INVALID_JSON', 'Invalid JSON in request body', requestId);
   }
 
   const validation = validateRequest(recommendRequestSchema, body);
   if (!validation.success) {
-    return NextResponse.json(formatValidationError(validation.error), { status: 400 });
+    return NextResponse.json(
+      {
+        ...formatValidationError(validation.error),
+        requestId,
+      },
+      {
+        status: 400,
+        headers: {
+          'X-Request-Id': requestId,
+        },
+      }
+    );
   }
 
   const input = validation.data;
 
   const imageValidation = quickValidateImageDataUri(input.photoDataUri);
   if (!imageValidation.isValid) {
-    return buildErrorResponse(400, 'INVALID_IMAGE', imageValidation.error || 'Invalid image payload');
+    return buildErrorResponse(400, 'INVALID_IMAGE', imageValidation.error || 'Invalid image payload', requestId);
   }
 
   if (input.photoDataUri.length > MAX_IMAGE_DATA_URI_CHARS) {
-    return buildErrorResponse(413, 'IMAGE_TOO_LARGE', 'Image payload too large. Please upload a smaller image.');
+    return buildErrorResponse(413, 'IMAGE_TOO_LARGE', 'Image payload too large. Please upload a smaller image.', requestId);
   }
 
   let userId = input.userId || 'anonymous';
@@ -60,14 +86,16 @@ export async function POST(req: Request) {
       userId = (await enforceRecommendAuth(req, userId)) || 'anonymous';
     } catch (error) {
       if (error instanceof AuthError) {
-        return buildErrorResponse(error.status, 'AUTH_ERROR', error.message);
+        return buildErrorResponse(error.status, 'AUTH_ERROR', error.message, requestId);
       }
-      return buildErrorResponse(401, 'UNAUTHORIZED', 'Unauthorized - invalid authentication token');
+      return buildErrorResponse(401, 'UNAUTHORIZED', 'Unauthorized - invalid authentication token', requestId);
     }
   }
 
   const normalizedInput = {
     ...input,
+    occasion: sanitizePromptText(input.occasion),
+    genre: sanitizePromptText(input.genre),
     dressColors: Array.isArray(input.dressColors)
       ? input.dressColors
       : typeof input.dressColors === 'string'
@@ -76,7 +104,7 @@ export async function POST(req: Request) {
     userId,
   };
 
-  const queued = await enqueueRecommendJob(normalizedInput, userId, { autoStart: false });
+  const queued = await enqueueRecommendJob(normalizedInput, userId, { autoStart: false, requestId });
 
   if (queued.deduped) {
     if (queued.status === 'completed' || queued.status === 'failed') {
@@ -102,6 +130,7 @@ export async function POST(req: Request) {
         return NextResponse.json(
           {
             success: true,
+            requestId,
             status: terminalJob.status,
             jobId: terminalJob.jobId,
             progress: terminalJob.progress,
@@ -116,7 +145,7 @@ export async function POST(req: Request) {
             completedAt: terminalJob.completedAt,
             deduped: true,
           },
-          { status: 200 }
+          { status: 200, headers: { 'X-Request-Id': requestId } }
         );
       }
     }
@@ -124,13 +153,14 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         success: true,
+        requestId,
         status: 'queued',
         jobId: queued.jobId,
         deduped: true,
         existingStatus: queued.status,
         message: 'Similar request already in progress or cached; attached to existing job.',
       },
-      { status: 202 }
+      { status: 202, headers: { 'X-Request-Id': requestId } }
     );
   }
 
@@ -150,6 +180,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           success: false,
+          requestId,
           code: 'RATE_LIMIT_EXCEEDED',
           status: 'rate_limited',
           error: limitResult.rateLimit.message || 'Rate limit exceeded',
@@ -159,6 +190,7 @@ export async function POST(req: Request) {
         {
           status: 429,
           headers: {
+            'X-Request-Id': requestId,
             'X-RateLimit-Remaining': '0',
             'X-RateLimit-Reset': limitResult.rateLimit.resetAt.toISOString(),
             'Retry-After': String(retryAfterSeconds),
@@ -172,7 +204,7 @@ export async function POST(req: Request) {
       queued.jobId,
       'Unable to verify current usage. Please retry shortly.'
     );
-    return buildErrorResponse(429, 'RATE_LIMIT_UNAVAILABLE', 'Unable to verify current usage. Please retry shortly.');
+    return buildErrorResponse(429, 'RATE_LIMIT_UNAVAILABLE', 'Unable to verify current usage. Please retry shortly.', requestId);
   }
 
   await startRecommendJob(queued.jobId);
@@ -199,6 +231,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         success: true,
+        requestId,
         status: terminalJob.status,
         jobId: terminalJob.jobId,
         progress: terminalJob.progress,
@@ -212,13 +245,14 @@ export async function POST(req: Request) {
         code: result?.code,
         completedAt: terminalJob.completedAt,
       },
-      { status: 200 }
+      { status: 200, headers: { 'X-Request-Id': requestId } }
     );
   }
 
   return NextResponse.json(
     {
       success: true,
+      requestId,
       status: 'queued',
       jobId: queued.jobId,
       deduped: queued.deduped,
@@ -226,6 +260,6 @@ export async function POST(req: Request) {
         ? 'Similar request already in progress or cached; attached to existing job.'
         : 'Recommendation job queued successfully.',
     },
-    { status: 202 }
+    { status: 202, headers: { 'X-Request-Id': requestId } }
   );
 }

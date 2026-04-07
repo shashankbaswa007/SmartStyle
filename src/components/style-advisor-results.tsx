@@ -50,9 +50,17 @@ type OutfitWithLinks = AnalyzeImageAndProvideRecommendationsOutput['outfitRecomm
   // Personalization fields from diversification system
   matchScore?: number;
   matchCategory?: string;
+  strategyBucket?: '70' | '20' | '10';
+  strategyLabel?: string;
   explanation?: string;
   position?: number;
 };
+
+function getStrategyBadgeClasses(bucket?: '70' | '20' | '10'): string {
+  if (bucket === '70') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30';
+  if (bucket === '20') return 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30';
+  return 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30';
+}
 
 
 // Helper function to convert color names to hex codes
@@ -1109,6 +1117,14 @@ export function StyleAdvisorResults({
                   <h4 className="text-lg sm:text-xl font-bold text-foreground flex-1 min-w-0 truncate">
                     {outfit.title}
                   </h4>
+                  {outfitWithLinks.strategyBucket && (
+                    <Badge
+                      variant="outline"
+                      className={`${getStrategyBadgeClasses(outfitWithLinks.strategyBucket)} font-medium px-3 py-1 text-xs`}
+                    >
+                      {outfitWithLinks.strategyLabel || `${outfitWithLinks.strategyBucket}% Strategy`}
+                    </Badge>
+                  )}
                   <MatchScoreBadge
                     matchScore={outfitWithLinks.matchScore}
                     matchCategory={outfitWithLinks.matchCategory}

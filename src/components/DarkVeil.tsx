@@ -109,6 +109,7 @@ export default function DarkVeil({
 
     let frame = 0;
     let resize: (() => void) | null = null;
+    let resizeObserver: ResizeObserver | null = null;
     let loseContext: (() => void) | null = null;
 
     try {
@@ -143,11 +144,17 @@ export default function DarkVeil({
       resize = () => {
         const w = parent.clientWidth;
         const h = parent.clientHeight;
-        renderer.setSize(w * resolutionScale, h * resolutionScale);
-        program.uniforms.uResolution.value.set(w, h);
+        const renderW = Math.max(1, Math.round(w * resolutionScale));
+        const renderH = Math.max(1, Math.round(h * resolutionScale));
+        renderer.setSize(renderW, renderH);
+        program.uniforms.uResolution.value.set(renderW, renderH);
       };
 
       window.addEventListener('resize', resize);
+      if (typeof ResizeObserver !== 'undefined') {
+        resizeObserver = new ResizeObserver(resize);
+        resizeObserver.observe(parent);
+      }
       resize();
 
       const start = performance.now();
@@ -175,6 +182,7 @@ export default function DarkVeil({
       if (resize) {
         window.removeEventListener('resize', resize);
       }
+      resizeObserver?.disconnect();
       loseContext?.();
       releaseWebGlContext();
     };

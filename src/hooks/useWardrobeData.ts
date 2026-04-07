@@ -24,6 +24,7 @@ interface UseWardrobeDataResult {
     wardrobeUpload?: UsageWindow;
   };
   usageLoading: boolean;
+  usageError: string | null;
   isOutfitLimitReached: boolean;
   isUploadLimitReached: boolean;
   refreshWardrobe: (options?: { silent?: boolean; preserveExistingOnError?: boolean }) => Promise<void>;
@@ -35,6 +36,20 @@ const FETCH_TIMEOUT_MS = 10_000;
 function getTimezoneHeader(): Record<string, string> {
   if (typeof window === 'undefined') return {};
   return { 'x-timezone-offset-minutes': String(new Date().getTimezoneOffset()) };
+}
+
+function parseUsageWindow(data: unknown): UsageWindow | undefined {
+  if (!data || typeof data !== 'object') return undefined;
+  const candidate = data as { remaining?: unknown; limit?: unknown; resetAt?: unknown };
+  if (typeof candidate.remaining !== 'number' || typeof candidate.limit !== 'number') {
+    return undefined;
+  }
+
+  return {
+    remaining: candidate.remaining,
+    limit: candidate.limit,
+    resetAt: typeof candidate.resetAt === 'string' ? candidate.resetAt : undefined,
+  };
 }
 
 export function useWardrobeData(): UseWardrobeDataResult {
@@ -51,10 +66,12 @@ export function useWardrobeData(): UseWardrobeDataResult {
     wardrobeUpload?: UsageWindow;
   }>({});
   const [usageLoading, setUsageLoading] = useState(true);
+  const [usageError, setUsageError] = useState<string | null>(null);
   const hasTaskStartedRef = useRef(false);
   const hasTaskCompletedRef = useRef(false);
   const lastForcedRefreshFailureAtRef = useRef(0);
   const authUserRef = useRef<User | null>(null);
+  const userIdRef = useRef<string | null>(null);
 
   const fetchWardrobeItems = useCallback(async (
     uid: string,
@@ -139,12 +156,14 @@ export function useWardrobeData(): UseWardrobeDataResult {
     const activeUser = uid || tokenUser?.uid;
     if (!activeUser || !tokenUser) {
       setUsageLimits({});
+      setUsageError(null);
       setUsageLoading(false);
       return;
     }
 
     try {
       setUsageLoading(true);
+      setUsageError(null);
       const fetchUsageStatus = async (forceRefreshToken = false) => {
         const freshTokenUser = authUserRef.current || auth.currentUser;
         if (!freshTokenUser) {
@@ -173,6 +192,7 @@ export function useWardrobeData(): UseWardrobeDataResult {
       if (response.status === 401) {
         if (Date.now() - lastForcedRefreshFailureAtRef.current < 120_000) {
           setUsageLimits({});
+          setUsageError('Session refresh is cooling down. Please try again in a moment.');
           return;
         }
 
@@ -181,34 +201,32 @@ export function useWardrobeData(): UseWardrobeDataResult {
         } catch {
           lastForcedRefreshFailureAtRef.current = Date.now();
           setUsageLimits({});
+          setUsageError('Session refresh failed. Please sign in again and retry.');
           return;
         }
       }
 
       if (!response.ok) {
         setUsageLimits({});
+        setUsageError('Unable to load daily limits right now. Please retry.');
         return;
       }
 
       const data = await response.json();
+      const outfitWindow = parseUsageWindow(data?.usage?.[RATE_LIMIT_SCOPES.wardrobeOutfit]);
+      const uploadWindow = parseUsageWindow(data?.usage?.[RATE_LIMIT_SCOPES.wardrobeUpload]);
+
       setUsageLimits({
-        wardrobeOutfit: data?.usage?.[RATE_LIMIT_SCOPES.wardrobeOutfit]
-          ? {
-              remaining: data.usage[RATE_LIMIT_SCOPES.wardrobeOutfit].remaining,
-              limit: data.usage[RATE_LIMIT_SCOPES.wardrobeOutfit].limit,
-              resetAt: data.usage[RATE_LIMIT_SCOPES.wardrobeOutfit].resetAt,
-            }
-          : undefined,
-        wardrobeUpload: data?.usage?.[RATE_LIMIT_SCOPES.wardrobeUpload]
-          ? {
-              remaining: data.usage[RATE_LIMIT_SCOPES.wardrobeUpload].remaining,
-              limit: data.usage[RATE_LIMIT_SCOPES.wardrobeUpload].limit,
-              resetAt: data.usage[RATE_LIMIT_SCOPES.wardrobeUpload].resetAt,
-            }
-          : undefined,
+        wardrobeOutfit: outfitWindow,
+        wardrobeUpload: uploadWindow,
       });
+
+      if (!outfitWindow && !uploadWindow) {
+        setUsageError('Daily limits are temporarily unavailable. Please retry.');
+      }
     } catch {
       setUsageLimits({});
+      setUsageError('Unable to load usage status. Please try again.');
     } finally {
       setUsageLoading(false);
     }
@@ -241,15 +259,18 @@ export function useWardrobeData(): UseWardrobeDataResult {
       authUserRef.current = user;
       if (user) {
         setUserId(user.uid);
+        userIdRef.current = user.uid;
         void fetchWardrobeItems(user.uid, { silent: false, preserveExistingOnError: true });
         void fetchUsageLimits(user.uid);
       } else {
         setUserId(null);
+        userIdRef.current = null;
         hasTaskStartedRef.current = false;
         hasTaskCompletedRef.current = false;
         setLoading(false);
         setUsageLimits({});
         setUsageLoading(false);
+        setUsageError(null);
       }
     });
 
@@ -290,7 +311,7 @@ export function useWardrobeData(): UseWardrobeDataResult {
     const onUsageConsumed = (event: Event) => {
       const customEvent = event as CustomEvent<{ scope?: string }>;
       if (customEvent.detail?.scope === RATE_LIMIT_SCOPES.wardrobeOutfit || customEvent.detail?.scope === RATE_LIMIT_SCOPES.wardrobeUpload) {
-        void fetchUsageLimits(userId);
+        void fetchUsageLimits(userIdRef.current);
       }
     };
 
@@ -329,6 +350,7 @@ export function useWardrobeData(): UseWardrobeDataResult {
     isSyncing,
     usageLimits,
     usageLoading,
+    usageError,
     isOutfitLimitReached,
     isUploadLimitReached,
     refreshWardrobe,

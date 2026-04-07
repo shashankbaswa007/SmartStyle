@@ -136,6 +136,12 @@ const AnalyzeImageAndProvideRecommendationsOutputSchema = z.object({
     }).describe('Optional shopping links for the primary item(s) in this outfit.'),
     isExistingMatch: z.boolean().describe('True if the outfit matches well with current styling trends and user preferences.'),
     items: z.array(z.string()).describe('A list of 2-4 clothing items for this outfit.'),
+    matchScore: z.number().min(0).max(100).optional().describe('Post-processed interest alignment score for this recommendation.'),
+    matchCategory: z.enum(['perfect', 'great', 'exploring']).optional().describe('Post-processed recommendation category aligned with adaptive 70-20-10.'),
+    strategyBucket: z.enum(['70', '20', '10']).optional().describe('Adaptive 70-20-10 bucket assignment for the recommendation rank.'),
+    strategyLabel: z.string().optional().describe('Human-readable label for the assigned strategy bucket.'),
+    explanation: z.string().optional().describe('Short explanation for why this recommendation sits in its current strategy bucket.'),
+    position: z.number().int().min(1).max(3).optional().describe('One-based ranking position after adaptive diversification ordering.'),
   })).describe('A list of 2-3 complete outfit recommendations.'),
   notes: z.string().describe('A concluding pro tip or a gentle style note in a single sentence.'),
   imagePrompt: z.string().describe('A concise, descriptive prompt for an image generation model, describing the top recommended outfit on a mannequin or person.'),
@@ -313,12 +319,25 @@ const prompt = ai.definePrompt({
   
   Think of each outfit as designed for a DIFFERENT PERSONALITY interpreting the same occasion.
   
-  **Priority Order for Recommendations:**
-  1. **FIRST:** User's explicitly selected outfits (selectedOutfitHistory) - these are PROVEN winners
-  2. **SECOND:** User's favorite colors (favoriteColors) - they love these
-  3. **THIRD:** Occasion and weather requirements - must be appropriate
-  4. **FOURTH:** Complementary colors for their skin tone - flattering choices
-  5. **FIFTH:** Current fashion trends - modern and stylish
+  **Interest Weighting Model (apply when balancing signals):**
+  - If total selections >= 50:
+    Historical behavior (selected/worn outfits): 60%
+    Explicit profile preferences (favorite/disliked colors/styles): 25%
+    Current session context (occasion/genre/weather/current outfit): 15%
+  - If total selections is 10-49:
+    Historical behavior (selected/worn outfits): 45%
+    Explicit profile preferences (favorite/disliked colors/styles): 30%
+    Current session context (occasion/genre/weather/current outfit): 25%
+  - If total selections < 10 or unavailable:
+    Historical behavior (selected/worn outfits): 30%
+    Explicit profile preferences (favorite/disliked colors/styles): 30%
+    Current session context (occasion/genre/weather/current outfit): 40%
+
+  **Adaptive 70-20-10 recommendation mandate:**
+  - Recommendation 1 (70): safest match to strongest signals and proven interests.
+  - Recommendation 2 (20): adjacent option with moderate exploration.
+  - Recommendation 3 (10): controlled exploratory option that still respects hard constraints.
+  - Always return exactly one recommendation for each bucket in this order.
   
   **Mandatory Requirements:**
   - ✅ Recommendations MUST perfectly align with "{{{occasion}}}" and "{{{genre}}}" preferences

@@ -188,8 +188,8 @@ export function MatchingWardrobeItems({
   const displayItems = isExpanded ? matchingItems : matchingItems.slice(0, 4);
 
   return (
-    <div className="bg-card rounded-xl p-6 shadow-sm border border-border" role="region" aria-label="Matching wardrobe items">
-      <div className="flex items-center justify-between mb-4">
+    <div className="bg-card rounded-xl p-4 sm:p-6 shadow-sm border border-border" role="region" aria-label="Matching wardrobe items">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -218,7 +218,7 @@ export function MatchingWardrobeItems({
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         {displayItems.map((item) => (
           <button
             key={item.id}

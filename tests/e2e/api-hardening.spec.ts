@@ -20,6 +20,8 @@ test.describe('API Hardening', () => {
     const response = await request.post('/api/recommend', {
       data: {
         photoDataUri: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
+        occasion: 'office',
+        genre: 'minimalist',
         gender: 'male',
         userId: 'forged-user-id',
       },

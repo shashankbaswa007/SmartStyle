@@ -41,15 +41,31 @@ const genders = [
   { value: "unisex", label: "Unisex" },
 ];
 
+const PROMPT_SAFE_USER_INPUT_REGEX = /^[a-zA-Z0-9 ,.'&()\-/]+$/;
+
+function normalizePromptInput(value: string): string {
+  return value.replace(/[\r\n\t]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+}
+
 const formSchema = z.object({
   image: z
     .any()
     .refine((files) => files?.length === 1, "An image of your outfit is required.")
     .refine((files) => files?.[0]?.size <= 10000000, `Max file size is 10MB.`),
-  occasion: z.string({ required_error: "Please enter an occasion." }).min(3, "Occasion must be at least 3 characters."),
-  genre: z.string({ required_error: "Please enter a genre." }).min(3, "Genre must be at least 3 characters."),
-  gender: z.string({ required_error: "Please select a gender." }).min(1),
+  occasion: z.string({ required_error: "Please enter an occasion." })
+    .trim()
+    .min(3, "Occasion must be at least 3 characters.")
+    .max(100, "Occasion must be less than 100 characters.")
+    .refine((value) => PROMPT_SAFE_USER_INPUT_REGEX.test(value), "Occasion contains unsupported characters."),
+  genre: z.string({ required_error: "Please enter a genre." })
+    .trim()
+    .min(3, "Genre must be at least 3 characters.")
+    .max(100, "Genre must be less than 100 characters.")
+    .refine((value) => PROMPT_SAFE_USER_INPUT_REGEX.test(value), "Genre contains unsupported characters."),
+  gender: z.enum(["male", "female", "unisex"], { required_error: "Please select a gender." }),
 });
+
+type StyleAdvisorFormValues = z.input<typeof formSchema>;
 
 type AnalysisRequest = Omit<AnalyzeImageAndProvideRecommendationsInput, 'previousRecommendation'>;
 
@@ -240,6 +256,12 @@ interface ResultMeta {
   usedFallback: boolean;
 }
 
+interface AnalysisFailureState {
+  title: string;
+  description: string;
+  code?: string;
+}
+
 interface StyleAdvisorProps {
   isLimitReached?: boolean;
 }
@@ -370,6 +392,8 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   const [uxVariant, setUxVariant] = React.useState<'A' | 'B'>('A');
   const [resultMeta, setResultMeta] = React.useState<ResultMeta | null>(null);
   const [recommendCooldownUntil, setRecommendCooldownUntil] = React.useState<number | null>(null);
+  const [isAutoRetrying, setIsAutoRetrying] = React.useState(false);
+  const [analysisFailure, setAnalysisFailure] = React.useState<AnalysisFailureState | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
@@ -380,12 +404,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   const submitInFlightRef = React.useRef(false);
 
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<StyleAdvisorFormValues, any, StyleAdvisorFormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       occasion: "",
       genre: "",
-      gender: "",
+      gender: "unisex",
     },
   });
 
@@ -535,6 +559,17 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         try {
           const validation = await validateImageForStyleAnalysis(imageDataUrl);
 
+          if (validation.multiplePeopleDetected) {
+            const msg = "We detected multiple people in the image. Please upload a single-person photo for accurate analysis.";
+            setImageValidationError(msg);
+            toast({
+              variant: "destructive",
+              title: "Multiple People Detected",
+              description: msg,
+            });
+            return;
+          }
+
           // Only accept images with confidence strictly greater than 80
           const MIN_CONFIDENCE = 80;
           if (!validation.confidence || validation.confidence <= MIN_CONFIDENCE) {
@@ -626,6 +661,18 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       try {
         const validation = await validateImageForStyleAnalysis(imgSrc);
 
+        if (validation.multiplePeopleDetected) {
+          const msg = "We detected multiple people in the image. Please upload a single-person photo for accurate analysis.";
+          setImageValidationError(msg);
+          setPreviewImage(null);
+          toast({
+            variant: "destructive",
+            title: "Multiple People Detected",
+            description: msg,
+          });
+          return;
+        }
+
         // Only accept images with confidence strictly greater than 80
         const MIN_CONFIDENCE = 80;
         if (!validation.confidence || validation.confidence <= MIN_CONFIDENCE) {
@@ -716,6 +763,8 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     setFallbackMessage(null);
     setCompletionGlow(false);
     setResultMeta(null);
+    setIsAutoRetrying(false);
+    setAnalysisFailure(null);
   };
 
   const extractColorsFromCanvas = (): { skinTone: string; dressColors: string; colorPalette?: string[] } => {
@@ -1172,7 +1221,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     };
   };
 
-  const performAnalysis = async (request: AnalyzeImageAndProvideRecommendationsInput) => {
+  const performAnalysis = async (
+    request: AnalyzeImageAndProvideRecommendationsInput,
+    options: { retryAttempt?: number; preserveState?: boolean } = {}
+  ) => {
+    const retryAttempt = options.retryAttempt ?? 0;
+    const preserveState = options.preserveState ?? false;
     const requestId = ++activeRequestIdRef.current;
     const isStale = () => !isMountedRef.current || requestId !== activeRequestIdRef.current;
 
@@ -1188,18 +1242,20 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     ) => {
       const maxRetries = options.maxRetries ?? 2;
       const retryOn429 = options.retryOn429 ?? true;
+      const MAX_RETRY_AFTER_MS = 60_000;
+      const MAX_BACKOFF_MS = 30_000;
       let lastError: Error | null = null;
 
       const parseRetryAfterMs = (retryAfter: string | null): number => {
         if (!retryAfter) return 0;
         const numeric = Number(retryAfter);
         if (!Number.isNaN(numeric) && Number.isFinite(numeric)) {
-          return Math.max(0, Math.round(numeric * 1000));
+          return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, Math.round(numeric * 1000)));
         }
 
         const parsedDate = Date.parse(retryAfter);
         if (!Number.isNaN(parsedDate)) {
-          return Math.max(0, parsedDate - Date.now());
+          return Math.min(MAX_RETRY_AFTER_MS, Math.max(0, parsedDate - Date.now()));
         }
 
         return 0;
@@ -1221,7 +1277,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           if (shouldRetry && attempt < maxRetries) {
             const retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'));
             const baseBackoff = response.status === 429 ? 1000 * 2 ** attempt : 500 * 2 ** attempt;
-            const waitMs = Math.max(baseBackoff, retryAfterMs);
+            const waitMs = Math.min(MAX_BACKOFF_MS, Math.max(baseBackoff, retryAfterMs));
             await new Promise((resolve) => setTimeout(resolve, waitMs));
             continue;
           }
@@ -1292,36 +1348,41 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     };
 
     setIsLoading(true);
-    setAllContentReady(false);
-    setShowResults(false); // Hide previous results immediately
-    setAnalysisResult(null);
-    setGeneratedImageUrls([]);
-    setImageSources([]);
-    setFallbackMessage(null);
-    setCompletionGlow(false);
-    setStagedPreview({
-      stage: 'queued',
-      queueWaitMs: 0,
-      imagesReady: 0,
-      totalImages: 3,
-      analysis: {
-        feedback: '',
-        highlights: [],
-        colorSuggestions: (extractedData?.colorPalette || []).slice(0, 6).map((hex) => ({
-          name: hex,
-          hex,
-          reason: 'Detected from your uploaded image.',
-        })),
-        outfitRecommendations: [],
-        notes: '',
-        imagePrompt: '',
-        provider: 'gemini',
-      },
-    });
-    setResultMeta(null);
-    
-    // Initialize processing steps
-    initializeProcessingSteps();
+    setAnalysisFailure(null);
+    if (!preserveState) {
+      setIsAutoRetrying(false);
+      setAllContentReady(false);
+      setShowResults(false);
+      setAnalysisResult(null);
+      setGeneratedImageUrls([]);
+      setImageSources([]);
+      setFallbackMessage(null);
+      setCompletionGlow(false);
+      setStagedPreview({
+        stage: 'queued',
+        queueWaitMs: 0,
+        imagesReady: 0,
+        totalImages: 3,
+        analysis: {
+          feedback: '',
+          highlights: [],
+          colorSuggestions: (extractedData?.colorPalette || []).slice(0, 6).map((hex) => ({
+            name: hex,
+            hex,
+            reason: 'Detected from your uploaded image.',
+          })),
+          outfitRecommendations: [],
+          notes: '',
+          imagePrompt: '',
+          provider: 'gemini',
+        },
+      });
+      setResultMeta(null);
+      initializeProcessingSteps();
+    } else {
+      setLoadingMessage(`Retrying analysis automatically (${retryAttempt}/1)...`);
+      setIsAutoRetrying(true);
+    }
 
     try {
       if (!request.previousRecommendation) {
@@ -1394,6 +1455,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       }
       headers['Authorization'] = `Bearer ${idToken}`;
 
+      const requestCorrelationId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      headers['X-Request-Id'] = requestCorrelationId;
+
       const apiRequest = {
         ...request,
         userId: auth.currentUser.uid,
@@ -1405,7 +1472,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         headers,
         body: JSON.stringify(apiRequest),
       }, {
-        maxRetries: 2,
+        maxRetries: 1,
         retryOn429: false,
       });
 
@@ -1427,14 +1494,18 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           // Use status text as fallback
           errorData = { error: response.statusText || 'API request failed', code: 'HTTP_ERROR' };
         }
-        throw new Error(errorData.error || errorData.message || `API request failed with status ${response.status}`);
+        const apiError = new Error(errorData.error || errorData.message || `API request failed with status ${response.status}`) as Error & { code?: string };
+        apiError.code = errorData.code || `HTTP_${response.status}`;
+        throw apiError;
       }
 
       let data: any;
       try {
         data = await response.json();
       } catch {
-        throw new Error('Received an invalid server response. Please try again.');
+        const parseError = new Error('Received an invalid server response. Please try again.') as Error & { code?: string };
+        parseError.code = 'INVALID_RESPONSE';
+        throw parseError;
       }
 
       setRecommendCooldownUntil(null);
@@ -1466,7 +1537,10 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
             `/api/recommend/status?jobId=${encodeURIComponent(jobId)}&userId=${encodeURIComponent(auth.currentUser.uid)}`,
             {
               method: 'GET',
-              headers,
+              headers: {
+                ...headers,
+                'X-Request-Id': requestCorrelationId,
+              },
             },
             { maxRetries: 2 }
           );
@@ -1491,7 +1565,9 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           try {
             statusData = await statusResponse.json();
           } catch {
-            throw new Error('Received an invalid status response. Please try again.');
+            const statusParseError = new Error('Received an invalid status response. Please try again.') as Error & { code?: string };
+            statusParseError.code = 'INVALID_RESPONSE';
+            throw statusParseError;
           }
 
           const previewFromStatus = toStagedPreview(statusData);
@@ -1520,7 +1596,9 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         }
 
         if (!finalStatusData) {
-          throw new Error('Analysis timed out. Please try again.');
+          const timeoutError = new Error('Analysis timed out. Please try again.') as Error & { code?: string };
+          timeoutError.code = 'ANALYSIS_TIMEOUT';
+          throw timeoutError;
         }
 
         data = finalStatusData;
@@ -1539,12 +1617,16 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       setResultMeta({ isFresh, usedFallback });
 
       if (!data.success || !data.payload) {
-        throw new Error('Invalid API response structure');
+        const invalidStructureError = new Error('Invalid API response structure') as Error & { code?: string };
+        invalidStructureError.code = data?.code || 'INVALID_RESPONSE';
+        throw invalidStructureError;
       }
 
       const result = data.payload.analysis;
       if (!result || !Array.isArray(result.outfitRecommendations)) {
-        throw new Error('Server response was incomplete. Please try again.');
+        const incompleteError = new Error('Server response was incomplete. Please try again.') as Error & { code?: string };
+        incompleteError.code = data?.code || 'ML_EMPTY_RESPONSE';
+        throw incompleteError;
       }
 
       const enrichedOutfits = result.outfitRecommendations;
@@ -1635,19 +1717,37 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         return;
       }
 
+      const typedError = e as Error & { code?: string };
       const errorMessage = e instanceof Error ? e.message : 'An unexpected error occurred';
+      const errorCode = typedError.code || 'UNKNOWN';
       
       // Mark current step as error
       const currentStep = processingSteps.find(s => s.status === 'processing');
       if (currentStep) {
         updateStep(currentStep.id, 'error', errorMessage);
       }
+
+      const normalizedError = `${errorMessage} ${errorCode}`.toLowerCase();
+      const transientFailure =
+        normalizedError.includes('timeout') ||
+        normalizedError.includes('network') ||
+        normalizedError.includes('failed to fetch') ||
+        normalizedError.includes('service unavailable') ||
+        normalizedError.includes('status 5');
+
+      if (transientFailure && retryAttempt < 1) {
+        setIsAutoRetrying(true);
+        setLoadingMessage('Connection hiccup detected. Retrying automatically (1/1)...');
+        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        await performAnalysis(request, { retryAttempt: retryAttempt + 1, preserveState: true });
+        return;
+      }
+
+      setIsAutoRetrying(false);
       
       // Determine error type and show appropriate message
       let title = "Analysis Failed";
       let description = "An unexpected error occurred. Please try again.";
-      
-      const normalizedError = errorMessage.toLowerCase();
 
       if (
         normalizedError.includes('high demand') ||
@@ -1656,19 +1756,25 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         normalizedError.includes('status 503')
       ) {
         title = "Service Busy";
-        description = "⏳ Our AI service is experiencing high demand. Please wait 30-60 seconds and try again. We apologize for the inconvenience!";
+        description = "Our AI service is under heavy load. Wait 30-60 seconds, then retry the same photo.";
       } else if (normalizedError.includes('rate limit') || normalizedError.includes('quota')) {
         title = "Rate Limit Reached";
-        description = "⏱️ Too many requests. Please wait a minute and try again.";
+        description = "Daily analysis quota reached. Please wait for reset and try again.";
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'recommend' } }));
         }
+      } else if (normalizedError.includes('ml_empty_response') || normalizedError.includes('invalid_response')) {
+        title = "Incomplete AI Response";
+        description = "We got an incomplete analysis result. Retry once with the same image, or upload a clearer photo.";
       } else if (errorMessage.includes('schema validation')) {
         title = "AI Response Error";
         description = "The AI response was incomplete. Please try again.";
       } else if (errorMessage.includes('network') || errorMessage.includes('fetch') || errorMessage.includes('Failed to fetch')) {
         title = "Connection Error";
-        description = "🌐 Network connection issue. Please check your internet and try again.";
+        description = "Network connection issue. Check your internet and retry.";
+      } else if (normalizedError.includes('analysis_timeout')) {
+        title = "Analysis Timed Out";
+        description = "The request took too long. Retry once, or use a smaller/clearer image for faster analysis.";
       } else if (errorMessage.includes('invalid server response')) {
         title = "Server Response Error";
         description = "The server returned an invalid response. Please retry.";
@@ -1677,43 +1783,35 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           ? "An error occurred. Please try again or contact support if it persists."
           : errorMessage;
       }
-      
-      const fallbackAnalysis = buildDemoFallbackAnalysis();
-      const fallbackImages = buildDemoFallbackImageDataUris();
 
-      setAnalysisResult(fallbackAnalysis);
-      setGeneratedImageUrls(fallbackImages);
-      setImageSources(['placeholder', 'placeholder', 'placeholder']);
-      setRecommendationId(`demo_fallback_${Date.now()}`);
+      setAnalysisFailure({ title, description, code: errorCode });
+      setAnalysisResult(null);
+      setGeneratedImageUrls([]);
+      setImageSources([]);
+      setRecommendationId(null);
       setFallbackMessage(null);
-      setResultMeta({ isFresh: true, usedFallback: true });
+      setResultMeta(null);
       setStagedPreview(null);
       setLoadingMessage('');
-      setAllContentReady(true);
-      setShowResults(true);
-
-      updateStep('analyze', 'complete');
-      updateStep('generate', 'complete');
-      updateStep('enhance', 'complete');
-      updateStep('search', 'complete');
-      updateStep('finalize', 'complete');
+      setAllContentReady(false);
+      setShowResults(false);
 
       toast({
         title,
-        description: `${description} Showing demo-safe recommendations now.`,
+        description,
         duration: 4500,
       });
     } finally {
       window.clearTimeout(timeoutId);
       submitInFlightRef.current = false;
-      if (isMountedRef.current && requestId === activeRequestIdRef.current) {
-        setIsLoading(false);
-      }
+      if (!isMountedRef.current || requestId !== activeRequestIdRef.current) return;
+      setIsAutoRetrying(false);
+      setIsLoading(false);
       // Don't set allContentReady on error - it should only be true when everything is ready
     }
   };
 
-  const onSubmit = async (values: z.infer<typeof formSchema>) => {
+  const onSubmit = async (values: StyleAdvisorFormValues) => {
     if (recommendCooldownUntil && Date.now() < recommendCooldownUntil) {
       const secondsRemaining = Math.max(1, Math.ceil((recommendCooldownUntil - Date.now()) / 1000));
       toast({
@@ -1829,11 +1927,13 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
 
         // Get user ID for personalization
         const userId = auth.currentUser?.uid;
+        const occasion = normalizePromptInput(values.occasion);
+        const genre = normalizePromptInput(values.genre);
 
         await performAnalysis({
           photoDataUri: previewImage,
-          occasion: values.occasion,
-          genre: values.genre,
+          occasion,
+          genre,
           gender: values.gender,
           weather: weather,
           weatherForecast: weatherForecast || undefined,
@@ -1892,6 +1992,37 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       <canvas ref={canvasRef} className="hidden"></canvas>
       {showCamera && (
         <video ref={videoRef} autoPlay playsInline className="hidden" />
+      )}
+
+      {analysisFailure && !isLoading && (
+        <Alert className="border-red-500/40 bg-red-500/10">
+          <AlertCircle className="h-4 w-4 text-red-500" />
+          <AlertTitle>{analysisFailure.title}</AlertTitle>
+          <AlertDescription className="space-y-3">
+            <p>{analysisFailure.description}</p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                size="sm"
+                onClick={() => {
+                  if (!lastAnalysisRequest) return;
+                  void performAnalysis(lastAnalysisRequest);
+                }}
+                disabled={!lastAnalysisRequest || isLimitReached}
+              >
+                Retry Analysis
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setAnalysisFailure(null);
+                }}
+              >
+                Dismiss
+              </Button>
+            </div>
+          </AlertDescription>
+        </Alert>
       )}
 
       {!analysisResult && !isLoading && (
@@ -2175,6 +2306,31 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
               >
                 {loadingMessage}
               </motion.p>
+              {isAutoRetrying && (
+                <p className="text-xs text-amber-600 text-center mt-2 font-medium">
+                  Retrying automatically (1/1)...
+                </p>
+              )}
+              {processingSteps.length > 0 && (
+                <div className="mt-4 rounded-lg border border-border/40 bg-background/40 p-3">
+                  <ul className="space-y-1.5 text-xs">
+                    {processingSteps.map((step) => (
+                      <li key={step.id} className="flex items-center justify-between gap-3">
+                        <span className="text-muted-foreground truncate">{step.label}</span>
+                        <span className={cn(
+                          'uppercase tracking-wide text-[10px] font-semibold',
+                          step.status === 'complete' && 'text-emerald-600',
+                          step.status === 'processing' && 'text-violet-600',
+                          step.status === 'error' && 'text-red-600',
+                          step.status === 'pending' && 'text-muted-foreground/70'
+                        )}>
+                          {step.status}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
                 {(TRUST_CUES_BY_VARIANT[uxVariant] || TRUST_CUES).map((cue) => (
                   <span

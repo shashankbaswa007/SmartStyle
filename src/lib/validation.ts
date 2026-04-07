@@ -5,6 +5,29 @@
 
 import { z } from 'zod';
 
+const PROMPT_SAFE_TEXT_REGEX = /^[a-zA-Z0-9 ,.'&()\-/]+$/;
+export const MAX_IMAGE_DATA_URI_CHARS = 10_000_000;
+
+function sanitizePromptText(value: string): string {
+  return value
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
+const promptSafeTextSchema = (fieldName: string, min = 3, max = 100) =>
+  z.string({ required_error: `${fieldName} is required` })
+    .transform((value) => sanitizePromptText(value))
+    .pipe(
+      z.string()
+        .min(min, `${fieldName} must be at least ${min} characters`)
+        .max(max, `${fieldName} must be less than ${max} characters`)
+        .refine(
+          (value) => PROMPT_SAFE_TEXT_REGEX.test(value),
+          { message: `${fieldName} contains unsupported characters` }
+        )
+    );
+
 const weatherForecastDaySchema = z.object({
   date: z.string().min(1),
   dayLabel: z.string().min(1),
@@ -32,7 +55,7 @@ const weatherForecastSchema = z.object({
 export const recommendRequestSchema = z.object({
   photoDataUri: z.string()
     .min(1, 'Photo data is required')
-    .max(15_000_000, 'Image data too large. Maximum size is ~10MB')
+    .max(MAX_IMAGE_DATA_URI_CHARS, 'Image data too large. Maximum size is ~10MB')
     .startsWith('data:image/', 'Invalid image data format')
     .refine(
       (data) => {
@@ -72,16 +95,10 @@ export const recommendRequestSchema = z.object({
       { message: 'Image file size exceeds 10MB limit' }
     ),
   
-  occasion: z.string()
-    .min(3, 'Occasion must be at least 3 characters')
-    .max(100, 'Occasion must be less than 100 characters')
-    .optional()
+  occasion: promptSafeTextSchema('Occasion', 3, 100)
     .describe('Event or occasion (e.g., office, casual, party, wedding, formal, travel, etc.)'),
   
-  genre: z.string()
-    .min(3, 'Genre must be at least 3 characters')
-    .max(100, 'Genre must be less than 100 characters')
-    .optional()
+  genre: promptSafeTextSchema('Genre', 3, 100)
     .describe('Style genre or theme (e.g., bohemian, minimalist, streetwear, vintage, etc.)'),
   
   gender: z.enum(['male', 'female', 'unisex'])
@@ -120,6 +137,7 @@ export const recommendRequestSchema = z.object({
 });
 
 export type RecommendRequest = z.infer<typeof recommendRequestSchema>;
+export { sanitizePromptText, PROMPT_SAFE_TEXT_REGEX };
 
 // ========================================
 // LIKES API VALIDATION

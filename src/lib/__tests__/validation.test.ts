@@ -15,6 +15,8 @@ describe('validation schemas', () => {
   describe('recommendRequestSchema', () => {
     const validPayload = {
       photoDataUri: VALID_PHOTO_URI,
+      occasion: 'office',
+      genre: 'minimalist',
       gender: 'male' as const,
     };
 

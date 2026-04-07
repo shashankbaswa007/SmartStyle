@@ -30,6 +30,8 @@ interface RateLimitDoc {
 }
 
 const COLLECTION = 'rateLimits';
+const STRICT_PROD_RATE_LIMIT_BACKEND =
+  process.env.NODE_ENV === 'production' && process.env.ALLOW_IN_MEMORY_RATE_LIMIT_FALLBACK !== '1';
 
 function getCurrentWindow(config: ServerRateLimitConfig) {
   const now = Date.now();
@@ -117,6 +119,15 @@ export async function checkServerRateLimit(
       };
     });
   } catch {
+    if (STRICT_PROD_RATE_LIMIT_BACKEND) {
+      return {
+        allowed: false,
+        remaining: 0,
+        resetAt,
+        message: 'Rate limit service is temporarily unavailable. Please retry shortly.',
+      };
+    }
+
     // Local/dev fallback when Firestore admin is unavailable.
     const fallback = checkRateLimit(`${config.scope}:${subject}`, {
       windowMs: config.windowMs,
@@ -214,6 +225,15 @@ export async function getServerRateLimitStatus(
       resetAt,
     };
   } catch {
+    if (STRICT_PROD_RATE_LIMIT_BACKEND) {
+      return {
+        limit: config.maxRequests,
+        used: config.maxRequests,
+        remaining: 0,
+        resetAt,
+      };
+    }
+
     const fallback = getRateLimitStatus(`${config.scope}:${subject}`, {
       windowMs: config.windowMs,
       maxRequests: config.maxRequests,

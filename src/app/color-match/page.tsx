@@ -175,10 +175,10 @@ export default function ColorMatchPage() {
       )}
       </div>
 
-      <div className="relative z-10 container mx-auto px-4 py-12">
+      <div className="relative z-10 container mx-auto px-4 py-8 sm:py-10 md:py-12">
         {/* Header */}
-        <header className="text-center mb-8 sm:mb-12 md:mb-16">
-          <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto">
+        <header className="text-center mb-8 sm:mb-12 md:mb-16 space-y-3 sm:space-y-4">
+          <div className="relative h-[120px] sm:h-[200px] md:h-[300px] max-w-4xl mx-auto">
             {isMounted && (
               <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-violet-400 to-violet-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">Color-Match</h1>}>
                 <TextPressure
@@ -193,10 +193,10 @@ export default function ColorMatchPage() {
               </Suspense>
             )}
           </div>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto mt-4">
+          <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto mt-3 leading-relaxed">
             Discover harmonious color combinations that work perfectly together
           </p>
-          <p className="text-sm text-muted-foreground/70 max-w-xl mx-auto mt-2">
+          <p className="text-sm text-muted-foreground/70 max-w-xl mx-auto mt-1.5 leading-relaxed break-words">
             Enter any color and we&apos;ll suggest the best matching colors for your style
           </p>
         </header>
@@ -208,12 +208,12 @@ export default function ColorMatchPage() {
           transition={{ duration: 0.3 }}
           className="max-w-4xl mx-auto mb-6"
         >
-          <div className="bg-card/40 backdrop-blur-xl border border-border/10 shadow-md rounded-xl p-4">
+          <div className="bg-card/40 backdrop-blur-xl border border-border/10 shadow-md rounded-xl p-4 space-y-3">
             <div className="flex items-center gap-2 mb-3">
               <Sparkles className="w-4 h-4 text-accent" />
               <h3 className="text-sm font-medium text-muted-foreground">Popular Colors</h3>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2">
+            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-2">
               {[
                 { name: 'Navy', hex: '#001F3F' },
                 { name: 'Rose', hex: '#FF6B9D' },
@@ -256,7 +256,7 @@ export default function ColorMatchPage() {
             transition={{ duration: 0.3 }}
             className="max-w-4xl mx-auto mb-8"
           >
-            <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-6">
+              <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-4 sm:p-6 space-y-4">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-accent" />
@@ -273,7 +273,7 @@ export default function ColorMatchPage() {
                 </Button>
               </div>
             
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
                 { value: 'recommended', label: 'Recommended', desc: 'Smart auto-select', featured: true },
                 { value: 'complementary', label: 'Complementary', desc: 'Opposite on color wheel' },
@@ -324,9 +324,9 @@ export default function ColorMatchPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="max-w-md mx-auto mb-12"
+          className="max-w-xl mx-auto mb-10 sm:mb-12"
         >
-          <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-6">
+          <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <Palette className="w-5 h-5 text-accent" />
@@ -346,7 +346,7 @@ export default function ColorMatchPage() {
             </div>
             
             <div className="space-y-4">
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <div className="relative flex-1">
                   <Input
                     type="text"
@@ -371,14 +371,14 @@ export default function ColorMatchPage() {
                   variant="outline"
                   size="icon"
                   onClick={() => setShowPicker(!showPicker)}
-                  className="flex-shrink-0"
+                  className="flex-shrink-0 w-full sm:w-10"
                 >
                   <Pipette className="w-4 h-4" />
                 </Button>
               </div>
               
               {showPicker && (
-                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg flex-wrap">
                   <label className="text-sm font-medium">Pick Color:</label>
                   <input
                     type="color"
@@ -386,7 +386,7 @@ export default function ColorMatchPage() {
                     onChange={(e) => setColor(e.target.value)}
                     className="w-12 h-12 rounded cursor-pointer border-2 border-border"
                   />
-                  <span className="text-xs text-muted-foreground flex-1">or type a color name above</span>
+                  <span className="text-xs text-muted-foreground flex-1 break-words">or type a color name above</span>
                 </div>
               )}
 
@@ -409,7 +409,7 @@ export default function ColorMatchPage() {
               </Button>
             </div>
 
-            <div className="mt-4 p-3 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/50 rounded-lg">
+            <div className="mt-2 p-3 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/50 rounded-lg">
               <div className="flex items-start gap-2">
                 <Info className="w-4 h-4 text-violet-600 dark:text-violet-400 mt-0.5 flex-shrink-0" />
                 <p className="text-xs text-violet-700 dark:text-violet-300">
@@ -451,8 +451,8 @@ export default function ColorMatchPage() {
           >
             {/* Input Color Display */}
             <motion.div variants={itemVariants} className="mb-8">
-              <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-6">
-                <div className="flex items-center justify-between mb-4">
+              <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-4 sm:p-6 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-1 sm:mb-2">
                   <h3 className="font-semibold text-lg flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-accent" />
                     Your Color
@@ -470,7 +470,7 @@ export default function ColorMatchPage() {
                       </span>
                     )}
                   </h3>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <Button
                       variant="outline"
                       size="sm"
@@ -489,7 +489,7 @@ export default function ColorMatchPage() {
                           });
                         }
                       }}
-                      className="gap-2"
+                      className="gap-2 w-full sm:w-auto"
                     >
                       <Copy className="w-4 h-4" />
                       Copy All
@@ -515,7 +515,7 @@ export default function ColorMatchPage() {
                 </div>
 
                 {/* Save Palette Button */}
-                <div className="mb-4">
+                <div>
                   <SaveColorPalette
                     baseColor={colorData.inputColor}
                     harmonyType={colorData.harmonyType || 'complementary'}
@@ -529,17 +529,17 @@ export default function ColorMatchPage() {
                   />
                 </div>
 
-                <div className="flex items-center gap-4 sm:gap-6">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 sm:gap-6">
                   <div
                     className="w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full shadow-xl border-4 border-white/20"
                     style={{ backgroundColor: colorData.inputColor.hex }}
                   />
-                  <div className="space-y-1">
+                  <div className="space-y-1 text-center sm:text-left max-w-full">
                     {colorData.inputColor.name && (
-                      <p className="text-2xl font-bold capitalize">{colorData.inputColor.name}</p>
+                      <p className="text-xl sm:text-2xl font-bold capitalize break-words">{colorData.inputColor.name}</p>
                     )}
-                    <p className="text-lg font-mono text-muted-foreground">{colorData.inputColor.hex}</p>
-                    <p className="text-sm text-muted-foreground">{colorData.inputColor.rgb}</p>
+                    <p className="text-base sm:text-lg font-mono text-muted-foreground break-all">{colorData.inputColor.hex}</p>
+                    <p className="text-sm text-muted-foreground break-words">{colorData.inputColor.rgb}</p>
                     
                     {/* Fashion Context for Input Color */}
                     {colorData.inputColor.fashionContext && (
@@ -559,7 +559,8 @@ export default function ColorMatchPage() {
 
             {/* Top Matching Colors - Highlighted */}
             <motion.div variants={itemVariants} className="mb-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="bg-card/50 backdrop-blur-xl border border-border/20 shadow-md rounded-2xl p-4 sm:p-5 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-1">
                 <h3 className="font-semibold text-xl flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-accent" />
                   Best Color Matches
@@ -568,15 +569,16 @@ export default function ColorMatchPage() {
                   {showAllColors ? `All ${colorData.matches.length}` : 'Top 5'} Colors
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground mb-6">
+              <p className="text-sm text-muted-foreground mb-1">
                 These colors work beautifully with your selection
               </p>
+              </div>
             </motion.div>
 
             {/* Palette Explanation */}
             {colorData.explanation && (
               <motion.div variants={itemVariants} className="mb-6">
-                <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-6">
+                <div className="bg-card/60 backdrop-blur-xl border border-border/20 shadow-lg rounded-2xl p-4 sm:p-6">
                   <h3 className="font-semibold text-base mb-3 flex items-center gap-2">
                     <Info className="w-4 h-4 text-accent" />
                     Why This Palette Works
@@ -584,7 +586,7 @@ export default function ColorMatchPage() {
                   <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
                     {colorData.explanation.why}
                   </p>
-                  <div className="grid sm:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <p className="text-xs font-semibold text-foreground uppercase tracking-wide">How to Wear It</p>
                       <p className="text-sm text-muted-foreground leading-relaxed">{colorData.explanation.howToUse}</p>
@@ -612,7 +614,7 @@ export default function ColorMatchPage() {
             )}
 
             {/* Color Matches Grid - Show top 5 or all */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 mb-6">
               {colorData.matches.slice(0, showAllColors ? undefined : 5).map((match, index) => {
                 // Determine if this is a key color (primary/secondary)
                 const isKeyColor = match.fashionContext?.usage === 'primary' || match.fashionContext?.usage === 'secondary';
@@ -626,7 +628,7 @@ export default function ColorMatchPage() {
                       y: -8,
                       transition: { type: 'spring', stiffness: 400, damping: 25 }
                     }}
-                    className={`bg-card/60 backdrop-blur-xl border shadow-lg rounded-2xl p-4 cursor-pointer hover:shadow-xl will-change-transform ${
+                    className={`bg-card/70 backdrop-blur-xl border shadow-lg rounded-2xl p-4 cursor-pointer hover:shadow-xl will-change-transform ${
                       isKeyColor ? 'border-accent/50 ring-2 ring-accent/20' : 'border-border/20'
                     }`}
                   >
@@ -699,7 +701,7 @@ export default function ColorMatchPage() {
                             )}
                             
                             {/* Style Notes */}
-                            <p className="text-xs text-muted-foreground italic leading-tight">
+                            <p className="text-xs text-muted-foreground italic leading-relaxed break-words">
                               {match.fashionContext.styleNotes}
                             </p>
                           </div>
@@ -752,12 +754,12 @@ export default function ColorMatchPage() {
 
             {/* Quick Fashion Tips - Always Visible */}
             <motion.div variants={itemVariants} className="mb-6">
-              <div className="bg-gradient-to-br from-purple-50 to-purple-50 dark:from-purple-950/20 dark:to-purple-950/20 border border-purple-200 dark:border-purple-800/30 shadow-lg rounded-xl p-6">
+              <div className="bg-gradient-to-br from-purple-50 to-purple-50 dark:from-purple-950/20 dark:to-purple-950/20 border border-purple-200 dark:border-purple-800/30 shadow-lg rounded-xl p-4 sm:p-6">
                 <h3 className="font-semibold text-base mb-3 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
                   Quick Styling Tips
                 </h3>
-                <div className="grid sm:grid-cols-2 gap-3 text-sm">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div className="flex items-start gap-2">
                     <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-1.5 flex-shrink-0" />
                     <p className="text-muted-foreground"><span className="font-semibold text-foreground">60-30-10 Rule:</span> 60% main, 30% secondary, 10% accent</p>

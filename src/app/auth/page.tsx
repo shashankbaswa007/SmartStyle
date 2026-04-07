@@ -346,13 +346,13 @@ export default function AuthPage() {
   }
 
   return (
-    <div ref={sceneRef} className="relative min-h-[100dvh] md:min-h-screen flex flex-col md:flex-row overflow-x-hidden overflow-y-auto md:overflow-hidden bg-[#050813]">
+    <div ref={sceneRef} className="relative min-h-[100svh] md:min-h-screen flex flex-col md:flex-row overflow-x-hidden bg-[#050813]">
       {/* LEFT PANEL (55% on desktop, full on mobile) */}
       <motion.section
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={cardTransition}
-        className="relative w-full md:w-[55%] flex items-center justify-center px-4 sm:px-6 py-10 sm:py-12 md:py-0 order-1"
+        className="relative w-full md:w-[55%] flex items-center justify-center px-4 sm:px-6 py-6 sm:py-8 md:py-0 order-1"
       >
         {/* Background layers */}
         <div className="absolute inset-0 z-0">
@@ -363,7 +363,7 @@ export default function AuthPage() {
             speed={0.34}
             scanlineFrequency={0.001}
             warpAmount={0.03}
-            resolutionScale={0.8}
+            resolutionScale={1}
           />
         </div>
 
@@ -383,7 +383,7 @@ export default function AuthPage() {
 
 
         {/* Content */}
-        <div className="relative z-10 max-w-2xl">
+        <div className="relative z-10 max-w-2xl w-full space-y-6 sm:space-y-7">
           {/* Logo and branding header */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
@@ -393,7 +393,7 @@ export default function AuthPage() {
               delay: prefersReducedMotion ? 0 : 0.15,
               ease: MOTION_EASING.graceful,
             }}
-            className="flex flex-col items-center gap-2 mb-8"
+            className="flex flex-col items-center gap-2 mb-6 sm:mb-8"
           >
             <AnimatedLogo size={64} className="scale-90 sm:scale-100" />
             <p className="text-[11px] uppercase tracking-[0.18em] text-slate-100/80">Your Personal Style Assistant</p>
@@ -408,7 +408,7 @@ export default function AuthPage() {
               delay: prefersReducedMotion ? 0 : 0.3,
               ease: MOTION_EASING.graceful,
             }}
-            className="font-headline text-3xl sm:text-4xl md:text-5xl xl:text-6xl font-medium leading-[1.08] tracking-[-0.02em] text-white text-center mb-4"
+            className="font-headline text-2xl sm:text-4xl md:text-5xl xl:text-6xl font-medium leading-[1.15] tracking-[-0.02em] text-white text-center mb-3 sm:mb-4 text-balance"
           >
             Dress with clarity, not guesswork.
           </motion.h1>
@@ -422,7 +422,7 @@ export default function AuthPage() {
               delay: prefersReducedMotion ? 0 : 0.45,
               ease: MOTION_EASING.graceful,
             }}
-            className="text-center text-sm sm:text-base md:text-lg text-slate-200/74 mb-8 leading-relaxed"
+            className="text-center text-sm sm:text-base md:text-lg text-slate-200/74 mb-6 sm:mb-8 leading-relaxed break-words"
           >
             Build a sharper wardrobe identity with AI guidance tuned for tone, silhouette, and daily confidence.
           </motion.p>
@@ -436,10 +436,10 @@ export default function AuthPage() {
               delay: prefersReducedMotion ? 0 : 0.6,
               ease: MOTION_EASING.graceful,
             }}
-            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-3 sm:gap-4"
+            className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4"
           >
             {/* Badge 1: Color Intelligence */}
-            <div className="rounded-xl border-l-4 border-purple-600 bg-gradient-to-r from-purple-600/8 via-transparent to-transparent px-4 py-3 backdrop-blur-sm">
+            <div className="rounded-xl border-l-4 border-purple-600 bg-gradient-to-r from-purple-600/8 via-transparent to-transparent px-3.5 py-3 backdrop-blur-sm">
               <div className="flex items-start gap-3">
                 <Palette className="h-5 w-5 text-slate-200 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
@@ -450,7 +450,7 @@ export default function AuthPage() {
             </div>
 
             {/* Badge 2: Wardrobe Precision */}
-            <div className="rounded-xl border-l-4 border-purple-600 bg-gradient-to-r from-purple-600/8 via-transparent to-transparent px-4 py-3 backdrop-blur-sm">
+            <div className="rounded-xl border-l-4 border-purple-600 bg-gradient-to-r from-purple-600/8 via-transparent to-transparent px-3.5 py-3 backdrop-blur-sm">
               <div className="flex items-start gap-3">
                 <Shirt className="h-5 w-5 text-slate-200 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
@@ -479,7 +479,7 @@ export default function AuthPage() {
           ...cardTransition,
           delay: prefersReducedMotion ? 0 : 0.4,
         }}
-        className="relative w-full md:w-[45%] flex items-center justify-center px-4 sm:px-6 py-10 sm:py-12 md:py-0 order-2 md:order-2 bg-[#0a0a0f]"
+        className="relative w-full md:w-[45%] flex items-center justify-center px-4 sm:px-6 py-6 sm:py-8 md:py-0 order-2 md:order-2 bg-[#0a0a0f]"
       >
         {/* Auth Card */}
         <div className="w-full max-w-md sm:max-w-sm">
@@ -495,9 +495,9 @@ export default function AuthPage() {
                   delay: prefersReducedMotion ? 0 : 0.5,
                   ease: MOTION_EASING.graceful,
                 }}
-                className="flex justify-center mb-5 sm:mb-6"
+                className="flex justify-center mb-4 sm:mb-6"
               >
-                <AnimatedLogo size={72} className="scale-90 sm:scale-100" />
+                <AnimatedLogo size={64} className="scale-90 sm:scale-100" />
               </motion.div>
 
               {/* Title and subtitle */}
@@ -509,7 +509,7 @@ export default function AuthPage() {
                   delay: prefersReducedMotion ? 0 : 0.55,
                   ease: MOTION_EASING.graceful,
                 }}
-                className="text-center mb-8 sm:mb-10"
+                className="text-center mb-6 sm:mb-10"
               >
                 <h2 className="font-headline text-2xl font-semibold tracking-wide text-white">SmartStyle</h2>
                 <p className="text-xs tracking-widest text-slate-400 uppercase mt-1.5">Your Personal Style Assistant</p>
@@ -526,7 +526,7 @@ export default function AuthPage() {
                 }}
                 onClick={handleGoogleSignIn}
                 disabled={googleLoading}
-                className="group relative w-full h-[52px] rounded-full bg-gradient-to-r from-purple-700 via-purple-600 to-purple-700 text-white font-medium text-base flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-[0_8px_32px_rgba(147,51,234,0.5)] hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden"
+                className="group relative w-full h-[48px] sm:h-[52px] rounded-full bg-gradient-to-r from-purple-700 via-purple-600 to-purple-700 text-white font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-[0_8px_32px_rgba(147,51,234,0.5)] hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden"
               >
                 {/* Shimmer effect on hover */}
                 <motion.div
@@ -544,7 +544,7 @@ export default function AuthPage() {
                   }}
                 />
 
-                <span className="relative flex items-center gap-2 z-10">
+                <span className="relative flex items-center gap-2 z-10 whitespace-nowrap">
                   {googleLoading ? (
                     <>
                       <span className="flex items-center gap-1.5">
@@ -572,7 +572,7 @@ export default function AuthPage() {
                   delay: prefersReducedMotion ? 0 : 0.65,
                   ease: MOTION_EASING.graceful,
                 }}
-                className="mt-6 text-center text-[11px] leading-relaxed text-slate-400"
+                className="mt-5 sm:mt-6 text-center text-[11px] leading-relaxed text-slate-400 break-words"
               >
                 By signing in you agree to our{' '}
                 <Link href="/terms" className="text-purple-400 underline underline-offset-1 hover:text-purple-300 transition-colors">

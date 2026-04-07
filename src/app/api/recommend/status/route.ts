@@ -1,26 +1,34 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { enforceRecommendAuth, AuthError } from '@/lib/recommend/request-guard';
 import { getRecommendJobStatus } from '@/lib/recommend/async-jobs';
 
-function errorResponse(status: number, code: string, message: string) {
+function errorResponse(status: number, code: string, message: string, requestId: string) {
   return NextResponse.json(
     {
       success: false,
       code,
       error: message,
       message,
+      requestId,
     },
-    { status }
+    {
+      status,
+      headers: {
+        'X-Request-Id': requestId,
+      },
+    }
   );
 }
 
 export async function GET(req: Request) {
+  const requestId = req.headers.get('x-request-id') || crypto.randomUUID();
   const url = new URL(req.url);
   const jobId = url.searchParams.get('jobId')?.trim();
   const userId = url.searchParams.get('userId')?.trim() || 'anonymous';
 
   if (!jobId) {
-    return errorResponse(400, 'MISSING_JOB_ID', 'Query parameter jobId is required');
+    return errorResponse(400, 'MISSING_JOB_ID', 'Query parameter jobId is required', requestId);
   }
 
   if (userId !== 'anonymous') {
@@ -28,9 +36,9 @@ export async function GET(req: Request) {
       await enforceRecommendAuth(req, userId);
     } catch (error) {
       if (error instanceof AuthError) {
-        return errorResponse(error.status, 'AUTH_ERROR', error.message);
+        return errorResponse(error.status, 'AUTH_ERROR', error.message, requestId);
       }
-      return errorResponse(401, 'UNAUTHORIZED', 'Unauthorized - invalid authentication token');
+      return errorResponse(401, 'UNAUTHORIZED', 'Unauthorized - invalid authentication token', requestId);
     }
   }
 
@@ -40,6 +48,7 @@ export async function GET(req: Request) {
     // Return a processing state instead of 404 so clients can keep polling without surfacing noisy errors.
     return NextResponse.json({
       success: true,
+      requestId,
       status: 'processing',
       jobId,
       progress: {
@@ -49,18 +58,19 @@ export async function GET(req: Request) {
       },
       partialPayload: null,
       updatedAt: Date.now(),
-    });
+    }, { headers: { 'X-Request-Id': requestId } });
   }
 
   if (job.status === 'queued' || job.status === 'processing') {
     return NextResponse.json({
       success: true,
+      requestId,
       status: job.status,
       jobId: job.jobId,
       progress: job.progress,
       partialPayload: job.partialPayload ?? null,
       updatedAt: job.updatedAt,
-    });
+    }, { headers: { 'X-Request-Id': requestId } });
   }
 
   const result = job.result as
@@ -74,6 +84,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     success: true,
+    requestId,
     status: job.status,
     jobId: job.jobId,
     progress: job.progress,
@@ -85,5 +96,5 @@ export async function GET(req: Request) {
     fallbackSource: job.fallbackSource,
     error: job.error,
     completedAt: job.completedAt,
-  });
+  }, { headers: { 'X-Request-Id': requestId } });
 }
