@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { validateRequestOrigin } from '@/lib/csrf-protection';
 
 const uxAlertSchema = z.object({
   userId: z.string().min(1),
@@ -14,6 +15,10 @@ const uxAlertSchema = z.object({
 
 export async function POST(request: Request) {
   try {
+    if (!validateRequestOrigin(request)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+    }
+
     const body = await request.json();
     const parsed = uxAlertSchema.safeParse(body);
 

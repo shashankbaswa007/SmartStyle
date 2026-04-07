@@ -3,6 +3,7 @@ import { verifyBearerToken, AuthError } from '@/lib/server-auth';
 import { checkServerRateLimit } from '@/lib/server-rate-limiter';
 import { addWardrobeItemWithCapacityServer } from '@/lib/wardrobeService.server';
 import { DAILY_WINDOW_MS, getTimezoneOffsetMinutesFromRequest, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
+import { validateRequestOrigin } from '@/lib/csrf-protection';
 
 const MAX_WARDROBE_ITEMS = 300;
 
@@ -30,6 +31,10 @@ interface WardrobeItemPayload {
 
 export async function POST(request: Request) {
   try {
+    if (!validateRequestOrigin(request)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+    }
+
     const authenticatedUserId = await verifyBearerToken(request);
     const timezoneOffsetMinutes = getTimezoneOffsetMinutesFromRequest(request);
 

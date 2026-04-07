@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { logger } from '@/lib/logger';
+import { validateRequestOrigin } from '@/lib/csrf-protection';
+import { verifyFirebaseIdToken } from '@/lib/server-auth';
 
 const sessionSchema = z.object({
   idToken: z.string().min(1),
@@ -13,37 +15,6 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60;
 function getCookieDomain(): string | undefined {
   const raw = process.env.NEXT_PUBLIC_COOKIE_DOMAIN?.trim();
   return raw ? raw : undefined;
-}
-
-function decodeBase64Url(value: string): string {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = normalized.length % 4;
-  const withPadding = pad === 0 ? normalized : normalized + '='.repeat(4 - pad);
-  return Buffer.from(withPadding, 'base64').toString('utf8');
-}
-
-function hasPlausibleUnexpiredFirebaseClaims(token: string): boolean {
-  try {
-    const parts = token.split('.');
-    if (parts.length < 2) return false;
-
-    const payload = JSON.parse(decodeBase64Url(parts[1])) as {
-      sub?: string;
-      aud?: string;
-      iss?: string;
-      exp?: number;
-    };
-
-    if (!payload.sub || !payload.aud || !payload.iss || !payload.exp) return false;
-    if (Date.now() >= payload.exp * 1000) return false;
-
-    return (
-      payload.iss === `https://securetoken.google.com/${payload.aud}` ||
-      payload.iss === `https://session.firebase.google.com/${payload.aud}`
-    );
-  } catch {
-    return false;
-  }
 }
 
 function clearSessionCookie(response: NextResponse) {
@@ -61,6 +32,10 @@ function clearSessionCookie(response: NextResponse) {
 
 export async function POST(request: Request) {
   try {
+    if (!validateRequestOrigin(request)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+    }
+
     let body;
     try {
       body = await request.json();
@@ -76,14 +51,16 @@ export async function POST(request: Request) {
 
     const { idToken } = parsed.data;
 
-    if (!hasPlausibleUnexpiredFirebaseClaims(idToken)) {
-      logger.warn('Auth session POST rejected: token missing plausible Firebase claims');
-      return NextResponse.json({ error: 'Invalid token payload' }, { status: 400 });
+    const verifiedUid = await verifyFirebaseIdToken(idToken, { allowDevFallback: false });
+    if (!verifiedUid) {
+      logger.warn('Auth session POST rejected: token verification failed');
+      return NextResponse.json({ error: 'Invalid authentication token' }, { status: 401 });
     }
 
     logger.info('Auth session POST: token received', {
       hasToken: !!idToken,
       tokenLength: idToken.length,
+      verifiedUid,
       cookieDomain: getCookieDomain() || 'host-only',
       secureCookie: process.env.NODE_ENV === 'production',
     });
@@ -114,7 +91,7 @@ export async function GET(request: Request) {
   const rawToken = sessionPair ? sessionPair.slice(`${SESSION_COOKIE_NAME}=`.length) : '';
   const token = rawToken ? decodeURIComponent(rawToken) : '';
 
-  const authenticated = token ? hasPlausibleUnexpiredFirebaseClaims(token) : false;
+  const authenticated = token ? !!(await verifyFirebaseIdToken(token, { allowDevFallback: false })) : false;
   logger.info('Auth session GET: status check', {
     hasSessionCookie: !!token,
     authenticated,
@@ -125,7 +102,11 @@ export async function GET(request: Request) {
   return response;
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  if (!validateRequestOrigin(request)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+  }
+
   const response = NextResponse.json({ ok: true });
   clearSessionCookie(response);
   logger.info('Auth session DELETE: session cookie cleared');

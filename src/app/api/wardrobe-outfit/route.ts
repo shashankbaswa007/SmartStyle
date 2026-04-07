@@ -10,10 +10,15 @@ import {
   getCachedRecommendation, 
   cacheRecommendation 
 } from '@/lib/recommendations-cache';
+import { validateRequestOrigin } from '@/lib/csrf-protection';
 const MAX_REQUESTS_PER_DAY = USAGE_LIMITS.wardrobeOutfit;
 
 export async function POST(request: NextRequest) {
   try {
+    if (!validateRequestOrigin(request)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+    }
+
     const authenticatedUserId = await verifyBearerToken(request);
     const timezoneOffsetMinutes = getTimezoneOffsetMinutesFromRequest(request);
 

@@ -43,26 +43,6 @@ function parseJwtPayload(token: string): Record<string, unknown> | null {
   }
 }
 
-function hasFreshFirebaseLikeClaims(sessionCookie: string): boolean {
-  const payload = parseJwtPayload(sessionCookie);
-  if (!payload) return false;
-
-  const sub = typeof payload.sub === 'string' ? payload.sub : '';
-  const audience = typeof payload.aud === 'string' ? payload.aud : '';
-  const issuer = typeof payload.iss === 'string' ? payload.iss : '';
-  const exp = typeof payload.exp === 'number' ? payload.exp : 0;
-
-  if (!sub || !audience || !issuer || !exp) return false;
-  if (Date.now() >= exp * 1000) return false;
-
-  const validIssuers = new Set([
-    `https://securetoken.google.com/${audience}`,
-    `https://session.firebase.google.com/${audience}`,
-  ]);
-
-  return validIssuers.has(issuer);
-}
-
 async function verifyFirebaseSessionCookie(sessionCookie: string): Promise<{ sub?: string } | null> {
   try {
     // Verify signature first, then validate issuer/audience relationship.
@@ -90,7 +70,10 @@ async function verifyFirebaseSessionCookie(sessionCookie: string): Promise<{ sub
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const e2eBypassEnabled = process.env.E2E_AUTH_BYPASS === '1';
+  const allowE2EBypassInProduction = process.env.ALLOW_E2E_AUTH_BYPASS_IN_PROD === '1';
+  const e2eBypassEnabled =
+    process.env.E2E_AUTH_BYPASS === '1' &&
+    (process.env.NODE_ENV !== 'production' || allowE2EBypassInProduction);
   const hasE2EBypassCookie = request.cookies.get(E2E_AUTH_BYPASS_COOKIE)?.value === 'enabled';
 
   const isDemoDisabledRoute = Array.from(DEMO_DISABLED_ROUTES).some(
@@ -105,11 +88,9 @@ export async function middleware(request: NextRequest) {
   const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
   const verifiedSession = sessionCookie ? await verifyFirebaseSessionCookie(sessionCookie) : null;
   const hasSessionCookie = !!sessionCookie;
-  const hasFreshFallbackClaims = sessionCookie ? hasFreshFirebaseLikeClaims(sessionCookie) : false;
   const isAuthenticated =
     (e2eBypassEnabled && hasE2EBypassCookie) ||
-    !!verifiedSession?.sub ||
-    hasFreshFallbackClaims;
+    !!verifiedSession?.sub;
   const requestId = request.headers.get('x-request-id') || crypto.randomUUID();
 
   logger.info('Auth middleware evaluation', {
@@ -117,7 +98,6 @@ export async function middleware(request: NextRequest) {
     requestId,
     hasSessionCookie,
     hasVerifiedSession: !!verifiedSession?.sub,
-    hasFreshFallbackClaims,
     hasE2EBypassCookie,
     isAuthenticated,
   });
@@ -135,18 +115,6 @@ export async function middleware(request: NextRequest) {
   }
 
   if (isProtectedPath(pathname) && !isAuthenticated) {
-    // If any auth cookie exists but cannot be verified right now, avoid forcing a hard
-    // redirect loop. Let client auth resolve and re-sync the cookie on this request cycle.
-    if (hasSessionCookie) {
-      const passthrough = NextResponse.next();
-      passthrough.headers.set('X-Request-Id', requestId);
-      logger.info('Auth middleware: protected route with session cookie, allowing passthrough', {
-        requestId,
-        pathname,
-      });
-      return passthrough;
-    }
-
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = '/auth';
     redirectUrl.searchParams.set('next', pathname);
@@ -156,6 +124,7 @@ export async function middleware(request: NextRequest) {
       requestId,
       from: pathname,
       to: redirectUrl.pathname,
+      reason: hasSessionCookie ? 'unverified_or_expired_session' : 'no_session',
     });
     return redirectResponse;
   }
@@ -204,6 +173,10 @@ export async function middleware(request: NextRequest) {
     "form-action 'self'",
   ].join('; ');
   response.headers.set('Content-Security-Policy', csp);
+
+  if (isProduction) {
+    response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
 
   return response;
 }

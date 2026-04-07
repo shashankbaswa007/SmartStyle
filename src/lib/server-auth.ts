@@ -48,7 +48,7 @@ function extractUidFromUnverifiedToken(token: string): string | null {
 }
 
 function canUseDevAuthFallback() {
-  return process.env.NODE_ENV !== 'production';
+  return process.env.ALLOW_DEV_AUTH_FALLBACK === '1' && process.env.NODE_ENV !== 'production';
 }
 
 async function verifyWithGoogleJwks(token: string): Promise<string | null> {
@@ -74,12 +74,10 @@ async function verifyWithGoogleJwks(token: string): Promise<string | null> {
   }
 }
 
-export async function verifyBearerToken(request: Request | NextRequest): Promise<string> {
-  const token = extractBearerToken(request);
-  if (!token) {
-    throw new AuthError('Unauthorized - Missing bearer token', 401);
-  }
-
+export async function verifyFirebaseIdToken(
+  token: string,
+  options?: { allowDevFallback?: boolean }
+): Promise<string | null> {
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     return decoded.uid;
@@ -89,15 +87,29 @@ export async function verifyBearerToken(request: Request | NextRequest): Promise
       return jwksUid;
     }
 
-    if (canUseDevAuthFallback()) {
+    if (options?.allowDevFallback && canUseDevAuthFallback()) {
       const fallbackUid = extractUidFromUnverifiedToken(token);
       if (fallbackUid) {
         return fallbackUid;
       }
     }
 
+    return null;
+  }
+}
+
+export async function verifyBearerToken(request: Request | NextRequest): Promise<string> {
+  const token = extractBearerToken(request);
+  if (!token) {
+    throw new AuthError('Unauthorized - Missing bearer token', 401);
+  }
+
+  const uid = await verifyFirebaseIdToken(token, { allowDevFallback: true });
+  if (!uid) {
     throw new AuthError('Unauthorized - Invalid authentication token', 401);
   }
+
+  return uid;
 }
 
 export async function verifyBearerTokenMatchesUser(

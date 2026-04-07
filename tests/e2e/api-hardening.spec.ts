@@ -37,17 +37,62 @@ test.describe('API Hardening', () => {
       data: {
         invalid: true,
       },
+      headers: {
+        Origin: 'http://localhost:3000',
+      },
     });
 
     expect(badCreate.status()).toBe(400);
 
     const clearSession = await request.fetch('/api/auth/session', {
       method: 'DELETE',
+      headers: {
+        Origin: 'http://localhost:3000',
+      },
     });
 
     expect(clearSession.status()).toBe(200);
     const clearBody = await clearSession.json();
     expect(clearBody.ok).toBe(true);
+  });
+
+  test('session endpoint rejects cross-origin session creation and clear', async ({ request }) => {
+    const forgedCreate = await request.post('/api/auth/session', {
+      data: {
+        idToken: 'fake-token',
+      },
+      headers: {
+        Origin: 'https://attacker.example',
+      },
+    });
+
+    expect(forgedCreate.status()).toBe(403);
+    const createBody = await forgedCreate.json();
+    expect(String(createBody?.error || '').toLowerCase()).toContain('origin');
+
+    const forgedDelete = await request.fetch('/api/auth/session', {
+      method: 'DELETE',
+      headers: {
+        Origin: 'https://attacker.example',
+      },
+    });
+
+    expect(forgedDelete.status()).toBe(403);
+    const deleteBody = await forgedDelete.json();
+    expect(String(deleteBody?.error || '').toLowerCase()).toContain('origin');
+  });
+
+  test('protected route redirects when session cookie is invalid', async ({ request }) => {
+    const response = await request.fetch('/analytics', {
+      headers: {
+        Cookie: 'smartstyle-session=invalid.jwt.structure',
+      },
+      maxRedirects: 0,
+    });
+
+    expect(response.status()).toBeGreaterThanOrEqual(300);
+    expect(response.status()).toBeLessThan(400);
+    expect(response.headers()['location']).toContain('/auth');
   });
 
   test('tavily endpoint requires auth and returns safe fallback shape', async ({ request }) => {
