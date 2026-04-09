@@ -57,6 +57,9 @@ export async function GET(request: Request) {
         success: true,
         usage: {
           recommend: sanitizeUsageStatus(recommend),
+          [RATE_LIMIT_SCOPES.wardrobeOutfit]: sanitizeUsageStatus(wardrobeOutfit),
+          [RATE_LIMIT_SCOPES.wardrobeUpload]: sanitizeUsageStatus(wardrobeUpload),
+          // Temporary legacy aliases for backward compatibility during rollout.
           wardrobeOutfit: sanitizeUsageStatus(wardrobeOutfit),
           wardrobeUpload: sanitizeUsageStatus(wardrobeUpload),
         },

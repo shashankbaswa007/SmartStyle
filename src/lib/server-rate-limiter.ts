@@ -179,6 +179,27 @@ export async function reserveServerRateLimit(
       };
     });
   } catch {
+    try {
+      const fallback = getRateLimitStatus(`${config.scope}:${subject}`, {
+        windowMs: config.windowMs,
+        maxRequests: config.maxRequests,
+      });
+
+      return {
+        allowed: fallback.remaining > 0,
+        remaining: fallback.remaining,
+        resetAt: new Date(fallback.resetTime),
+        reservationId,
+        ...(fallback.remaining > 0
+          ? {}
+          : {
+              message: `Daily limit reached. Try again in ${Math.max(1, Math.ceil((fallback.resetTime - now) / 1000))} seconds.`,
+            }),
+      };
+    } catch {
+      // Continue to strict fallback handling below.
+    }
+
     if (STRICT_PROD_RATE_LIMIT_BACKEND) {
       return {
         allowed: false,
@@ -188,21 +209,11 @@ export async function reserveServerRateLimit(
       };
     }
 
-    const fallback = getRateLimitStatus(`${config.scope}:${subject}`, {
-      windowMs: config.windowMs,
-      maxRequests: config.maxRequests,
-    });
-
     return {
-      allowed: fallback.remaining > 0,
-      remaining: fallback.remaining,
-      resetAt: new Date(fallback.resetTime),
-      reservationId,
-      ...(fallback.remaining > 0
-        ? {}
-        : {
-            message: `Daily limit reached. Try again in ${Math.max(1, Math.ceil((fallback.resetTime - now) / 1000))} seconds.`,
-          }),
+      allowed: false,
+      remaining: 0,
+      resetAt,
+      message: 'Rate limit service is temporarily unavailable. Please retry shortly.',
     };
   }
 }
@@ -434,7 +445,7 @@ export async function getServerRateLimitStatus(
   subject: string,
   config: ServerRateLimitConfig
 ): Promise<ServerRateLimitStatus> {
-  const { windowStartMs, resetAt } = getCurrentWindow(config);
+  const { now, windowStartMs, resetAt } = getCurrentWindow(config);
 
   const distributedStatus = await getDistributedRateLimitStatus(subject, {
     scope: config.scope,
@@ -495,7 +506,12 @@ export async function getServerRateLimitStatus(
     }
 
     // We're in the same window - return current status
-    const used = Math.max(0, Math.min(data.count || 0, config.maxRequests));
+    const activeReservations = data.reservations
+      ? Object.values(data.reservations).filter(
+          (expiresAtMs) => Number.isFinite(expiresAtMs) && expiresAtMs > now
+        ).length
+      : 0;
+    const used = Math.max(0, Math.min((data.count || 0) + activeReservations, config.maxRequests));
     const remaining = Math.max(0, config.maxRequests - used);
 
     return {
@@ -505,6 +521,22 @@ export async function getServerRateLimitStatus(
       resetAt,
     };
   } catch {
+    try {
+      const fallback = getRateLimitStatus(`${config.scope}:${subject}`, {
+        windowMs: config.windowMs,
+        maxRequests: config.maxRequests,
+      });
+
+      return {
+        limit: fallback.limit,
+        used: fallback.used,
+        remaining: fallback.remaining,
+        resetAt: new Date(fallback.resetTime),
+      };
+    } catch {
+      // Continue to strict fallback handling below.
+    }
+
     if (STRICT_PROD_RATE_LIMIT_BACKEND) {
       return {
         limit: config.maxRequests,
@@ -514,16 +546,11 @@ export async function getServerRateLimitStatus(
       };
     }
 
-    const fallback = getRateLimitStatus(`${config.scope}:${subject}`, {
-      windowMs: config.windowMs,
-      maxRequests: config.maxRequests,
-    });
-
     return {
-      limit: fallback.limit,
-      used: fallback.used,
-      remaining: fallback.remaining,
-      resetAt: new Date(fallback.resetTime),
+      limit: config.maxRequests,
+      used: config.maxRequests,
+      remaining: 0,
+      resetAt,
     };
   }
 }

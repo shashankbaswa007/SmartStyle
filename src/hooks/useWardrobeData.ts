@@ -159,7 +159,7 @@ export function useWardrobeData(): UseWardrobeDataResult {
         wardrobeUpload: uploadWindow,
       });
 
-      if (!outfitWindow && !uploadWindow) {
+      if (!outfitWindow || !uploadWindow) {
         setUsageError('Daily limits are temporarily unavailable. Please retry.');
       }
     } catch (error) {
@@ -256,7 +256,7 @@ export function useWardrobeData(): UseWardrobeDataResult {
 
     window.addEventListener('usage:consumed', onUsageConsumed as EventListener);
     return () => window.removeEventListener('usage:consumed', onUsageConsumed as EventListener);
-  }, [fetchUsageLimits, userId]);
+  }, [fetchUsageLimits]);
 
   const isOutfitLimitReached = !usageLoading && !!usageLimits.wardrobeOutfit && usageLimits.wardrobeOutfit.remaining <= 0;
   const isUploadLimitReached = !usageLoading && !!usageLimits.wardrobeUpload && usageLimits.wardrobeUpload.remaining <= 0;

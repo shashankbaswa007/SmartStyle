@@ -10,6 +10,11 @@ export type UsageStatusResponse = {
   usage: Record<string, UsageWindow | undefined>;
 };
 
+const LEGACY_SCOPE_ALIASES: Record<string, string[]> = {
+  'wardrobe-outfit': ['wardrobeOutfit'],
+  'wardrobe-upload': ['wardrobeUpload'],
+};
+
 interface HttpLikeError {
   status: number;
   message: string;
@@ -28,11 +33,27 @@ export function parseUsageWindow(data: unknown): UsageWindow | undefined {
     return undefined;
   }
 
+  const limit = Math.max(0, Math.floor(candidate.limit));
+  const remaining = Math.max(0, Math.min(limit, Math.floor(candidate.remaining)));
+
   return {
-    remaining: Math.max(0, candidate.remaining),
-    limit: Math.max(0, candidate.limit),
+    remaining,
+    limit,
     resetAt: typeof candidate.resetAt === 'string' ? candidate.resetAt : undefined,
   };
+}
+
+function getScopedUsageWindow(usage: Record<string, unknown>, scope: string): UsageWindow | undefined {
+  const direct = parseUsageWindow(usage[scope]);
+  if (direct) return direct;
+
+  const aliases = LEGACY_SCOPE_ALIASES[scope] || [];
+  for (const alias of aliases) {
+    const parsed = parseUsageWindow(usage[alias]);
+    if (parsed) return parsed;
+  }
+
+  return undefined;
 }
 
 export async function fetchUsageStatus(params: {
@@ -101,7 +122,7 @@ export async function fetchUsageStatus(params: {
 
   const parsed: Record<string, UsageWindow | undefined> = {};
   for (const scope of params.scopes) {
-    parsed[scope] = parseUsageWindow(usage[scope]);
+    parsed[scope] = getScopedUsageWindow(usage, scope);
   }
 
   return { usage: parsed };
