@@ -11,7 +11,7 @@ void main(){gl_Position=vec4(position,0.0,1.0);}
 
 const fragment = `
 #ifdef GL_ES
-precision lowp float;
+precision mediump float;
 #endif
 uniform vec2 uResolution;
 uniform float uTime;
@@ -86,6 +86,17 @@ type Props = {
   resolutionScale?: number;
 };
 
+function setFallbackVisible(fallback: HTMLDivElement, canvas: HTMLCanvasElement) {
+  fallback.style.opacity = '1';
+  canvas.style.opacity = '0';
+}
+
+function setWebglVisible(fallback: HTMLDivElement, canvas: HTMLCanvasElement) {
+  fallback.style.opacity = '0';
+  canvas.style.opacity = '1';
+  canvas.style.background = 'transparent';
+}
+
 export default function DarkVeil({
   hueShift = 0,
   noiseIntensity = 0,
@@ -96,10 +107,19 @@ export default function DarkVeil({
   resolutionScale = 1
 }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const fallbackRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const canvas = ref.current;
-    if (!canvas) return;
-    if (!tryAcquireWebGlContext()) return;
+    const fallback = fallbackRef.current;
+    if (!canvas || !fallback) return;
+
+    // Start from safe fallback and switch to WebGL only when fully initialized.
+    setFallbackVisible(fallback, canvas);
+
+    if (!tryAcquireWebGlContext()) {
+      return;
+    }
 
     const parent = canvas.parentElement;
     if (!parent) {
@@ -115,10 +135,12 @@ export default function DarkVeil({
     try {
       const renderer = new Renderer({
         dpr: Math.min(window.devicePixelRatio || 1, 2),
+        alpha: true,
         canvas,
       });
 
       const gl = renderer.gl;
+      gl.clearColor(0, 0, 0, 0);
       loseContext = () => {
         const extension = gl.getExtension('WEBGL_lose_context');
         extension?.loseContext();
@@ -156,6 +178,7 @@ export default function DarkVeil({
         resizeObserver.observe(parent);
       }
       resize();
+      setWebglVisible(fallback, canvas);
 
       const start = performance.now();
 
@@ -173,7 +196,7 @@ export default function DarkVeil({
       loop();
     } catch {
       // Graceful fallback when WebGL is unavailable (e.g. CI/headless browsers).
-      canvas.style.display = 'none';
+      setFallbackVisible(fallback, canvas);
       releaseWebGlContext();
     }
 
@@ -187,5 +210,18 @@ export default function DarkVeil({
       releaseWebGlContext();
     };
   }, [hueShift, noiseIntensity, scanlineIntensity, speed, scanlineFrequency, warpAmount, resolutionScale]);
-  return <canvas ref={ref} className="w-full h-full block" />;
+
+  return (
+    <div className="relative w-full h-full">
+      <div
+        ref={fallbackRef}
+        className="absolute inset-0 transition-opacity duration-300"
+        style={{
+          background:
+            'radial-gradient(circle at 20% 25%, rgba(76, 29, 149, 0.7), rgba(17, 24, 39, 0.9) 42%), radial-gradient(circle at 78% 28%, rgba(67, 56, 202, 0.48), transparent 48%), linear-gradient(135deg, rgba(3, 7, 18, 1) 0%, rgba(17, 24, 39, 1) 100%)',
+        }}
+      />
+      <canvas ref={ref} className="absolute inset-0 block h-full w-full" />
+    </div>
+  );
 }

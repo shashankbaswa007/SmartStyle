@@ -357,29 +357,15 @@ export default function AuthPage() {
         {/* Background layers */}
         <div className="absolute inset-0 z-0">
           <DarkVeil
-            hueShift={0}
-            noiseIntensity={0.012}
-            scanlineIntensity={0.018}
-            speed={0.34}
+            hueShift={10}
+            noiseIntensity={0.014}
+            scanlineIntensity={0.02}
+            speed={0.3}
             scanlineFrequency={0.001}
             warpAmount={0.03}
             resolutionScale={1}
           />
         </div>
-
-
-        {/* Grid overlay */}
-        <div
-          className="absolute inset-0 z-0 opacity-[0.2]"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)',
-            backgroundSize: '62px 62px',
-          }}
-        />
-
-        {/* Noise overlay */}
-        <div className="absolute inset-0 z-0 noise-overlay pointer-events-none" />
 
 
         {/* Content */}
