@@ -47,7 +47,7 @@ describe('GET /api/recommend/status', () => {
     expect(payload.requestId).toBe('req-status-missing-job');
   });
 
-  it('returns processing fallback with request ID when job is not yet visible', async () => {
+  it('returns JOB_NOT_FOUND with request ID when job is not visible', async () => {
     mockGetRecommendJobStatus.mockResolvedValue(null);
 
     const response = await GET(
@@ -58,11 +58,11 @@ describe('GET /api/recommend/status', () => {
       })
     );
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(404);
     expect(response.headers.get('x-request-id')).toBe('req-status-processing');
 
     const payload = await response.json();
-    expect(payload.status).toBe('processing');
+    expect(payload.code).toBe('JOB_NOT_FOUND');
     expect(payload.requestId).toBe('req-status-processing');
   });
 

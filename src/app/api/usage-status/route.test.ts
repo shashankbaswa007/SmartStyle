@@ -3,7 +3,9 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const mockVerifyBearerToken = jest.fn<(...args: any[]) => Promise<string>>();
+const mockVerifyFirebaseIdToken = jest.fn<(...args: any[]) => Promise<string | null>>();
 const mockGetServerRateLimitStatus = jest.fn<(...args: any[]) => Promise<any>>();
+const mockVerifySessionCookie = jest.fn<(...args: any[]) => Promise<{ uid: string }>>();
 
 class MockAuthError extends Error {
   status: number;
@@ -16,7 +18,17 @@ class MockAuthError extends Error {
 
 jest.mock('@/lib/server-auth', () => ({
   verifyBearerToken: (...args: any[]) => mockVerifyBearerToken(...args),
+  verifyFirebaseIdToken: (...args: any[]) => mockVerifyFirebaseIdToken(...args),
   AuthError: MockAuthError,
+}));
+
+jest.mock('@/lib/firebase-admin', () => ({
+  __esModule: true,
+  default: {
+    auth: () => ({
+      verifySessionCookie: (...args: any[]) => mockVerifySessionCookie(...args),
+    }),
+  },
 }));
 
 jest.mock('@/lib/server-rate-limiter', () => ({
@@ -29,6 +41,8 @@ describe('GET /api/usage-status', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockVerifyBearerToken.mockResolvedValue('user-1');
+    mockVerifyFirebaseIdToken.mockResolvedValue('user-1');
+    mockVerifySessionCookie.mockResolvedValue({ uid: 'user-1' });
     mockGetServerRateLimitStatus
       .mockResolvedValueOnce({ limit: 10, used: 0, remaining: 10, resetAt: new Date('2026-04-10T00:00:00.000Z') })
       .mockResolvedValueOnce({ limit: 10, used: 1, remaining: 9, resetAt: new Date('2026-04-10T00:00:00.000Z') })
@@ -72,5 +86,97 @@ describe('GET /api/usage-status', () => {
     expect(response.status).toBe(401);
     const payload = await response.json();
     expect(payload.code).toBe('UNAUTHORIZED');
+  });
+
+  it('uses session cookie fallback when bearer verification fails', async () => {
+    mockVerifyBearerToken.mockRejectedValue(new MockAuthError('Unauthorized', 401));
+    mockVerifySessionCookie.mockResolvedValue({ uid: 'user-from-session' });
+
+    const response = await GET(
+      new Request('http://localhost/api/usage-status', {
+        headers: {
+          cookie: 'smartstyle-session=session-cookie-token',
+          'x-timezone-offset-minutes': '-330',
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockGetServerRateLimitStatus).toHaveBeenCalledWith(
+      'user-from-session',
+      expect.objectContaining({ scope: 'recommend' })
+    );
+  });
+
+  it('falls back to verifyFirebaseIdToken when session-cookie admin verification fails', async () => {
+    mockVerifyBearerToken.mockRejectedValue(new MockAuthError('Unauthorized', 401));
+    mockVerifySessionCookie.mockRejectedValue(new Error('admin unavailable'));
+    mockVerifyFirebaseIdToken.mockResolvedValue('user-from-id-token');
+
+    const response = await GET(
+      new Request('http://localhost/api/usage-status', {
+        headers: {
+          cookie: 'smartstyle-session=session-cookie-token',
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockVerifyFirebaseIdToken).toHaveBeenCalledWith('session-cookie-token', { allowDevFallback: true });
+  });
+
+  it('returns 401 instead of 500 for malformed session cookies', async () => {
+    mockVerifyBearerToken.mockRejectedValue(new MockAuthError('Unauthorized', 401));
+
+    const response = await GET(
+      new Request('http://localhost/api/usage-status', {
+        headers: {
+          cookie: 'smartstyle-session=%E0%A4%A',
+        },
+      })
+    );
+
+    expect(response.status).toBe(401);
+    const payload = await response.json();
+    expect(payload.code).toBe('UNAUTHORIZED');
+  });
+
+  it('uses session fallback when bearer verification throws non-auth error', async () => {
+    mockVerifyBearerToken.mockRejectedValue(new Error('auth provider temporarily unavailable'));
+    mockVerifySessionCookie.mockResolvedValue({ uid: 'user-from-session-non-auth-failure' });
+
+    const response = await GET(
+      new Request('http://localhost/api/usage-status', {
+        headers: {
+          cookie: 'smartstyle-session=session-cookie-token',
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mockGetServerRateLimitStatus).toHaveBeenCalledWith(
+      'user-from-session-non-auth-failure',
+      expect.objectContaining({ scope: 'recommend' })
+    );
+  });
+
+  it('returns valid JSON with fallback usage payload on internal server errors', async () => {
+    mockGetServerRateLimitStatus.mockReset();
+    mockGetServerRateLimitStatus.mockRejectedValue(new Error('database unavailable'));
+
+    const response = await GET(
+      new Request('http://localhost/api/usage-status', {
+        headers: {
+          authorization: 'Bearer token',
+        },
+      })
+    );
+
+    expect(response.status).toBe(500);
+    const payload = await response.json();
+    expect(payload.success).toBe(false);
+    expect(payload.code).toBe('USAGE_STATUS_FAILED');
+    expect(payload.usage?.recommend?.limit).toBe(10);
+    expect(payload.usage?.recommend?.remaining).toBe(10);
   });
 });

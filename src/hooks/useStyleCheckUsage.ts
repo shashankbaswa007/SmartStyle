@@ -1,11 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { RATE_LIMIT_SCOPES } from '@/lib/usage-limits';
-import { categorizeError } from '@/lib/error-handler';
-import { useAsyncFlow } from '@/hooks/useAsyncFlow';
 import { logUxEvent } from '@/lib/ux-events';
 import { fetchUsageStatus } from '@/lib/usage-status-service';
 
@@ -24,120 +22,125 @@ interface UseStyleCheckUsageResult {
 }
 
 export function useStyleCheckUsage(): UseStyleCheckUsageResult {
-  const [authChecked, setAuthChecked] = useState(false);
+  const [usage, setUsage] = useState<UsageWindow>(null);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [usageError, setUsageError] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const hasTaskStartedRef = useRef(false);
   const hasTaskCompletedRef = useRef(false);
   const lastForcedRefreshFailureAtRef = useRef(0);
-  const inFlightFetchRef = useRef<Promise<UsageWindow | null> | null>(null);
-  const lastFetchAtRef = useRef(0);
+  const authUserRef = useRef<User | null>(null);
+  const userIdRef = useRef<string | null>(null);
 
-  const fetchUsageOperation = useCallback(async ({ signal }: { signal: AbortSignal }) => {
-    const user = auth.currentUser;
-    if (!user) {
-      return null;
+  const fetchUsageForUser = useCallback(async (uid?: string | null): Promise<boolean> => {
+    const tokenUser = authUserRef.current || auth.currentUser;
+    const activeUser = uid || tokenUser?.uid;
+    if (!activeUser || !tokenUser) {
+      setUsage(null);
+      setUsageError(null);
+      setUsageLoading(false);
+      return false;
     }
-
-    if (signal.aborted) return null;
-
-    const data = await fetchUsageStatus({
-      user,
-      scopes: [RATE_LIMIT_SCOPES.recommend],
-      lastForcedRefreshFailureAtRef,
-    });
-    const recommendUsage = data.usage[RATE_LIMIT_SCOPES.recommend];
-
-    if (!recommendUsage) return null;
-
-    return {
-      remaining: recommendUsage.remaining,
-      limit: recommendUsage.limit,
-      resetAt: recommendUsage.resetAt,
-    } as UsageWindow;
-  }, []);
-
-  const { loadable, execute, reset, isLoading, isRetrying } = useAsyncFlow<UsageWindow>({
-    operation: fetchUsageOperation,
-    autoLoad: false,
-    maxRetries: 1,
-    timeoutMs: 6_000,
-    mapError: (error) => categorizeError(error, { fallbackMessage: 'Unable to load usage status. Please try again.' }),
-    onSuccess: () => {
-      hasTaskCompletedRef.current = true;
-      void logUxEvent(auth.currentUser?.uid, 'task_completed', {
-        flow: 'style_check_usage',
-        step: 'usage_loaded',
-        success: true,
-      });
-    },
-    onError: (error) => {
-      void logUxEvent(auth.currentUser?.uid, 'error_shown', {
-        flow: 'style_check_usage',
-        step: 'usage_load_failed',
-        reason: error.code,
-      });
-    },
-  });
-
-  const runUsageFetch = useCallback(async () => {
-    const now = Date.now();
-    if (inFlightFetchRef.current) {
-      return await inFlightFetchRef.current;
-    }
-
-    // Avoid burst requests from closely spaced auth/events/rerenders.
-    if (now - lastFetchAtRef.current < 1500) {
-      return null;
-    }
-
-    lastFetchAtRef.current = now;
-    const promise = execute();
-    inFlightFetchRef.current = promise;
 
     try {
-      return await promise;
+      setUsageLoading(true);
+      setUsageError(null);
+      const data = await fetchUsageStatus({
+        user: tokenUser,
+        scopes: [RATE_LIMIT_SCOPES.recommend],
+        lastForcedRefreshFailureAtRef,
+      });
+      const recommendUsage = data.usage[RATE_LIMIT_SCOPES.recommend] || null;
+      setUsage(recommendUsage);
+
+      if (!recommendUsage) {
+        setUsageError('Daily limits are temporarily unavailable. Please retry.');
+        hasTaskCompletedRef.current = true;
+        return false;
+      }
+
+      hasTaskCompletedRef.current = true;
+      return true;
+    } catch (error) {
+      setUsage(null);
+      const typed = error as { message?: string };
+      setUsageError(typed?.message || 'Unable to load usage status. Please try again.');
+      hasTaskCompletedRef.current = true;
+      return false;
     } finally {
-      inFlightFetchRef.current = null;
+      setUsageLoading(false);
     }
-  }, [execute]);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setAuthChecked(true);
+      authUserRef.current = user;
       if (!user) {
+        setUserId(null);
+        userIdRef.current = null;
         hasTaskStartedRef.current = false;
         hasTaskCompletedRef.current = false;
-        reset();
+        setUsage(null);
+        setUsageLoading(false);
+        setUsageError(null);
         return;
       }
+
+      setUserId(user.uid);
+      userIdRef.current = user.uid;
+
       void logUxEvent(user.uid, 'task_started', {
         flow: 'style_check_usage',
         step: 'usage_load_requested',
       });
       hasTaskStartedRef.current = true;
       hasTaskCompletedRef.current = false;
-      void runUsageFetch();
+      void fetchUsageForUser(user.uid).then((success) => {
+        if (!success) {
+          void logUxEvent(user.uid, 'error_shown', {
+            flow: 'style_check_usage',
+            step: 'usage_load_failed',
+            reason: 'initial_fetch_failed',
+          });
+          return;
+        }
+
+        void logUxEvent(user.uid, 'task_completed', {
+          flow: 'style_check_usage',
+          step: 'usage_loaded',
+          success: true,
+        });
+      });
     });
 
-    return () => unsubscribe();
-  }, [reset, runUsageFetch]);
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchUsageForUser]);
+
+  useEffect(() => {
+    if (!userId) return;
+    void fetchUsageForUser(userId);
+  }, [fetchUsageForUser, userId]);
 
   useEffect(() => {
     const onUsageConsumed = (event: Event) => {
       const customEvent = event as CustomEvent<{ scope?: string }>;
       if (customEvent.detail?.scope === RATE_LIMIT_SCOPES.recommend) {
-        void runUsageFetch();
+        void fetchUsageForUser(userIdRef.current);
       }
     };
 
     window.addEventListener('usage:consumed', onUsageConsumed as EventListener);
     return () => window.removeEventListener('usage:consumed', onUsageConsumed as EventListener);
-  }, [runUsageFetch]);
+  }, [fetchUsageForUser]);
 
   useEffect(() => {
     return () => {
-      if (!hasTaskStartedRef.current || hasTaskCompletedRef.current) return;
+      const currentUserId = userIdRef.current;
+      if (!currentUserId || !hasTaskStartedRef.current || hasTaskCompletedRef.current) return;
 
-      void logUxEvent(auth.currentUser?.uid, 'drop_off', {
+      void logUxEvent(currentUserId, 'drop_off', {
         flow: 'style_check_usage',
         step: 'abandoned_before_completion',
         reason: 'navigation_or_unmount',
@@ -145,26 +148,26 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
     };
   }, []);
 
-  const usage = loadable.data;
-  const usageLoading = !authChecked || isLoading || isRetrying;
-  const usageError = loadable.error?.message || null;
   const isStyleCheckLimitReached = !usageLoading && !!usage && usage.remaining <= 0;
 
   const fetchUsage = useCallback(async () => {
-    const uid = auth.currentUser?.uid;
-    void logUxEvent(uid, 'retry_clicked', {
-      flow: 'style_check_usage',
-      step: 'manual_retry',
-    });
-    const result = await runUsageFetch();
-    if (result !== null) {
+    const uid = userIdRef.current;
+    if (uid) {
+      void logUxEvent(uid, 'retry_clicked', {
+        flow: 'style_check_usage',
+        step: 'manual_retry',
+      });
+    }
+
+    const recovered = await fetchUsageForUser(uid);
+    if (uid && recovered) {
       void logUxEvent(uid, 'recovered_from_error', {
         flow: 'style_check_usage',
         step: 'manual_retry_success',
         success: true,
       });
     }
-  }, [runUsageFetch]);
+  }, [fetchUsageForUser]);
 
   return {
     usage,

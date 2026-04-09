@@ -441,102 +441,136 @@ export async function checkServerRateLimit(
   }
 }
 
+async function getFirestoreRateLimitStatus(
+  subject: string,
+  config: ServerRateLimitConfig,
+  timing: { now: number; windowStartMs: number; resetAt: Date }
+): Promise<ServerRateLimitStatus> {
+  const { now, windowStartMs, resetAt } = timing;
+  const db = admin.firestore();
+  const docId = `${config.scope}:${subject}`;
+  const docRef = db.collection(COLLECTION).doc(docId);
+  const snap = await docRef.get();
+
+  if (!snap.exists) {
+    return {
+      limit: config.maxRequests,
+      used: 0,
+      remaining: config.maxRequests,
+      resetAt,
+    };
+  }
+
+  const data = snap.data() as RateLimitDoc;
+
+  // Safety check: ensure windowStart is valid
+  if (!data.windowStart) {
+    // If no window start, reset the record
+    await docRef.update({
+      windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
+      count: 0,
+    });
+    return {
+      limit: config.maxRequests,
+      used: 0,
+      remaining: config.maxRequests,
+      resetAt,
+    };
+  }
+
+  const storedWindowStartMs = data.windowStart.toMillis();
+
+  // Check if we're in a new window (24+ hours have passed)
+  if (storedWindowStartMs !== windowStartMs) {
+    // Window has expired, reset the counter
+    await docRef.update({
+      windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
+      count: 0,
+    });
+    return {
+      limit: config.maxRequests,
+      used: 0,
+      remaining: config.maxRequests,
+      resetAt,
+    };
+  }
+
+  // We're in the same window - return current status
+  const activeReservations = data.reservations
+    ? Object.values(data.reservations).filter(
+        (expiresAtMs) => Number.isFinite(expiresAtMs) && expiresAtMs > now
+      ).length
+    : 0;
+  const used = Math.max(0, Math.min((data.count || 0) + activeReservations, config.maxRequests));
+  const remaining = Math.max(0, config.maxRequests - used);
+
+  return {
+    limit: config.maxRequests,
+    used,
+    remaining,
+    resetAt,
+  };
+}
+
 export async function getServerRateLimitStatus(
   subject: string,
   config: ServerRateLimitConfig
 ): Promise<ServerRateLimitStatus> {
   const { now, windowStartMs, resetAt } = getCurrentWindow(config);
 
-  const distributedStatus = await getDistributedRateLimitStatus(subject, {
+  const distributedStatusPromise = getDistributedRateLimitStatus(subject, {
     scope: config.scope,
     windowMs: config.windowMs,
     maxRequests: config.maxRequests,
     timezoneOffsetMinutes: config.timezoneOffsetMinutes,
   });
+
+  const firestoreStatusPromise = getFirestoreRateLimitStatus(subject, config, {
+    now,
+    windowStartMs,
+    resetAt,
+  });
+
+  const [distributedStatus, firestoreStatus] = await Promise.all([
+    distributedStatusPromise.catch(() => null),
+    firestoreStatusPromise.catch(() => null),
+  ]);
+
+  if (distributedStatus && firestoreStatus) {
+    const used = Math.max(distributedStatus.used, firestoreStatus.used);
+    const remaining = Math.max(0, config.maxRequests - used);
+    return {
+      limit: config.maxRequests,
+      used,
+      remaining,
+      // Use the earlier reset time when both systems disagree.
+      resetAt: distributedStatus.resetAt.getTime() <= firestoreStatus.resetAt.getTime()
+        ? distributedStatus.resetAt
+        : firestoreStatus.resetAt,
+    };
+  }
+
+  if (firestoreStatus) {
+    return firestoreStatus;
+  }
+
   if (distributedStatus) {
     return distributedStatus;
   }
 
   try {
-    const db = admin.firestore();
-    const docId = `${config.scope}:${subject}`;
-    const snap = await db.collection(COLLECTION).doc(docId).get();
-
-    if (!snap.exists) {
-      return {
-        limit: config.maxRequests,
-        used: 0,
-        remaining: config.maxRequests,
-        resetAt,
-      };
-    }
-
-    const data = snap.data() as RateLimitDoc;
-    
-    // Safety check: ensure windowStart is valid
-    if (!data.windowStart) {
-      // If no window start, reset the record
-      await db.collection(COLLECTION).doc(docId).update({
-        windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
-        count: 0,
-      });
-      return {
-        limit: config.maxRequests,
-        used: 0,
-        remaining: config.maxRequests,
-        resetAt,
-      };
-    }
-
-    const storedWindowStartMs = data.windowStart.toMillis();
-
-    // Check if we're in a new window (24+ hours have passed)
-    if (storedWindowStartMs !== windowStartMs) {
-      // Window has expired, reset the counter
-      await db.collection(COLLECTION).doc(docId).update({
-        windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
-        count: 0,
-      });
-      return {
-        limit: config.maxRequests,
-        used: 0,
-        remaining: config.maxRequests,
-        resetAt,
-      };
-    }
-
-    // We're in the same window - return current status
-    const activeReservations = data.reservations
-      ? Object.values(data.reservations).filter(
-          (expiresAtMs) => Number.isFinite(expiresAtMs) && expiresAtMs > now
-        ).length
-      : 0;
-    const used = Math.max(0, Math.min((data.count || 0) + activeReservations, config.maxRequests));
-    const remaining = Math.max(0, config.maxRequests - used);
+    const fallback = getRateLimitStatus(`${config.scope}:${subject}`, {
+      windowMs: config.windowMs,
+      maxRequests: config.maxRequests,
+    });
 
     return {
-      limit: config.maxRequests,
-      used,
-      remaining,
-      resetAt,
+      limit: fallback.limit,
+      used: fallback.used,
+      remaining: fallback.remaining,
+      resetAt: new Date(fallback.resetTime),
     };
   } catch {
-    try {
-      const fallback = getRateLimitStatus(`${config.scope}:${subject}`, {
-        windowMs: config.windowMs,
-        maxRequests: config.maxRequests,
-      });
-
-      return {
-        limit: fallback.limit,
-        used: fallback.used,
-        remaining: fallback.remaining,
-        resetAt: new Date(fallback.resetTime),
-      };
-    } catch {
-      // Continue to strict fallback handling below.
-    }
-
     if (STRICT_PROD_RATE_LIMIT_BACKEND) {
       return {
         limit: config.maxRequests,

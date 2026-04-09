@@ -14,7 +14,7 @@ import { useEffect } from 'react';
 import { useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth/AuthProvider';
-import { Loader2 } from 'lucide-react';
+import { PremiumAuthLoader } from '@/components/auth/PremiumAuthLoader';
 
 const LOGIN_GRACE_KEY = 'smartstyle_login_grace_ts';
 const E2E_AUTH_BYPASS_COOKIE = 'smartstyle-e2e-auth=enabled';
@@ -122,14 +122,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   // Show loading state while checking authentication state and initialization
   if (!shouldBypassAuth && (!initialized || loading || resolvingSession)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-          <p className="text-muted-foreground">Verifying authentication...</p>
-        </div>
-      </div>
-    );
+    return <PremiumAuthLoader statusText="Verifying authentication..." />;
   }
 
   // Don't render content if user is not authenticated (will redirect)

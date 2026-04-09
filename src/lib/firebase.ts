@@ -11,9 +11,14 @@ import { getFirestore, Firestore } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { logger } from './logger';
 
+const globalFirebaseLogState = globalThis as typeof globalThis & {
+  __smartstyleFirebaseEnvLogged?: boolean;
+  __smartstyleFirebaseInitLogged?: boolean;
+};
+
 // Debug: Log what environment variables are available (for development only)
-if (process.env.NODE_ENV === 'development') {
-  logger.log('🔍 Firebase env check:', {
+if (process.env.NODE_ENV === 'development' && !globalFirebaseLogState.__smartstyleFirebaseEnvLogged) {
+  logger.debug('🔍 Firebase env check:', {
     hasApiKey: !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
     hasAuthDomain: !!process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
     hasProjectId: !!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
@@ -30,13 +35,14 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-if (process.env.NODE_ENV === 'development') {
-  logger.log('🔍 Firebase config object:', {
+if (process.env.NODE_ENV === 'development' && !globalFirebaseLogState.__smartstyleFirebaseEnvLogged) {
+  logger.debug('🔍 Firebase config object:', {
     hasApiKey: !!firebaseConfig.apiKey,
     hasAuthDomain: !!firebaseConfig.authDomain,
     hasProjectId: !!firebaseConfig.projectId,
     configKeys: Object.keys(firebaseConfig),
   });
+  globalFirebaseLogState.__smartstyleFirebaseEnvLogged = true;
 }
 
 // Validate Firebase configuration values (not process.env, but actual config values)
@@ -58,7 +64,10 @@ if (missingFields.length > 0) {
 let app;
 try {
   app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-  logger.log('✅ Firebase initialized successfully');
+  if (process.env.NODE_ENV === 'development' && !globalFirebaseLogState.__smartstyleFirebaseInitLogged) {
+    logger.debug('✅ Firebase initialized successfully');
+    globalFirebaseLogState.__smartstyleFirebaseInitLogged = true;
+  }
 } catch (error) {
   logger.error('❌ Firebase initialization error:', error);
   throw error;

@@ -11,16 +11,51 @@ import { generateShoppingLinks } from '@/lib/shopping-query-optimizer';
 import { generateSessionId } from '@/lib/interaction-tracker';
 import saveRecommendation from '@/lib/firestoreRecommendations';
 import { getRedisClient } from '@/lib/redis';
+import { featureFlags } from '@/lib/feature-flags';
 import { enforceAdaptive701020 } from '@/lib/recommend/diversification';
 import { confirmServerRateLimit, releaseServerRateLimit } from '@/lib/server-rate-limiter';
 import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 
 const JOB_TTL_SECONDS = 4 * 60 * 60;
 const DEDUPE_TTL_SECONDS = 2 * 60 * 60;
-export const RECOMMEND_JOB_TIMEOUT_MS = 60_000;
+export const RECOMMEND_JOB_TIMEOUT_MS = 180_000;
+const STALE_PROCESSING_REQUEUE_MS = 12_000;
+const LOCAL_JOB_SWEEP_INTERVAL_MS = 60_000;
 const METRIC_PREFIX = 'smartstyle:v1:metrics:recommend';
 const RECENT_JOB_LIST_SIZE = 20;
 const UX_VARIANTS = ['A', 'B'] as const;
+
+type LocalJobEntry = {
+  record: RecommendJobRecord;
+  expiresAt: number;
+};
+
+type LocalJobStoreState = {
+  jobs: Map<string, LocalJobEntry>;
+  lastSweepAt: number;
+};
+
+const globalRecommendState = globalThis as typeof globalThis & {
+  __smartstyleRecommendLocalJobStore__?: LocalJobStoreState;
+  __smartstyleRecommendProcessLocks__?: Set<string>;
+};
+
+const localStoreState: LocalJobStoreState =
+  globalRecommendState.__smartstyleRecommendLocalJobStore__ || {
+    jobs: new Map<string, LocalJobEntry>(),
+    lastSweepAt: 0,
+  };
+
+if (!globalRecommendState.__smartstyleRecommendLocalJobStore__) {
+  globalRecommendState.__smartstyleRecommendLocalJobStore__ = localStoreState;
+}
+
+const localJobStore = localStoreState.jobs;
+const localProcessLocks = globalRecommendState.__smartstyleRecommendProcessLocks__ || new Set<string>();
+
+if (!globalRecommendState.__smartstyleRecommendProcessLocks__) {
+  globalRecommendState.__smartstyleRecommendProcessLocks__ = localProcessLocks;
+}
 
 type UxVariant = typeof UX_VARIANTS[number];
 
@@ -106,6 +141,42 @@ class RecommendJobError extends Error {
 
 function now(): number {
   return Date.now();
+}
+
+function sweepLocalJobsIfNeeded(timestamp: number): void {
+  if (timestamp - localStoreState.lastSweepAt < LOCAL_JOB_SWEEP_INTERVAL_MS) {
+    return;
+  }
+
+  localStoreState.lastSweepAt = timestamp;
+  for (const [id, entry] of localJobStore.entries()) {
+    if (entry.expiresAt <= timestamp) {
+      localJobStore.delete(id);
+    }
+  }
+}
+
+function saveLocalJob(job: RecommendJobRecord): void {
+  const timestamp = now();
+  sweepLocalJobsIfNeeded(timestamp);
+  localJobStore.set(job.jobId, {
+    record: { ...job },
+    expiresAt: timestamp + JOB_TTL_SECONDS * 1000,
+  });
+}
+
+function getLocalJob(jobId: string): RecommendJobRecord | null {
+  const timestamp = now();
+  sweepLocalJobsIfNeeded(timestamp);
+
+  const entry = localJobStore.get(jobId);
+  if (!entry) return null;
+  if (entry.expiresAt <= timestamp) {
+    localJobStore.delete(jobId);
+    return null;
+  }
+
+  return { ...entry.record };
 }
 
 function jobKey(jobId: string): string {
@@ -366,6 +437,13 @@ async function buildFallbackResultWithRecovery(
   }
 
   const fallbackAnalysis = enforceAdaptive701020(createFallbackAnalysis(job.input), job.input);
+  const fallbackAnalysisWithImages = {
+    ...fallbackAnalysis,
+    outfitRecommendations: fallbackAnalysis.outfitRecommendations.slice(0, 3).map((outfit, index) => ({
+      ...outfit,
+      imageUrl: buildImageFallbackDataUri(outfit.title || `Style Preview ${index + 1}`),
+    })),
+  };
   return {
     result: {
       success: true,
@@ -380,7 +458,7 @@ async function buildFallbackResultWithRecovery(
         skinTone: job.input.skinTone,
         dressColors: job.input.dressColors,
         sessionId: generateSessionId(),
-        analysis: fallbackAnalysis,
+        analysis: fallbackAnalysisWithImages,
       },
       recommendationId: null,
       cached: false,
@@ -416,6 +494,14 @@ function validateAnalysisResponse(analysis: AnalyzeImageAndProvideRecommendation
     throw new RecommendJobError('INVALID_RESPONSE', 'AI response missing highlights.');
   }
 
+  if (!analysis.notes || typeof analysis.notes !== 'string' || analysis.notes.trim().length < 10) {
+    throw new RecommendJobError('INVALID_RESPONSE', 'AI response missing concluding notes.');
+  }
+
+  if (!analysis.imagePrompt || typeof analysis.imagePrompt !== 'string' || analysis.imagePrompt.trim().length < 20) {
+    throw new RecommendJobError('INVALID_RESPONSE', 'AI response missing primary image prompt.');
+  }
+
   if (analysis.outfitRecommendations.length < 3) {
     throw new RecommendJobError('ML_EMPTY_RESPONSE', 'AI returned insufficient outfit recommendations.');
   }
@@ -443,11 +529,11 @@ function validateAnalysisResponse(analysis: AnalyzeImageAndProvideRecommendation
       throw new RecommendJobError('INVALID_RESPONSE', 'AI returned incomplete outfit recommendation data.');
     }
 
-    if ((outfit.description || '').trim().length < 80 || sentenceCount(outfit.description) < 2) {
+    if ((outfit.description || '').trim().length < 100 || sentenceCount(outfit.description) < 3) {
       throw new RecommendJobError('ML_EMPTY_RESPONSE', 'AI returned incomplete outfit recommendation details.');
     }
 
-    if (!Array.isArray(outfit.colorPalette) || outfit.colorPalette.length < 3) {
+    if (!Array.isArray(outfit.colorPalette) || outfit.colorPalette.length < 3 || outfit.colorPalette.length > 4) {
       throw new RecommendJobError('INVALID_RESPONSE', 'AI returned incomplete outfit color palettes.');
     }
 
@@ -456,7 +542,7 @@ function validateAnalysisResponse(analysis: AnalyzeImageAndProvideRecommendation
       throw new RecommendJobError('INVALID_RESPONSE', 'AI returned invalid outfit colors.');
     }
 
-    if (!outfit.imagePrompt || typeof outfit.imagePrompt !== 'string') {
+    if (!outfit.imagePrompt || typeof outfit.imagePrompt !== 'string' || outfit.imagePrompt.trim().length < 20) {
       throw new RecommendJobError('INVALID_RESPONSE', 'AI returned incomplete outfit generation prompts.');
     }
   }
@@ -591,11 +677,32 @@ function buildDedupeKey(input: RecommendRequest, userId: string): string {
 }
 
 async function getJob(jobId: string): Promise<RecommendJobRecord | null> {
-  return getDistributedJson<RecommendJobRecord>(jobKey(jobId));
+  const key = jobKey(jobId);
+  const distributed = await getDistributedJson<RecommendJobRecord>(key);
+  if (distributed) {
+    saveLocalJob(distributed);
+    return distributed;
+  }
+
+  return getLocalJob(jobId);
 }
 
 async function saveJob(job: RecommendJobRecord): Promise<void> {
+  saveLocalJob(job);
   await setDistributedJson(jobKey(job.jobId), job, JOB_TTL_SECONDS);
+}
+
+function acquireLocalProcessLock(jobId: string): boolean {
+  if (localProcessLocks.has(jobId)) {
+    return false;
+  }
+
+  localProcessLocks.add(jobId);
+  return true;
+}
+
+function releaseLocalProcessLock(jobId: string): void {
+  localProcessLocks.delete(jobId);
 }
 
 async function finalizeRecommendUsage(job: RecommendJobRecord, success: boolean): Promise<void> {
@@ -818,8 +925,8 @@ async function runWorkflow(job: RecommendJobRecord): Promise<any> {
         userId: job.input.userId || '',
       }),
       {
-        timeoutMs: 12000,
-        retries: 1,
+        timeoutMs: 70_000,
+        retries: 0,
         operationName: 'recommend.job.analysis',
       }
     );
@@ -956,15 +1063,26 @@ export async function processRecommendJob(jobId: string): Promise<void> {
   if (!existing) return;
   if (existing.status === 'completed') return;
 
+  const hasDistributedLockInfrastructure = featureFlags.redisDedupLock && !!getRedisClient();
   let lock: DistributedLock | null = null;
-  for (let attempt = 0; attempt < 3 && !lock; attempt += 1) {
-    lock = await acquireDistributedLock(`recommend:job:lock:${jobId}`, 45);
-    if (!lock && attempt < 2) {
-      const backoffMs = 80 * (attempt + 1);
-      await new Promise((resolve) => setTimeout(resolve, backoffMs));
+  let usingLocalLock = false;
+
+  if (hasDistributedLockInfrastructure) {
+    for (let attempt = 0; attempt < 3 && !lock; attempt += 1) {
+      lock = await acquireDistributedLock(
+        `recommend:job:lock:${jobId}`,
+        Math.ceil(RECOMMEND_JOB_TIMEOUT_MS / 1000) + 30
+      );
+      if (!lock && attempt < 2) {
+        const backoffMs = 80 * (attempt + 1);
+        await new Promise((resolve) => setTimeout(resolve, backoffMs));
+      }
     }
+    if (!lock) return;
+  } else {
+    usingLocalLock = acquireLocalProcessLock(jobId);
+    if (!usingLocalLock) return;
   }
-  if (!lock) return;
 
   const start = now();
   try {
@@ -1027,7 +1145,6 @@ export async function processRecommendJob(jobId: string): Promise<void> {
   } catch (error: any) {
     const failed = await getJob(jobId);
     if (!failed) return;
-    await finalizeRecommendUsage(failed, false);
     const uxVariant = normalizeVariant(failed.input.uxVariant);
 
     const errorCode: RecommendFailureCode =
@@ -1036,6 +1153,8 @@ export async function processRecommendJob(jobId: string): Promise<void> {
         : 'JOB_PROCESSING_FAILED';
 
     const fallback = await buildFallbackResultWithRecovery(failed, 'JOB_FALLBACK', errorCode);
+    const fallbackDeliveredPayload = Boolean(fallback.result?.success && fallback.result?.payload);
+    await finalizeRecommendUsage(failed, fallbackDeliveredPayload);
 
     failed.status = 'failed';
     failed.error = error?.message || 'Job processing failed';
@@ -1059,7 +1178,12 @@ export async function processRecommendJob(jobId: string): Promise<void> {
     await incrVariantMetric(uxVariant, 'failed', 1);
     await incrVariantMetric(uxVariant, 'fallbacks', 1);
   } finally {
-    await releaseDistributedLock(lock);
+    if (lock) {
+      await releaseDistributedLock(lock);
+    }
+    if (usingLocalLock) {
+      releaseLocalProcessLock(jobId);
+    }
   }
 }
 
@@ -1070,6 +1194,13 @@ export async function getRecommendJobStatus(jobId: string): Promise<RecommendJob
   // Opportunistic processing in case background trigger was interrupted.
   if (job.status === 'queued') {
     void processRecommendJob(jobId);
+  } else if (job.status === 'processing') {
+    const lastProgressAt = job.updatedAt || job.startedAt || job.createdAt;
+    const isStaleProcessing = now() - lastProgressAt > STALE_PROCESSING_REQUEUE_MS;
+    const stillWithinTimeoutWindow = now() - job.createdAt <= RECOMMEND_JOB_TIMEOUT_MS;
+    if (isStaleProcessing && stillWithinTimeoutWindow) {
+      void processRecommendJob(jobId);
+    }
   }
 
   if ((job.status === 'queued' || job.status === 'processing') && now() - job.createdAt > RECOMMEND_JOB_TIMEOUT_MS) {

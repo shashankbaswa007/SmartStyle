@@ -67,6 +67,36 @@ interface TavilySearchResult {
 
 const TAVILY_API_URL = 'https://api.tavily.com/search';
 const TAVILY_API_KEY = process.env.TAVILY_API_KEY || '';
+const GEMINI_QUERY_COOLDOWN_MS = 60_000;
+let geminiQueryBackoffUntil = 0;
+
+function stripHexColorToken(value: string): string {
+  return (value || '').replace(/#[0-9A-Fa-f]{3,8}/g, '').trim();
+}
+
+function isGeminiQuotaOrRateLimitError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes('429') ||
+    normalized.includes('quota') ||
+    normalized.includes('rate limit') ||
+    normalized.includes('too many requests')
+  );
+}
+
+function extractRetryDelayMs(message: string): number {
+  const retryInSecondsMatch = message.match(/retry in\s+([0-9]+(?:\.[0-9]+)?)s/i);
+  if (retryInSecondsMatch) {
+    return Math.round(Number(retryInSecondsMatch[1]) * 1000);
+  }
+
+  const retryDelayMatch = message.match(/"retryDelay"\s*:\s*"([0-9]+)s"/i);
+  if (retryDelayMatch) {
+    return Number(retryDelayMatch[1]) * 1000;
+  }
+
+  return GEMINI_QUERY_COOLDOWN_MS;
+}
 
 async function postTavilySearch(payload: Record<string, unknown>, timeoutMs: number): Promise<Response> {
   const request = async (signal?: AbortSignal): Promise<Response> => {
@@ -601,7 +631,9 @@ export async function tavilySearch(
 
   try {
     // Extract color from query or use first color from array
-    const colorFromQuery = colors && colors.length > 0 ? colors[0] : '';
+    const colorFromQuery = (colors || [])
+      .map((colorValue) => stripHexColorToken(colorValue))
+      .find((colorValue) => colorValue.length > 0) || '';
     const color = colorFromQuery || cleanQuery.split(' ').find(word => 
       /^(red|blue|green|black|white|navy|grey|gray|pink|purple|yellow|orange|brown|beige|cream)/i.test(word)
     ) || '';
@@ -611,37 +643,51 @@ export async function tavilySearch(
       /(shirt|jacket|blazer|top|sweater|coat|hoodie|cardigan|vest|blouse)/i.test(word)
     ) || cleanQuery.split(' ')[0];
 
-    logger.log('🤖 Generating smart query with Gemini...');
+    const genderPrefix = gender?.toLowerCase() === 'female' ? 'women' : gender?.toLowerCase() === 'male' ? 'men' : '';
+    const joinTerms = (parts: Array<string | undefined | null>) =>
+      parts.map((part) => (part || '').trim()).filter(Boolean).join(' ');
+
+    const buildFallbackQueryData = () => ({
+      primaryQuery: joinTerms([genderPrefix, style, color, detectedClothingType, occasion]),
+      fallbackQueries: [
+        joinTerms([color, detectedClothingType, genderPrefix ? `for ${genderPrefix}` : null]),
+        joinTerms([genderPrefix, detectedClothingType, color]),
+      ],
+      keywords: [detectedClothingType, color, genderPrefix, style, occasion].filter(Boolean),
+      excludeTerms: ['pants', 'trousers', 'jeans', 'shorts', 'bottoms', 'joggers', 'leggings'],
+      tataCliqQuery: joinTerms([genderPrefix, detectedClothingType]),
+    });
+
     let queryData;
-    
-    try {
-      queryData = await generateShoppingQuery({
-        clothingType: detectedClothingType,
-        color: color,
-        gender: gender || '',
-        style: style,
-        occasion: occasion,
-      });
-      logger.log('✅ Smart query generated:', queryData);
-    } catch (error: any) {
-      // Fallback to manual query generation if Gemini fails (quota exceeded, etc.)
-      logger.warn('⚠️ Gemini query generation failed, using fallback:', error.message);
-      
-      const genderPrefix = gender?.toLowerCase() === 'female' ? 'women' : gender?.toLowerCase() === 'male' ? 'men' : '';
-      const styleStr = style ? ` ${style}` : '';
-      const occasionStr = occasion ? ` ${occasion}` : '';
-      
-      queryData = {
-        primaryQuery: `${genderPrefix}${styleStr} ${color} ${detectedClothingType}${occasionStr}`.trim(),
-        fallbackQueries: [
-          `${color} ${detectedClothingType} for ${genderPrefix}`.trim(),
-          `${genderPrefix} ${detectedClothingType} ${color}`.trim(),
-        ],
-        keywords: [detectedClothingType, color, genderPrefix, style, occasion].filter(Boolean),
-        excludeTerms: ['pants', 'trousers', 'jeans', 'shorts', 'bottoms', 'joggers', 'leggings'],
-        tataCliqQuery: `${genderPrefix} ${detectedClothingType}`.trim(),
-      };
-      
+    const now = Date.now();
+    const canUseGeminiQuery = now >= geminiQueryBackoffUntil;
+
+    if (canUseGeminiQuery) {
+      logger.log('🤖 Generating smart query with Gemini...');
+      try {
+        queryData = await generateShoppingQuery({
+          clothingType: detectedClothingType,
+          color: color,
+          gender: gender || '',
+          style: style,
+          occasion: occasion,
+        });
+        logger.log('✅ Smart query generated:', queryData);
+      } catch (error: any) {
+        const errorMessage = error?.message || 'Unknown Gemini query generation error';
+
+        if (isGeminiQuotaOrRateLimitError(errorMessage)) {
+          const retryDelayMs = Math.max(GEMINI_QUERY_COOLDOWN_MS, extractRetryDelayMs(errorMessage));
+          geminiQueryBackoffUntil = Date.now() + retryDelayMs;
+        }
+
+        logger.warn('⚠️ Gemini query generation failed, using fallback:', errorMessage);
+        queryData = buildFallbackQueryData();
+        logger.log('✅ Using fallback query:', queryData);
+      }
+    } else {
+      queryData = buildFallbackQueryData();
+      logger.log('[Tavily] Gemini query generation cooldown active, using deterministic fallback query.');
       logger.log('✅ Using fallback query:', queryData);
     }
 

@@ -56,7 +56,7 @@ function validAnalysis(): AnalysisShape {
       {
         title: 'Tailored Layers',
         description:
-          'Pair structured trousers with a fitted knit and lightweight overshirt for sharp weekday polish. Add clean sneakers for comfort while preserving the tailored silhouette.',
+          'Pair structured trousers with a fitted knit and lightweight overshirt for sharp weekday polish. Add clean sneakers for comfort while preserving the tailored silhouette. Finish with a minimal watch to keep the look refined and cohesive.',
         items: ['overshirt', 'knit tee', 'tailored trousers'],
         colorPalette: ['#1E3A8A', '#F8F5F0', '#166534'],
         imagePrompt: 'Tailored overshirt and knit layered with trousers in navy ivory green',
@@ -65,7 +65,7 @@ function validAnalysis(): AnalysisShape {
       {
         title: 'Weekend Relaxed',
         description:
-          'Use a breathable camp-collar shirt over straight denim to keep movement easy and the shape clean. Ground the look with minimal trainers and a tonal belt.',
+          'Use a breathable camp-collar shirt over straight denim to keep movement easy and the shape clean. Ground the look with minimal trainers and a tonal belt. Add a lightweight overshirt for cooler evenings and extra texture.',
         items: ['camp-collar shirt', 'straight denim', 'trainers'],
         colorPalette: ['#334155', '#E2E8F0', '#0F766E'],
         imagePrompt: 'Relaxed weekend outfit with camp collar shirt and denim',
@@ -74,7 +74,7 @@ function validAnalysis(): AnalysisShape {
       {
         title: 'Evening Contrast',
         description:
-          'Introduce a darker outer layer with a crisp base to build evening contrast and depth. Finish with simple leather shoes to keep the outfit refined and cohesive.',
+          'Introduce a darker outer layer with a crisp base to build evening contrast and depth. Finish with simple leather shoes to keep the outfit refined and cohesive. Keep accessories understated so the silhouette and color balance remain the focus.',
         items: ['dark blazer', 'crisp tee', 'tapered pants'],
         colorPalette: ['#111827', '#FAFAF9', '#7C2D12'],
         imagePrompt: 'Evening contrast outfit with dark blazer and crisp tee',
@@ -115,9 +115,38 @@ describe('recommend async job validation', () => {
     expectJobError(() => __testables.validateAnalysisResponse(payload as any), 'INVALID_RESPONSE');
   });
 
+  it('rejects outfit descriptions with fewer than 3 sentences', () => {
+    const payload = validAnalysis();
+    payload.outfitRecommendations[0].description =
+      'Structured layers look sharp for weekday dressing. Keep the accessories minimal.';
+
+    expectJobError(() => __testables.validateAnalysisResponse(payload as any), 'ML_EMPTY_RESPONSE');
+  });
+
+  it('rejects outfit color palette longer than 4 colors', () => {
+    const payload = validAnalysis();
+    payload.outfitRecommendations[0].colorPalette = ['#1E3A8A', '#F8F5F0', '#166534', '#0F172A', '#7C2D12'];
+
+    expectJobError(() => __testables.validateAnalysisResponse(payload as any), 'INVALID_RESPONSE');
+  });
+
   it('rejects missing image prompt in top outfits as INVALID_RESPONSE', () => {
     const payload = validAnalysis();
     payload.outfitRecommendations[2].imagePrompt = '';
+
+    expectJobError(() => __testables.validateAnalysisResponse(payload as any), 'INVALID_RESPONSE');
+  });
+
+  it('rejects missing top-level notes as INVALID_RESPONSE', () => {
+    const payload = validAnalysis();
+    payload.notes = '';
+
+    expectJobError(() => __testables.validateAnalysisResponse(payload as any), 'INVALID_RESPONSE');
+  });
+
+  it('rejects short top-level image prompt as INVALID_RESPONSE', () => {
+    const payload = validAnalysis();
+    payload.imagePrompt = 'Short prompt';
 
     expectJobError(() => __testables.validateAnalysisResponse(payload as any), 'INVALID_RESPONSE');
   });

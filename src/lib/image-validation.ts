@@ -30,8 +30,6 @@
 export interface ImageValidationResult {
   isValid: boolean;
   hasPerson: boolean;
-  multiplePeopleDetected?: boolean;
-  personCount?: number;
   message: string;
   confidence?: number;
 }
@@ -57,8 +55,6 @@ export async function validateImageForStyleAnalysis(
         resolve({
           isValid: false,
           hasPerson: false,
-          multiplePeopleDetected: false,
-          personCount: 0,
           message: "Could not process image. Please try again.",
           confidence: 0,
         });
@@ -75,8 +71,6 @@ export async function validateImageForStyleAnalysis(
         resolve({
           isValid: false,
           hasPerson: false,
-          multiplePeopleDetected: false,
-          personCount: 0,
           message: "Could not analyze image. Please try a different photo.",
           confidence: 0,
         });
@@ -87,8 +81,6 @@ export async function validateImageForStyleAnalysis(
       resolve({
         isValid: false,
         hasPerson: false,
-        multiplePeopleDetected: false,
-        personCount: 0,
         message: "Could not load image. Please try again.",
         confidence: 0,
       });
@@ -115,7 +107,6 @@ function analyzeImageForPerson(
   let colorVariety = new Set<string>();
   let verticalEdges = 0;
   let horizontalEdges = 0;
-  const skinPoints: Array<{ x: number; y: number }> = [];
   
   // Sample stride for performance
   const stride = Math.max(4, Math.floor(Math.min(width, height) / 100)) * 4;
@@ -148,7 +139,6 @@ function analyzeImageForPerson(
     // Detect skin tones (multiple methods for accuracy)
     if (isSkinTone(r, g, b)) {
       skinPixelCount += centerWeight;
-      skinPoints.push({ x, y });
     }
     
     // Detect fabric/clothing colors (non-skin, non-background)
@@ -205,12 +195,7 @@ function analyzeImageForPerson(
   
   // Determine result
   hasPerson = confidence >= 50;
-  const personCount = estimatePersonCountFromSkinPoints(skinPoints, width, height);
-  const multiplePeopleDetected = personCount > 1;
-  
-  if (multiplePeopleDetected) {
-    message = "We detected multiple people in the image. Please upload a single-person photo for accurate analysis.";
-  } else if (!hasSkinTone && !hasFabric) {
+  if (!hasSkinTone && !hasFabric) {
     message = "No person detected. Image appears to be an object or landscape. Please upload a photo of yourself wearing an outfit.";
   } else if (!hasSkinTone) {
     message = "No visible face/skin detected. Please ensure you're in the photo.";
@@ -225,72 +210,11 @@ function analyzeImageForPerson(
   }
   
   return {
-    isValid: hasPerson && confidence >= 60 && !multiplePeopleDetected,
+    isValid: hasPerson && confidence >= 60,
     hasPerson,
-    multiplePeopleDetected,
-    personCount,
     message,
     confidence,
   };
-}
-
-function estimatePersonCountFromSkinPoints(
-  points: Array<{ x: number; y: number }>,
-  width: number,
-  height: number
-): number {
-  if (points.length < 12) return points.length > 0 ? 1 : 0;
-
-  const minDim = Math.min(width, height);
-  const cellSize = Math.max(16, Math.floor(minDim / 14));
-  const cols = Math.max(1, Math.ceil(width / cellSize));
-  const rows = Math.max(1, Math.ceil(height / cellSize));
-  const grid = new Uint16Array(cols * rows);
-
-  for (const point of points) {
-    const col = Math.min(cols - 1, Math.max(0, Math.floor(point.x / cellSize)));
-    const row = Math.min(rows - 1, Math.max(0, Math.floor(point.y / cellSize)));
-    grid[row * cols + col] += 1;
-  }
-
-  const minCellOccupancy = 2;
-  const minClusterWeight = Math.max(8, Math.floor(points.length * 0.18));
-  const visited = new Uint8Array(cols * rows);
-  let detected = 0;
-
-  for (let idx = 0; idx < grid.length; idx += 1) {
-    if (visited[idx] || grid[idx] < minCellOccupancy) continue;
-
-    let clusterWeight = 0;
-    const queue: number[] = [idx];
-    visited[idx] = 1;
-
-    while (queue.length > 0) {
-      const current = queue.pop()!;
-      clusterWeight += grid[current];
-
-      const x = current % cols;
-      const y = Math.floor(current / cols);
-      for (let dy = -1; dy <= 1; dy += 1) {
-        for (let dx = -1; dx <= 1; dx += 1) {
-          if (dx === 0 && dy === 0) continue;
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
-          const nIdx = ny * cols + nx;
-          if (visited[nIdx] || grid[nIdx] < minCellOccupancy) continue;
-          visited[nIdx] = 1;
-          queue.push(nIdx);
-        }
-      }
-    }
-
-    if (clusterWeight >= minClusterWeight) {
-      detected += 1;
-    }
-  }
-
-  return Math.max(1, Math.min(3, detected || 1));
 }
 
 /**

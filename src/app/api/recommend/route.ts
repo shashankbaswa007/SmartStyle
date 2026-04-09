@@ -46,7 +46,7 @@ function buildErrorResponse(
 }
 
 export async function POST(req: Request) {
-  const TERMINAL_WAIT_MS = Math.min(22_000, RECOMMEND_JOB_TIMEOUT_MS - 5_000);
+  const TERMINAL_WAIT_MS = Math.min(55_000, RECOMMEND_JOB_TIMEOUT_MS - 3_000);
   const requestId = req.headers.get('x-request-id') || crypto.randomUUID();
 
   let body: unknown;

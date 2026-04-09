@@ -25,6 +25,7 @@ import { StyleAdvisorResults } from "./style-advisor-results";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { validateImageForStyleAnalysis, validateImageProperties } from "@/lib/image-validation";
+import { RATE_LIMIT_SCOPES } from "@/lib/usage-limits";
 import { RecommendationProgress } from './RecommendationProgress';
 import { OutfitSkeletonGrid } from './OutfitCardSkeleton';
 
@@ -165,9 +166,9 @@ function getFallbackFriendlyMessage(
 
 function buildDemoFallbackImageDataUris(): string[] {
   const cards = [
-    { title: 'Demo Look 1', bgA: '#1e3a8a', bgB: '#312e81', chip: '#f8f5f0' },
-    { title: 'Demo Look 2', bgA: '#1f2937', bgB: '#334155', chip: '#d6c7b0' },
-    { title: 'Demo Look 3', bgA: '#64748b', bgB: '#475569', chip: '#f8f5f0' },
+    { title: 'Style Preview 1', bgA: '#1e3a8a', bgB: '#312e81', chip: '#f8f5f0' },
+    { title: 'Style Preview 2', bgA: '#1f2937', bgB: '#334155', chip: '#d6c7b0' },
+    { title: 'Style Preview 3', bgA: '#64748b', bgB: '#475569', chip: '#f8f5f0' },
   ];
 
   return cards.map((card) => {
@@ -187,6 +188,33 @@ function buildDemoFallbackImageDataUris(): string[] {
     `;
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   });
+}
+
+function buildOutfitFallbackImageDataUri(title?: string, palette?: string[]): string {
+  const primary = typeof palette?.[0] === 'string' ? palette[0] : '#1e3a8a';
+  const secondary = typeof palette?.[1] === 'string' ? palette[1] : '#312e81';
+  const safeTitle = (title || 'Style Preview')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .slice(0, 48);
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1365" viewBox="0 0 1024 1365" role="img" aria-label="${safeTitle}">
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="${primary}" />
+          <stop offset="100%" stop-color="${secondary}" />
+        </linearGradient>
+      </defs>
+      <rect width="1024" height="1365" fill="url(#bg)" />
+      <circle cx="512" cy="560" r="170" fill="#ffffff" fill-opacity="0.18" />
+      <rect x="170" y="840" width="684" height="180" rx="28" fill="#ffffff" fill-opacity="0.14" />
+      <text x="512" y="928" text-anchor="middle" font-family="Arial, sans-serif" font-size="48" font-weight="700" fill="#ffffff">${safeTitle}</text>
+      <text x="512" y="978" text-anchor="middle" font-family="Arial, sans-serif" font-size="24" fill="#F8FAFC">Preview generated from fallback styling data</text>
+    </svg>
+  `;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
 function buildDemoFallbackAnalysis(): AnalyzeImageAndProvideRecommendationsOutput {
@@ -267,8 +295,7 @@ function isRenderableRecommendation(outfit: any): boolean {
   const hasTitle = typeof outfit?.title === 'string' && outfit.title.trim().length >= 3;
   const hasDescription = typeof outfit?.description === 'string' && outfit.description.trim().length >= 40;
   const hasColorPalette = Array.isArray(outfit?.colorPalette) && outfit.colorPalette.length >= 3;
-  const hasImage = typeof outfit?.imageUrl === 'string' && outfit.imageUrl.trim().length > 0;
-  return hasTitle && hasDescription && hasColorPalette && hasImage;
+  return hasTitle && hasDescription && hasColorPalette;
 }
 
 interface StyleAdvisorProps {
@@ -412,6 +439,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const analysisAbortRef = React.useRef<AbortController | null>(null);
   const activeRequestIdRef = React.useRef(0);
+  const imageValidationRequestIdRef = React.useRef(0);
   const isMountedRef = React.useRef(true);
   const submitInFlightRef = React.useRef(false);
 
@@ -584,22 +612,13 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         setShowCamera(false);
         
         // Validate the captured image
+        const validationRequestId = ++imageValidationRequestIdRef.current;
         setIsValidatingImage(true);
         setLoadingMessage("Validating captured photo...");
         
         try {
           const validation = await validateImageForStyleAnalysis(imageDataUrl);
-
-          if (validation.multiplePeopleDetected) {
-            const msg = "We detected multiple people in the image. Please upload a single-person photo for accurate analysis.";
-            setImageValidationError(msg);
-            toast({
-              variant: "destructive",
-              title: "Multiple People Detected",
-              description: msg,
-            });
-            return;
-          }
+          if (validationRequestId !== imageValidationRequestIdRef.current) return;
 
           // Only accept images with confidence strictly greater than 80
           const MIN_CONFIDENCE = 80;
@@ -637,33 +656,35 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
               form.setValue('image', dataTransfer.files);
             });
         } catch (error) {
-          // On error, allow to proceed
-          setPreviewImage(imageDataUrl);
-          
-          const extracted = extractColorsFromCanvas();
-          setExtractedData(extracted);
-          
-          fetch(imageDataUrl)
-            .then(res => res.blob())
-            .then(blob => {
-              const file = new File([blob], "camera-capture.jpg", { type: "image/jpeg" });
-              const dataTransfer = new DataTransfer();
-              dataTransfer.items.add(file);
-              form.setValue('image', dataTransfer.files);
-            });
+          if (validationRequestId !== imageValidationRequestIdRef.current) return;
+          const msg = "Unable to validate the captured photo. Please capture again.";
+          setImageValidationError(msg);
+          setPreviewImage(null);
+          setExtractedData(null);
+          form.setValue('image', undefined);
+          toast({
+            variant: "destructive",
+            title: "Photo Validation Failed",
+            description: msg,
+          });
         } finally {
-          setIsValidatingImage(false);
+          if (validationRequestId === imageValidationRequestIdRef.current) {
+            setIsValidatingImage(false);
+            setLoadingMessage('');
+          }
         }
       }
     }
   }, [form, toast]);
 
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const validationRequestId = ++imageValidationRequestIdRef.current;
     const file = e.target.files?.[0];
     if (!file) {
       setPreviewImage(null);
       setExtractedData(null);
       setImageValidationError(null);
+      setIsValidatingImage(false);
       return;
     }
 
@@ -671,6 +692,9 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     const propertyValidation = validateImageProperties(file);
     if (!propertyValidation.isValid) {
       setImageValidationError(propertyValidation.message);
+      setPreviewImage(null);
+      setExtractedData(null);
+      setIsValidatingImage(false);
       toast({
         variant: "destructive",
         title: "Invalid Image",
@@ -681,6 +705,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
 
     const reader = new FileReader();
     reader.onloadend = async () => {
+      if (validationRequestId !== imageValidationRequestIdRef.current) return;
       const imgSrc = reader.result as string;
       setPreviewImage(imgSrc);
       setImageValidationError(null);
@@ -691,18 +716,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
 
       try {
         const validation = await validateImageForStyleAnalysis(imgSrc);
-
-        if (validation.multiplePeopleDetected) {
-          const msg = "We detected multiple people in the image. Please upload a single-person photo for accurate analysis.";
-          setImageValidationError(msg);
-          setPreviewImage(null);
-          toast({
-            variant: "destructive",
-            title: "Multiple People Detected",
-            description: msg,
-          });
-          return;
-        }
+        if (validationRequestId !== imageValidationRequestIdRef.current) return;
 
         // Only accept images with confidence strictly greater than 80
         const MIN_CONFIDENCE = 80;
@@ -740,40 +754,32 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         };
         img.src = imgSrc;
       } catch (error) {
-        // Allow to proceed on validation error
+        if (validationRequestId !== imageValidationRequestIdRef.current) return;
+        const msg = "Unable to validate this image. Please select a different image and try again.";
+        setImageValidationError(msg);
+        setPreviewImage(null);
+        setExtractedData(null);
         toast({
-          variant: "default",
-          title: "Validation Skipped",
-          description: "Proceeding with analysis...",
+          variant: "destructive",
+          title: "Image Validation Failed",
+          description: msg,
         });
-
-        // Extract colors anyway
-        const img = document.createElement('img');
-        img.onload = () => {
-          if (canvasRef.current) {
-            const canvas = canvasRef.current;
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.drawImage(img, 0, 0);
-              const extracted = extractColorsFromCanvas();
-              setExtractedData(extracted);
-            }
-          }
-        };
-        img.src = imgSrc;
       } finally {
-        setIsValidatingImage(false);
+        if (validationRequestId === imageValidationRequestIdRef.current) {
+          setIsValidatingImage(false);
+          setLoadingMessage('');
+        }
       }
     };
     reader.readAsDataURL(file);
   };
 
   const removeImage = () => {
+    imageValidationRequestIdRef.current += 1;
     setPreviewImage(null);
     setExtractedData(null);
     setImageValidationError(null);
+    setIsValidatingImage(false);
     form.setValue('image', undefined);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -781,6 +787,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   };
 
   const resetForm = () => {
+    imageValidationRequestIdRef.current += 1;
     form.reset();
     setPreviewImage(null);
     setAnalysisResult(null);
@@ -796,6 +803,8 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     setResultMeta(null);
     setIsAutoRetrying(false);
     setAnalysisFailure(null);
+    setImageValidationError(null);
+    setIsValidatingImage(false);
   };
 
   const extractColorsFromCanvas = (): { skinTone: string; dressColors: string; colorPalette?: string[] } => {
@@ -1264,15 +1273,18 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     analysisAbortRef.current?.abort();
     const controller = new AbortController();
     analysisAbortRef.current = controller;
-    const timeoutId = window.setTimeout(() => controller.abort(), 70000);
+    const timeoutId = window.setTimeout(() => controller.abort(), 210000);
 
     const requestWithRetry = async (
       url: string,
       init: RequestInit,
-      options: { maxRetries?: number; retryOn429?: boolean } = {}
+      options: { maxRetries?: number; retryOn429?: boolean; attemptTimeoutMs?: number } = {}
     ) => {
       const maxRetries = options.maxRetries ?? 2;
       const retryOn429 = options.retryOn429 ?? true;
+      const defaultAttemptTimeoutMs =
+        init.method === 'POST' && url.includes('/api/recommend') ? 90_000 : 15_000;
+      const attemptTimeoutMs = options.attemptTimeoutMs ?? defaultAttemptTimeoutMs;
       const MAX_RETRY_AFTER_MS = 60_000;
       const MAX_BACKOFF_MS = 30_000;
       let lastError: Error | null = null;
@@ -1296,7 +1308,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         const attemptController = new AbortController();
         const onAbort = () => attemptController.abort();
         controller.signal.addEventListener('abort', onAbort, { once: true });
-        const attemptTimeout = window.setTimeout(() => attemptController.abort(), 15000);
+        const attemptTimeout = window.setTimeout(() => attemptController.abort(), attemptTimeoutMs);
 
         try {
           const response = await fetch(url, {
@@ -1504,7 +1516,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         headers,
         body: JSON.stringify(apiRequest),
       }, {
-        maxRetries: 1,
+        maxRetries: 0,
         retryOn429: false,
       });
 
@@ -1552,10 +1564,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
 
         setLoadingMessage('Preparing your personalized recommendations...');
 
-        const pollTimeoutMs = 65_000;
+        const pollTimeoutMs = 160_000;
         const pollIntervalMs = 1_500;
+        const maxConsecutiveNotFound = 5;
         const pollStart = Date.now();
         let finalStatusData: any = null;
+        let consecutiveNotFound = 0;
 
         while (Date.now() - pollStart < pollTimeoutMs) {
           if (controller.signal.aborted) {
@@ -1588,7 +1602,13 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
 
             if (statusResponse.status === 404) {
               // Eventual consistency across serverless instances can briefly miss queued jobs.
-              // Treat as in-progress and continue polling instead of surfacing an error.
+              // Treat as in-progress briefly, then fail fast if the job cannot be found repeatedly.
+              consecutiveNotFound += 1;
+              if (consecutiveNotFound >= maxConsecutiveNotFound) {
+                const missingJobError = new Error('Recommendation job was not found. Please retry analysis.') as Error & { code?: string };
+                missingJobError.code = 'JOB_NOT_FOUND';
+                throw missingJobError;
+              }
               continue;
             }
 
@@ -1600,6 +1620,8 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
             }
             throw new Error(statusError.error || statusError.message || 'Status check failed');
           }
+
+          consecutiveNotFound = 0;
 
           let statusData: any;
           try {
@@ -1636,6 +1658,32 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         }
 
         if (!finalStatusData) {
+          // One final status check reduces false timeouts when a job completes near the polling deadline.
+          const finalStatusResponse = await requestWithRetry(
+            `/api/recommend/status?jobId=${encodeURIComponent(jobId)}&userId=${encodeURIComponent(activeUser.uid)}`,
+            {
+              method: 'GET',
+              headers: {
+                ...headers,
+                'X-Request-Id': requestCorrelationId,
+              },
+            },
+            { maxRetries: 1 }
+          );
+
+          if (finalStatusResponse.ok) {
+            try {
+              const lastStatusData = await finalStatusResponse.json();
+              if (lastStatusData?.status === 'completed' || lastStatusData?.status === 'failed') {
+                finalStatusData = lastStatusData;
+              }
+            } catch {
+              // Fall through to timeout handling below.
+            }
+          }
+        }
+
+        if (!finalStatusData) {
           const timeoutError = new Error('Analysis timed out. Please try again.') as Error & { code?: string };
           timeoutError.code = 'ANALYSIS_TIMEOUT';
           throw timeoutError;
@@ -1656,26 +1704,75 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       const usedFallback = Boolean(data?.fallbackSource) || ['fallback', 'timeout-fallback', 'exact-cache-recovery', 'similar-recovery'].includes(String(data?.cacheSource || ''));
       setResultMeta({ isFresh, usedFallback });
 
-      if (!data.success || !data.payload) {
-        const invalidStructureError = new Error('Invalid API response structure') as Error & { code?: string };
-        invalidStructureError.code = data?.code || 'INVALID_RESPONSE';
-        throw invalidStructureError;
+      let result = data?.payload?.analysis;
+      if (!data?.success || !result || !Array.isArray(result.outfitRecommendations)) {
+        const demoFallback = buildDemoFallbackAnalysis();
+        data = {
+          ...data,
+          success: true,
+          status: data?.status || 'failed',
+          payload: {
+            ...(data?.payload || {}),
+            analysis: demoFallback,
+          },
+          cacheSource: data?.cacheSource || 'fallback',
+          fallbackSource: data?.fallbackSource || 'simplified',
+        };
+        setFallbackMessage((previous) => previous || getFallbackFriendlyMessage('simplified', 'fallback', uxVariant));
+        result = demoFallback;
       }
 
-      const result = data.payload.analysis;
-      if (!result || !Array.isArray(result.outfitRecommendations)) {
-        const incompleteError = new Error('Server response was incomplete. Please try again.') as Error & { code?: string };
-        incompleteError.code = data?.code || 'ML_EMPTY_RESPONSE';
-        throw incompleteError;
-      }
+      let enrichedOutfits = result.outfitRecommendations.map((outfit: any, index: number) => ({
+        ...outfit,
+        imageUrl:
+          typeof outfit?.imageUrl === 'string' && outfit.imageUrl.trim().length > 0
+            ? outfit.imageUrl
+            : buildOutfitFallbackImageDataUri(outfit?.title, outfit?.colorPalette),
+      }));
 
-      const enrichedOutfits = result.outfitRecommendations;
+      let resolvedAnalysis = {
+        ...result,
+        outfitRecommendations: enrichedOutfits,
+      };
 
       const renderableOutfits = enrichedOutfits.filter((outfit: any) => isRenderableRecommendation(outfit));
       if (renderableOutfits.length < 3) {
-        const incompleteError = new Error('We could not assemble complete recommendations. Please retry.') as Error & { code?: string };
-        incompleteError.code = data?.code || 'ML_EMPTY_RESPONSE';
-        throw incompleteError;
+        const demoFallback = buildDemoFallbackAnalysis();
+        enrichedOutfits = Array.from({ length: 3 }).map((_, index) => {
+          const existingOutfit = enrichedOutfits[index];
+          const demoOutfit = demoFallback.outfitRecommendations[index];
+
+          const title =
+            typeof existingOutfit?.title === 'string' && existingOutfit.title.trim().length >= 3
+              ? existingOutfit.title
+              : demoOutfit.title;
+          const description =
+            typeof existingOutfit?.description === 'string' && existingOutfit.description.trim().length >= 40
+              ? existingOutfit.description
+              : demoOutfit.description;
+          const colorPalette =
+            Array.isArray(existingOutfit?.colorPalette) && existingOutfit.colorPalette.length >= 3
+              ? existingOutfit.colorPalette
+              : demoOutfit.colorPalette;
+
+          return {
+            ...demoOutfit,
+            ...existingOutfit,
+            title,
+            description,
+            colorPalette,
+            imageUrl:
+              typeof existingOutfit?.imageUrl === 'string' && existingOutfit.imageUrl.trim().length > 0
+                ? existingOutfit.imageUrl
+                : buildOutfitFallbackImageDataUri(title, colorPalette),
+          };
+        });
+        resolvedAnalysis = {
+          ...demoFallback,
+          ...result,
+          outfitRecommendations: enrichedOutfits,
+        };
+        setFallbackMessage((previous) => previous || getFallbackFriendlyMessage('simplified', 'fallback', uxVariant));
       }
       
       updateStep('analyze', 'complete');
@@ -1711,7 +1808,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       updateStep('finalize', 'processing');
       if (isStale()) return;
 
-      setAnalysisResult(result);
+      setAnalysisResult(resolvedAnalysis);
       setAllContentReady(true);
       setShowResults(true);
       setCompletionGlow(true);
@@ -1724,8 +1821,17 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       setLoadingMessage('');
 
       if (typeof window !== 'undefined') {
-        if (String(data?.status || '').toLowerCase() === 'completed') {
-          window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'recommend' } }));
+        const terminalStatus = String(data?.status || '').toLowerCase();
+        if (terminalStatus === 'completed' || terminalStatus === 'failed') {
+          const usageEventId = `recommend:${String(data?.jobId || recId)}:${terminalStatus}`;
+          window.dispatchEvent(
+            new CustomEvent('usage:consumed', {
+              detail: {
+                scope: RATE_LIMIT_SCOPES.recommend,
+                eventId: usageEventId,
+              },
+            })
+          );
         }
       }
 
@@ -1772,10 +1878,13 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         normalizedError.includes('service unavailable') ||
         normalizedError.includes('status 5');
 
-      if (transientFailure && retryAttempt < 1) {
+      const maxAutoRetries = 2;
+      if (transientFailure && retryAttempt < maxAutoRetries) {
         setIsAutoRetrying(true);
-        setLoadingMessage('Connection hiccup detected. Retrying automatically (1/1)...');
-        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        const nextAttempt = retryAttempt + 1;
+        const backoffMs = nextAttempt === 1 ? 1200 : 2200;
+        setLoadingMessage(`Connection hiccup detected. Retrying automatically (${nextAttempt}/${maxAutoRetries})...`);
+        await new Promise((resolve) => window.setTimeout(resolve, backoffMs));
         await performAnalysis(request, { retryAttempt: retryAttempt + 1, preserveState: true });
         return;
       }
@@ -1798,7 +1907,14 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         title = "Rate Limit Reached";
         description = "Daily analysis quota reached. Please wait for reset and try again.";
         if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'recommend' } }));
+          window.dispatchEvent(
+            new CustomEvent('usage:consumed', {
+              detail: {
+                scope: RATE_LIMIT_SCOPES.recommend,
+                eventId: `recommend:rate-limit:${Date.now()}`,
+              },
+            })
+          );
         }
       } else if (normalizedError.includes('ml_empty_response') || normalizedError.includes('invalid_response')) {
         title = "Incomplete AI Response";

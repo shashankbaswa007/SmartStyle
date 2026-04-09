@@ -972,20 +972,39 @@ export function StyleAdvisorResults({
       </header>
 
       <motion.div variants={itemVariants} className={cardClasses}>
-        <div className="p-6 space-y-4">
-          <h3 className="font-bold text-xl text-foreground flex items-center gap-2">
-            <Palette className="text-accent" /> Your Current Color Combination
-          </h3>
+        <div className="p-5 sm:p-6 space-y-6">
+          <div className="space-y-1.5">
+            <h3 className="font-bold text-xl text-foreground flex items-center gap-2">
+              <Palette className="text-accent" /> Your Current Color Combination
+            </h3>
+            <p className="text-sm text-muted-foreground">
+              A concise color-direction brief with practical upgrades for your look.
+            </p>
+          </div>
 
-          <p className="text-muted-foreground">{colorCombinationInsight}</p>
-          <p className="text-muted-foreground">{analysisResult.feedback}</p>
+          <div className="rounded-xl border border-border/30 bg-accent/5 p-4 sm:p-5 space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Professional Read</p>
+                <p className="text-sm leading-relaxed text-foreground/90">{colorCombinationInsight}</p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fit and Styling Feedback</p>
+                <p className="text-sm leading-relaxed text-muted-foreground">{analysisResult.feedback}</p>
+              </div>
+            </div>
+          </div>
 
           {suggestedAccentColors.length > 0 && (
-            <div className="rounded-xl border border-border/20 bg-accent/5 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">
-                Quick Upgrade Colors To Try
-              </p>
-              <div className="flex flex-wrap gap-2">
+            <div className="rounded-xl border border-border/30 bg-background/60 p-4 sm:p-5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                  Quick Upgrade Colors To Try
+                </p>
+                <span className="text-[11px] text-muted-foreground">Tap any card to copy hex</span>
+              </div>
+
+              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                 {suggestedAccentColors.map((color, idx) => (
                   <button
                     key={`${color.displayName}-${idx}`}
@@ -993,12 +1012,17 @@ export function StyleAdvisorResults({
                       navigator.clipboard?.writeText(color.displayHex);
                       toast({ title: 'Copied!', description: `${color.displayName} (${color.displayHex}) copied to clipboard`, duration: 1500 });
                     }}
-                    className="inline-flex items-center gap-2 rounded-full border border-border/30 bg-background/70 px-2.5 py-1 text-xs hover:bg-background transition-colors"
+                    className="group inline-flex w-full items-center gap-3 rounded-lg border border-border/30 bg-card/80 px-3 py-2.5 text-left transition-colors hover:bg-card"
                     title={`${color.displayName} (${color.displayHex})`}
                   >
-                    <span className="inline-block w-3 h-3 rounded-full border border-black/10" style={{ backgroundColor: color.displayHex }} />
-                    <span className="font-medium text-foreground">{color.displayName}</span>
-                    <span className="text-muted-foreground">{color.displayHex}</span>
+                    <span
+                      className="h-8 w-8 shrink-0 rounded-md border border-black/10 shadow-sm"
+                      style={{ backgroundColor: color.displayHex }}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-foreground truncate">{color.displayName}</span>
+                      <span className="block text-xs text-muted-foreground truncate">{color.displayHex}</span>
+                    </span>
                   </button>
                 ))}
               </div>

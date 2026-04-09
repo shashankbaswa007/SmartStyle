@@ -17,13 +17,11 @@ import { Calendar, Shirt } from 'lucide-react';
 const StyleAdvisor = lazy(() => import('@/components/style-advisor').then(mod => ({ default: mod.StyleAdvisor })));
 const ShinyText = lazy(() => import('@/components/ShinyText'));
 const TextPressure = lazy(() => import('@/components/TextPressure'));
-const SplashCursor = lazy(() => import('@/components/SplashCursor'));
 const Particles = lazy(() => import('@/components/Particles'));
 
 export default function StyleCheckPage() {
   const isMounted = useMounted();
   const { usage, usageLoading, usageError, fetchUsage, isStyleCheckLimitReached } = useStyleCheckUsage();
-  const [showSplashCursor, setShowSplashCursor] = useState(false);
   const [showParticles, setShowParticles] = useState(false);
   const [isTabVisible, setIsTabVisible] = useState(true);
   const [supportsWebGL, setSupportsWebGL] = useState(false);
@@ -43,7 +41,6 @@ export default function StyleCheckPage() {
   useEffect(() => {
     if (!isMounted) return;
 
-    const splashTimer = window.setTimeout(() => setShowSplashCursor(true), 120);
     const particlesTimer = window.setTimeout(() => setShowParticles(true), 520);
 
     const handleVisibilityChange = () => {
@@ -51,10 +48,8 @@ export default function StyleCheckPage() {
       setIsTabVisible(visible);
 
       if (!visible) {
-        setShowSplashCursor(false);
         setShowParticles(false);
       } else {
-        window.setTimeout(() => setShowSplashCursor(true), 80);
         window.setTimeout(() => setShowParticles(true), 360);
       }
     };
@@ -62,7 +57,6 @@ export default function StyleCheckPage() {
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      window.clearTimeout(splashTimer);
       window.clearTimeout(particlesTimer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
@@ -71,42 +65,29 @@ export default function StyleCheckPage() {
   return (
     <ProtectedRoute>
       <div className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
-      <div className="absolute inset-0 -z-10">
-        {isMounted && (
-          <>
-            {isTabVisible && supportsWebGL && showSplashCursor ? (
-              <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-indigo-500/10" />}>
-                <div className="opacity-40">
-                  <SplashCursor
-                    SPLAT_RADIUS={0.06}
-                    SPLAT_FORCE={900}
-                    COLOR_UPDATE_SPEED={2}
-                    SIM_RESOLUTION={48}
-                    DYE_RESOLUTION={256}
-                    PRESSURE_ITERATIONS={6}
+        <div className="absolute inset-0 -z-10">
+          {isMounted && (
+            <>
+              {isTabVisible && supportsWebGL && showParticles ? (
+                <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-purple-500/10" />}>
+                  <Particles
+                    className="absolute inset-0"
+                    particleColors={['#a855f7', '#c4b5fd']}
+                    particleCount={200}
+                    particleSpread={10}
+                    speed={0.5}
+                    particleBaseSize={120}
+                    moveParticlesOnHover={false}
+                    alphaParticles={false}
+                    disableRotation={true}
                   />
-                </div>
-              </Suspense>
-            ) : null}
-            {isTabVisible && supportsWebGL && showParticles ? (
-              <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-purple-500/10" />}>
-                <Particles
-                  className="absolute inset-0"
-                  particleColors={['#a855f7', '#c4b5fd']}
-                  particleCount={200}
-                  particleSpread={10}
-                  speed={0.5}
-                  particleBaseSize={120}
-                  moveParticlesOnHover={false}
-                  alphaParticles={false}
-                  disableRotation={true}
-                />
-              </Suspense>
-            ) : null}
-          </>
-        )}
-      </div>
-      <div className="relative z-10 max-w-4xl mx-auto animate-fade-in">
+                </Suspense>
+              ) : null}
+            </>
+          )}
+        </div>
+
+        <div className="relative z-10 max-w-4xl mx-auto animate-fade-in">
         <header className="text-center mb-8 sm:mb-12 md:mb-16">
           <div className="relative h-[180px] sm:h-[240px] md:h-[300px]">
             {isMounted && (
@@ -185,8 +166,8 @@ export default function StyleCheckPage() {
             <StyleAdvisor isLimitReached={isStyleCheckLimitReached} />
           </Suspense>
         )}
+        </div>
       </div>
-    </div>
     </ProtectedRoute>
   );
 }

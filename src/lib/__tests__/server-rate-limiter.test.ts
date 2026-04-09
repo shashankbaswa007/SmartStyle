@@ -207,4 +207,63 @@ describe('server-rate-limiter production safeguards', () => {
     expect(result.remaining).toBe(5);
     dateNowSpy.mockRestore();
   });
+
+  it('uses the higher usage count when distributed and Firestore backends disagree', async () => {
+    const now = 1_700_100_000_000;
+    const dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(now);
+
+    process.env = {
+      ...originalEnv,
+      NODE_ENV: 'test',
+    };
+
+    jest.doMock('@/lib/distributed-rate-limiter', () => ({
+      checkDistributedRateLimit: jest.fn(async () => null),
+      getDistributedRateLimitStatus: jest.fn(async () => ({
+        limit: 10,
+        used: 8,
+        remaining: 2,
+        resetAt: new Date(now + 60_000),
+      })),
+    }));
+
+    jest.doMock('@/lib/firebase-admin', () => ({
+      __esModule: true,
+      default: {
+        firestore: jest.fn(() => ({
+          collection: jest.fn(() => ({
+            doc: jest.fn(() => ({
+              get: jest.fn(async () => ({
+                exists: true,
+                data: () => ({
+                  count: 4,
+                  windowStart: { toMillis: () => now - (now % 60_000) },
+                  reservations: {
+                    active: now + 10_000,
+                  },
+                }),
+              })),
+              update: jest.fn(async () => undefined),
+            })),
+          })),
+        })),
+      },
+    }));
+
+    jest.doMock('@/lib/rate-limiter', () => ({
+      checkRateLimit: jest.fn(),
+      getRateLimitStatus: jest.fn(),
+    }));
+
+    const mod = await import('../server-rate-limiter');
+    const result = await mod.getServerRateLimitStatus('user-merge', {
+      scope: 'recommend',
+      maxRequests: 10,
+      windowMs: 60_000,
+    });
+
+    expect(result.used).toBe(8);
+    expect(result.remaining).toBe(2);
+    dateNowSpy.mockRestore();
+  });
 });

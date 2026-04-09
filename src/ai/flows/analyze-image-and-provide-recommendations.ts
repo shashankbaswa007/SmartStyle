@@ -41,14 +41,16 @@ function createForecastSignature(input: AnalyzeImageAndProvideRecommendationsInp
 }
 
 function generateCacheKey(input: AnalyzeImageAndProvideRecommendationsInput): string {
-  // Generate cache key from image hash + context (not full personalization to allow sharing)
+  // Partition cache by user segment to prevent cross-user personalization bleed.
   const imageHash = crypto
     .createHash('sha256')
     .update(input.photoDataUri)
     .digest('hex')
     .substring(0, 16);
+
+  const userPartition = (input.userId || 'anonymous').trim().toLowerCase();
   
-  return `ai:${imageHash}:${input.occasion}:${input.gender}:${input.weather}:${createForecastSignature(input)}:${input.genre}:${input.skinTone}`;
+  return `ai:${userPartition}:${imageHash}:${input.occasion}:${input.gender}:${input.weather}:${createForecastSignature(input)}:${input.genre}:${input.skinTone}`;
 }
 
 function getCachedAIResponse(key: string): AnalyzeImageAndProvideRecommendationsOutput | null {
@@ -675,6 +677,74 @@ function extractSchemaFeedback(error: unknown): string | null {
   return concise;
 }
 
+function countSentences(text: string): number {
+  return (text || '')
+    .split(/[.!?]+/)
+    .map((segment) => segment.trim())
+    .filter(Boolean).length;
+}
+
+function ensureTrailingPeriod(text: string): string {
+  const value = (text || '').trim();
+  if (!value) return value;
+  return /[.!?]$/.test(value) ? value : `${value}.`;
+}
+
+function ensureDetailedDescription(params: {
+  description?: string;
+  title: string;
+  styleType: string;
+  occasion: string;
+  weather?: string;
+}): string {
+  const { description, title, styleType, occasion, weather } = params;
+  const fallbackSentences = [
+    `${title} blends a ${styleType} aesthetic with practical structure so it feels intentional and polished for ${occasion}.`,
+    `The pieces are layered to stay comfortable in ${weather || 'current conditions'} while keeping clean proportions and cohesive contrast across the look.`,
+    'This outfit transitions smoothly across day and evening plans, giving you a versatile option that remains stylish and easy to repeat.',
+  ];
+
+  const normalizedInput = ensureTrailingPeriod(description || '');
+  const sentences = normalizedInput
+    ? normalizedInput
+        .split(/(?<=[.!?])\s+/)
+        .map((segment) => segment.trim())
+        .filter(Boolean)
+    : [];
+
+  for (const sentence of fallbackSentences) {
+    if (sentences.length >= 3) break;
+    sentences.push(ensureTrailingPeriod(sentence));
+  }
+
+  let output = sentences.join(' ').trim();
+  if (countSentences(output) < 3) {
+    output = `${output} ${fallbackSentences.join(' ')}`.trim();
+  }
+
+  if (output.length < 100) {
+    output = `${output} Add minimal accessories and one anchor neutral to keep the silhouette balanced and elevated.`.trim();
+  }
+
+  return output;
+}
+
+function ensureMeaningfulFeedback(params: {
+  feedback?: string;
+  occasion: string;
+  genre: string;
+  weather?: string;
+}): string {
+  const base = ensureTrailingPeriod(params.feedback || '');
+  const fallback =
+    `Your ${params.genre || 'style'} direction fits ${params.occasion || 'the occasion'} well. ` +
+    `The recommendations below prioritize comfort for ${params.weather || 'current weather'} while keeping color balance and silhouette quality strong. ` +
+    'Use one statement element with grounded neutrals to make each outfit look intentional and repeatable.';
+
+  const merged = `${base} ${fallback}`.trim();
+  return merged.length >= 40 ? merged : `${fallback} ${fallback}`;
+}
+
 const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
   {
     name: 'analyzeImageAndProvideRecommendationsFlow',
@@ -798,39 +868,109 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
           return colorMap[color.toLowerCase()] || `#${Math.floor(Math.random()*16777215).toString(16).padStart(6, '0')}`;
         };
 
-        const convertedResult: AnalyzeImageAndProvideRecommendationsOutput = {
-          feedback: groqResult.styleAnalysis?.currentStyle || `Great style choices for ${input.occasion}! Here are some personalized recommendations.`,
-          highlights: groqResult.styleAnalysis?.strengths?.slice(0, 3) || [
-            `Perfect for ${input.occasion}`,
-            `Weather-appropriate styling`,
-            `Versatile color palette`
-          ],
-          colorSuggestions: colorPalette.map((color, i) => ({
-            name: color,
+        const fallbackHexPalette = ['#1E3A8A', '#F8F5F0', '#166534', '#1F2937'];
+        const normalizedColorSuggestions = (colorPalette.length > 0 ? colorPalette : fallbackHexPalette)
+          .slice(0, 8)
+          .map((color, index) => ({
+            name: color.startsWith('#') ? `Style Color ${index + 1}` : color,
             hex: ensureHexColor(color),
             reason: `Complements your ${input.skinTone} skin tone and ${input.occasion} occasion.`,
-          })),
-          outfitRecommendations: groqResult.outfitRecommendations.map(rec => ({
-            title: rec.title,
+          }));
+
+        while (normalizedColorSuggestions.length < 3) {
+          const hex = fallbackHexPalette[normalizedColorSuggestions.length % fallbackHexPalette.length];
+          normalizedColorSuggestions.push({
+            name: `Style Color ${normalizedColorSuggestions.length + 1}`,
+            hex,
+            reason: `Balances the ${input.genre || 'selected'} styling direction.`,
+          });
+        }
+
+        const sourceOutfits = groqResult.outfitRecommendations.slice(0, 3);
+        while (sourceOutfits.length < 3) {
+          const base = sourceOutfits[sourceOutfits.length - 1] || groqResult.outfitRecommendations[0];
+          if (!base) break;
+          sourceOutfits.push({
+            ...base,
+            title: `${base.title} ${sourceOutfits.length + 1}`,
+          });
+        }
+
+        const normalizedOutfits = sourceOutfits.map((rec, index) => {
+          const title = rec.title || `Outfit Recommendation ${index + 1}`;
+          const styleType = rec.styleType || input.genre || 'casual';
+          const occasion = rec.occasion || input.occasion;
+
+          const palette = (rec.colorPalette || [])
+            .map(c => ensureHexColor(c))
+            .filter(Boolean)
+            .slice(0, 4);
+
+          while (palette.length < 3) {
+            palette.push(fallbackHexPalette[palette.length % fallbackHexPalette.length]);
+          }
+
+          const items = Array.isArray(rec.items) && rec.items.length > 0
+            ? rec.items
+            : ['structured top', 'tailored bottom', 'versatile layer'];
+
+          const description = ensureDetailedDescription({
             description: rec.description,
-            colorPalette: (rec.colorPalette || []).map(c => ensureHexColor(c)),
-            styleType: rec.styleType || input.genre || 'casual',
-            occasion: rec.occasion || input.occasion,
-            imagePrompt: rec.imagePrompt || `${rec.title}: ${rec.description}. Items: ${rec.items.join(', ')}`,
+            title,
+            styleType,
+            occasion,
+            weather: input.weather,
+          });
+
+          const imagePrompt = (rec.imagePrompt || `${title}. ${description}. Items: ${items.join(', ')}`).trim();
+
+          return {
+            title,
+            description,
+            colorPalette: palette,
+            styleType,
+            occasion,
+            imagePrompt,
             shoppingLinks: {
               amazon: rec.shoppingLinks?.amazon || null,
               tatacliq: rec.shoppingLinks?.tatacliq || null,
               myntra: rec.shoppingLinks?.myntra || null,
             },
             isExistingMatch: rec.isExistingMatch || false,
-            items: rec.items,
-          })),
-          notes: groqResult.seasonalAdvice || `Perfect styling choices for ${input.occasion} in current weather conditions.`,
-          imagePrompt: groqResult.outfitRecommendations[0]?.imagePrompt 
-            || `${groqResult.outfitRecommendations[0]?.title}: ${groqResult.outfitRecommendations[0]?.description}`
-            || 'Stylish outfit for ' + input.occasion,
+            items,
+          };
+        });
+
+        const convertedResult: AnalyzeImageAndProvideRecommendationsOutput = {
+          feedback: ensureMeaningfulFeedback({
+            feedback: groqResult.styleAnalysis?.currentStyle,
+            occasion: input.occasion,
+            genre: input.genre,
+            weather: input.weather,
+          }),
+          highlights: (groqResult.styleAnalysis?.strengths || [])
+            .map((item) => ensureTrailingPeriod(item || ''))
+            .filter(Boolean)
+            .slice(0, 3),
+          colorSuggestions: normalizedColorSuggestions,
+          outfitRecommendations: normalizedOutfits,
+          notes:
+            ensureTrailingPeriod(groqResult.seasonalAdvice || '') ||
+            ensureTrailingPeriod(`Perfect styling choices for ${input.occasion} in current weather conditions.`),
+          imagePrompt:
+            normalizedOutfits[0]?.imagePrompt ||
+            `${normalizedOutfits[0]?.title}: ${normalizedOutfits[0]?.description}` ||
+            'Stylish outfit for ' + input.occasion,
           provider: 'groq',
         };
+
+        if (convertedResult.highlights.length < 2) {
+          convertedResult.highlights = [
+            `Aligned with your ${input.occasion} context.`,
+            'Balanced color and silhouette for repeat wear.',
+            'Structured enough to look polished while staying comfortable.',
+          ];
+        }
         
         return convertedResult;
       } catch (groqError) {

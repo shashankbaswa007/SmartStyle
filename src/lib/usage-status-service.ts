@@ -29,17 +29,36 @@ function getTimezoneHeader(): Record<string, string> {
 export function parseUsageWindow(data: unknown): UsageWindow | undefined {
   if (!data || typeof data !== 'object') return undefined;
   const candidate = data as { remaining?: unknown; limit?: unknown; resetAt?: unknown };
-  if (typeof candidate.remaining !== 'number' || typeof candidate.limit !== 'number') {
+  const parsedRemaining =
+    typeof candidate.remaining === 'number'
+      ? candidate.remaining
+      : typeof candidate.remaining === 'string'
+        ? Number(candidate.remaining)
+        : NaN;
+  const parsedLimit =
+    typeof candidate.limit === 'number'
+      ? candidate.limit
+      : typeof candidate.limit === 'string'
+        ? Number(candidate.limit)
+        : NaN;
+
+  if (!Number.isFinite(parsedRemaining) || !Number.isFinite(parsedLimit)) {
     return undefined;
   }
 
-  const limit = Math.max(0, Math.floor(candidate.limit));
-  const remaining = Math.max(0, Math.min(limit, Math.floor(candidate.remaining)));
+  const limit = Math.max(0, Math.floor(parsedLimit));
+  const remaining = Math.max(0, Math.min(limit, Math.floor(parsedRemaining)));
+  const parsedResetAt =
+    typeof candidate.resetAt === 'string' &&
+    candidate.resetAt.trim().length > 0 &&
+    !Number.isNaN(new Date(candidate.resetAt).getTime())
+      ? candidate.resetAt
+      : undefined;
 
   return {
     remaining,
     limit,
-    resetAt: typeof candidate.resetAt === 'string' ? candidate.resetAt : undefined,
+    resetAt: parsedResetAt,
   };
 }
 
@@ -57,7 +76,7 @@ function getScopedUsageWindow(usage: Record<string, unknown>, scope: string): Us
 }
 
 export async function fetchUsageStatus(params: {
-  user: User;
+  user?: User | null;
   scopes: string[];
   lastForcedRefreshFailureAtRef: { current: number };
   cooldownMs?: number;
@@ -65,9 +84,27 @@ export async function fetchUsageStatus(params: {
 }): Promise<UsageStatusResponse> {
   const cooldownMs = params.cooldownMs ?? 120_000;
   const timeoutMs = params.timeoutMs ?? 6_000;
+  const idTokenTimeoutMs = Math.max(1_500, Math.min(4_000, Math.floor(timeoutMs * 0.6)));
 
-  const doFetch = async (forceRefreshToken: boolean) => {
-    const idToken = await params.user.getIdToken(forceRefreshToken);
+  const resolveIdToken = async (forceRefreshToken: boolean): Promise<string | null> => {
+    if (!params.user) {
+      return null;
+    }
+
+    const tokenPromise = params.user
+      .getIdToken(forceRefreshToken)
+      .then((token) => token || null)
+      .catch(() => null);
+
+    const timeoutPromise = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), idTokenTimeoutMs);
+    });
+
+    return Promise.race([tokenPromise, timeoutPromise]);
+  };
+
+  const doFetch = async (forceRefreshToken: boolean, options?: { forceCookieAuth?: boolean }) => {
+    const idToken = options?.forceCookieAuth ? null : await resolveIdToken(forceRefreshToken);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -75,12 +112,22 @@ export async function fetchUsageStatus(params: {
       return await fetch('/api/usage-status', {
         cache: 'no-store',
         headers: {
-          Authorization: `Bearer ${idToken}`,
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
           'Cache-Control': 'no-cache',
           ...getTimezoneHeader(),
         },
+        credentials: 'include',
         signal: controller.signal,
       });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw {
+          status: 504,
+          message: 'Usage status request timed out. Please retry.',
+          retryAfter: null,
+        } as HttpLikeError;
+      }
+      throw error;
     } finally {
       clearTimeout(timeout);
     }
@@ -89,23 +136,31 @@ export async function fetchUsageStatus(params: {
   let response = await doFetch(false);
 
   if (response.status === 401) {
-    if (Date.now() - params.lastForcedRefreshFailureAtRef.current < cooldownMs) {
-      throw {
-        status: 401,
-        message: 'Session refresh is cooling down. Please retry in a moment.',
-        retryAfter: String(Math.ceil(cooldownMs / 1000)),
-      } as HttpLikeError;
-    }
+    if (!params.user) {
+      response = await doFetch(false, { forceCookieAuth: true });
+    } else {
+      if (Date.now() - params.lastForcedRefreshFailureAtRef.current < cooldownMs) {
+        throw {
+          status: 401,
+          message: 'Session refresh is cooling down. Please retry in a moment.',
+          retryAfter: String(Math.ceil(cooldownMs / 1000)),
+        } as HttpLikeError;
+      }
 
-    try {
-      response = await doFetch(true);
-    } catch {
-      params.lastForcedRefreshFailureAtRef.current = Date.now();
-      throw {
-        status: 401,
-        message: 'Session refresh failed. Please sign in again.',
-        retryAfter: null,
-      } as HttpLikeError;
+      try {
+        response = await doFetch(true);
+      } catch {
+        params.lastForcedRefreshFailureAtRef.current = Date.now();
+        throw {
+          status: 401,
+          message: 'Session refresh failed. Please sign in again.',
+          retryAfter: null,
+        } as HttpLikeError;
+      }
+
+      if (response.status === 401) {
+        response = await doFetch(false, { forceCookieAuth: true });
+      }
     }
   }
 
@@ -117,12 +172,38 @@ export async function fetchUsageStatus(params: {
     } as HttpLikeError;
   }
 
-  const payload = await response.json();
-  const usage = (payload?.usage || {}) as Record<string, unknown>;
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw {
+      status: 502,
+      message: 'Usage status returned an invalid response.',
+      retryAfter: null,
+    } as HttpLikeError;
+  }
+
+  const payloadObject = payload && typeof payload === 'object'
+    ? (payload as Record<string, unknown>)
+    : {};
+  const usage = (
+    payloadObject.usage && typeof payloadObject.usage === 'object'
+      ? payloadObject.usage
+      : {}
+  ) as Record<string, unknown>;
 
   const parsed: Record<string, UsageWindow | undefined> = {};
   for (const scope of params.scopes) {
     parsed[scope] = getScopedUsageWindow(usage, scope);
+  }
+
+  const missingScopes = params.scopes.filter((scope) => !parsed[scope]);
+  if (missingScopes.length > 0) {
+    throw {
+      status: 502,
+      message: `Usage status response was incomplete for scope(s): ${missingScopes.join(', ')}`,
+      retryAfter: null,
+    } as HttpLikeError;
   }
 
   return { usage: parsed };
