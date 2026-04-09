@@ -7,23 +7,13 @@ import { RATE_LIMIT_SCOPES } from '@/lib/usage-limits';
 import { categorizeError } from '@/lib/error-handler';
 import { useAsyncFlow } from '@/hooks/useAsyncFlow';
 import { logUxEvent } from '@/lib/ux-events';
+import { fetchUsageStatus } from '@/lib/usage-status-service';
 
 type UsageWindow = {
   remaining: number;
   limit: number;
   resetAt?: string;
 } | null;
-
-interface HttpLikeError {
-  status: number;
-  message: string;
-  retryAfter: string | null;
-}
-
-function getTimezoneHeader(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
-  return { 'x-timezone-offset-minutes': String(new Date().getTimezoneOffset()) };
-}
 
 interface UseStyleCheckUsageResult {
   usage: UsageWindow;
@@ -47,59 +37,14 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
       return null;
     }
 
-    let idToken = await user.getIdToken();
-    let response = await fetch('/api/usage-status', {
-      cache: 'no-store',
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        'Cache-Control': 'no-cache',
-        ...getTimezoneHeader(),
-      },
-      signal,
+    if (signal.aborted) return null;
+
+    const data = await fetchUsageStatus({
+      user,
+      scopes: [RATE_LIMIT_SCOPES.recommend],
+      lastForcedRefreshFailureAtRef,
     });
-
-    if (response.status === 401) {
-      if (Date.now() - lastForcedRefreshFailureAtRef.current < 120_000) {
-        throw {
-          status: 401,
-          message: 'Session refresh is cooling down. Please retry in a moment.',
-          retryAfter: '120',
-        } as HttpLikeError;
-      }
-
-      try {
-        idToken = await user.getIdToken(true);
-      } catch {
-        lastForcedRefreshFailureAtRef.current = Date.now();
-        throw {
-          status: 401,
-          message: 'Session refresh failed. Please sign in again.',
-          retryAfter: null,
-        } as HttpLikeError;
-      }
-
-      response = await fetch('/api/usage-status', {
-        cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-          'Cache-Control': 'no-cache',
-          ...getTimezoneHeader(),
-        },
-        signal,
-      });
-    }
-
-    if (!response.ok) {
-      const error: HttpLikeError = {
-        status: response.status,
-        message: 'Could not refresh your daily limit right now.',
-        retryAfter: response.headers.get('retry-after'),
-      };
-      throw error;
-    }
-
-    const data = await response.json();
-    const recommendUsage = data?.usage?.[RATE_LIMIT_SCOPES.recommend];
+    const recommendUsage = data.usage[RATE_LIMIT_SCOPES.recommend];
 
     if (!recommendUsage) return null;
 

@@ -26,6 +26,7 @@ const mockEnqueueRecommendJob = jest.fn<
   }>
 >();
 const mockMarkRecommendJobRateLimited = jest.fn();
+const mockSetRecommendJobUsageReservation = jest.fn();
 const mockStartRecommendJob = jest.fn();
 const mockAwaitRecommendJobTerminalState = jest.fn<(...args: any[]) => Promise<null | { status: string }>>();
 
@@ -59,6 +60,7 @@ jest.mock('@/lib/recommend/request-guard', () => ({
 jest.mock('@/lib/recommend/async-jobs', () => ({
   enqueueRecommendJob: (...args: any[]) => mockEnqueueRecommendJob(...args),
   markRecommendJobRateLimited: (...args: unknown[]) => mockMarkRecommendJobRateLimited(...args),
+  setRecommendJobUsageReservation: (...args: unknown[]) => mockSetRecommendJobUsageReservation(...args),
   startRecommendJob: (...args: unknown[]) => mockStartRecommendJob(...args),
   awaitRecommendJobTerminalState: (...args: any[]) => mockAwaitRecommendJobTerminalState(...args),
   RECOMMEND_JOB_TIMEOUT_MS: 60_000,
@@ -149,5 +151,62 @@ describe('POST /api/recommend', () => {
       'anonymous',
       expect.objectContaining({ requestId: 'req-deduped', autoStart: false })
     );
+  });
+
+  it('returns 429 with retry headers when usage limit is exceeded', async () => {
+    mockValidateRequest.mockReturnValue({
+      success: true,
+      data: {
+        photoDataUri: 'data:image/jpeg;base64,ZmFrZQ==',
+        occasion: 'office',
+        genre: 'minimalist',
+        gender: 'male',
+        userId: 'anonymous',
+      },
+    });
+    mockQuickValidateImageDataUri.mockReturnValue({ isValid: true });
+    mockEnqueueRecommendJob.mockResolvedValue({
+      jobId: 'job-rate-limit',
+      deduped: false,
+      status: 'queued',
+    });
+
+    const resetAt = new Date(Date.now() + 30_000);
+    mockEnforceRecommendRateLimit.mockResolvedValue({
+      effectiveUserId: 'anonymous',
+      rateLimit: {
+        allowed: false,
+        remaining: 0,
+        resetAt,
+        message: 'Daily limit reached',
+      },
+    });
+
+    const response = await POST(
+      new Request('http://localhost/api/recommend', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-request-id': 'req-rate-limited',
+        },
+        body: JSON.stringify({
+          photoDataUri: 'data:image/jpeg;base64,ZmFrZQ==',
+          occasion: 'office',
+          genre: 'minimalist',
+          gender: 'male',
+          userId: 'anonymous',
+        }),
+      })
+    );
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get('x-request-id')).toBe('req-rate-limited');
+    expect(response.headers.get('x-ratelimit-remaining')).toBe('0');
+    expect(response.headers.get('retry-after')).toBeTruthy();
+
+    const payload = await response.json();
+    expect(payload.code).toBe('RATE_LIMIT_EXCEEDED');
+    expect(payload.requestId).toBe('req-rate-limited');
+    expect(mockMarkRecommendJobRateLimited).toHaveBeenCalledWith('job-rate-limit', 'Daily limit reached');
   });
 });

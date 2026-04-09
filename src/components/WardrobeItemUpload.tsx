@@ -709,6 +709,10 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       // Step 4: Save through server API (enforces daily upload quota)
       let saveAttempt = 0;
       let saveResult = null;
+      const uploadRequestId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `upload_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
       
       while (saveAttempt < MAX_RETRIES && !saveResult?.success) {
         try {
@@ -719,6 +723,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
               'Content-Type': 'application/json',
               Authorization: `Bearer ${idToken}`,
               'x-timezone-offset-minutes': String(new Date().getTimezoneOffset()),
+              'x-idempotency-key': uploadRequestId,
             },
             body: JSON.stringify({
               userId: user.uid,

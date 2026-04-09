@@ -17,6 +17,11 @@ export interface ServerRateLimitResult {
   message?: string;
 }
 
+export interface ServerRateLimitReservationResult extends ServerRateLimitResult {
+  reservationId?: string;
+  replayed?: boolean;
+}
+
 export interface ServerRateLimitStatus {
   limit: number;
   used: number;
@@ -27,6 +32,8 @@ export interface ServerRateLimitStatus {
 interface RateLimitDoc {
   count: number;
   windowStart: admin.firestore.Timestamp;
+  reservations?: Record<string, number>;
+  confirmations?: Record<string, number>;
 }
 
 const COLLECTION = 'rateLimits';
@@ -41,6 +48,279 @@ function getCurrentWindow(config: ServerRateLimitConfig) {
   const windowStartMs = shiftedNow - (shiftedNow % config.windowMs) + offsetMs;
   const resetAt = new Date(windowStartMs + config.windowMs);
   return { now, windowStartMs, resetAt };
+}
+
+function cleanMapByMinTs(map: Record<string, number> | undefined, minTs: number) {
+  if (!map || typeof map !== 'object') return {} as Record<string, number>;
+
+  const cleaned: Record<string, number> = {};
+  for (const [key, ts] of Object.entries(map)) {
+    if (Number.isFinite(ts) && ts >= minTs) {
+      cleaned[key] = ts;
+    }
+  }
+  return cleaned;
+}
+
+function cleanReservations(map: Record<string, number> | undefined, nowMs: number) {
+  if (!map || typeof map !== 'object') return {} as Record<string, number>;
+
+  const cleaned: Record<string, number> = {};
+  for (const [key, expiresAtMs] of Object.entries(map)) {
+    if (Number.isFinite(expiresAtMs) && expiresAtMs > nowMs) {
+      cleaned[key] = expiresAtMs;
+    }
+  }
+  return cleaned;
+}
+
+function isSameWindow(data: RateLimitDoc | undefined, windowStartMs: number): boolean {
+  if (!data?.windowStart) return false;
+  return data.windowStart.toMillis() === windowStartMs;
+}
+
+function buildRateLimitRef(subject: string, scope: string) {
+  const db = admin.firestore();
+  const docId = `${scope}:${subject}`;
+  return db.collection(COLLECTION).doc(docId);
+}
+
+export async function reserveServerRateLimit(
+  subject: string,
+  config: ServerRateLimitConfig,
+  reservationId: string,
+  options?: { reservationTtlMs?: number }
+): Promise<ServerRateLimitReservationResult> {
+  const { now, windowStartMs, resetAt } = getCurrentWindow(config);
+  const reservationTtlMs = Math.max(1_000, options?.reservationTtlMs ?? 5 * 60_000);
+
+  try {
+    const db = admin.firestore();
+    const ref = buildRateLimitRef(subject, config.scope);
+
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const existingData = (snap.exists ? (snap.data() as RateLimitDoc) : undefined);
+
+      const baseCount = isSameWindow(existingData, windowStartMs)
+        ? Math.max(0, existingData?.count || 0)
+        : 0;
+      const reservations = isSameWindow(existingData, windowStartMs)
+        ? cleanReservations(existingData?.reservations, now)
+        : {};
+      const confirmations = isSameWindow(existingData, windowStartMs)
+        ? cleanMapByMinTs(existingData?.confirmations, windowStartMs)
+        : {};
+
+      if (confirmations[reservationId]) {
+        tx.set(ref, {
+          count: baseCount,
+          windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
+          reservations,
+          confirmations,
+        }, { merge: true });
+
+        return {
+          allowed: true,
+          remaining: Math.max(0, config.maxRequests - baseCount),
+          resetAt,
+          reservationId,
+          replayed: true,
+        };
+      }
+
+      if (reservations[reservationId]) {
+        tx.set(ref, {
+          count: baseCount,
+          windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
+          reservations,
+          confirmations,
+        }, { merge: true });
+
+        return {
+          allowed: true,
+          remaining: Math.max(0, config.maxRequests - baseCount),
+          resetAt,
+          reservationId,
+          replayed: true,
+        };
+      }
+
+      const activeReservations = Object.keys(reservations).length;
+      if (baseCount + activeReservations >= config.maxRequests) {
+        const secondsRemaining = Math.max(1, Math.ceil((resetAt.getTime() - now) / 1000));
+        tx.set(ref, {
+          count: baseCount,
+          windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
+          reservations,
+          confirmations,
+        }, { merge: true });
+        return {
+          allowed: false,
+          remaining: Math.max(0, config.maxRequests - baseCount),
+          resetAt,
+          message: `Daily limit reached. Try again in ${secondsRemaining} seconds.`,
+        };
+      }
+
+      reservations[reservationId] = now + reservationTtlMs;
+      tx.set(ref, {
+        count: baseCount,
+        windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
+        reservations,
+        confirmations,
+      }, { merge: true });
+
+      return {
+        allowed: true,
+        remaining: Math.max(0, config.maxRequests - baseCount),
+        resetAt,
+        reservationId,
+      };
+    });
+  } catch {
+    if (STRICT_PROD_RATE_LIMIT_BACKEND) {
+      return {
+        allowed: false,
+        remaining: 0,
+        resetAt,
+        message: 'Rate limit service is temporarily unavailable. Please retry shortly.',
+      };
+    }
+
+    const fallback = getRateLimitStatus(`${config.scope}:${subject}`, {
+      windowMs: config.windowMs,
+      maxRequests: config.maxRequests,
+    });
+
+    return {
+      allowed: fallback.remaining > 0,
+      remaining: fallback.remaining,
+      resetAt: new Date(fallback.resetTime),
+      reservationId,
+      ...(fallback.remaining > 0
+        ? {}
+        : {
+            message: `Daily limit reached. Try again in ${Math.max(1, Math.ceil((fallback.resetTime - now) / 1000))} seconds.`,
+          }),
+    };
+  }
+}
+
+export async function confirmServerRateLimit(
+  subject: string,
+  config: ServerRateLimitConfig,
+  reservationId: string
+): Promise<ServerRateLimitStatus> {
+  const { windowStartMs, resetAt } = getCurrentWindow(config);
+
+  try {
+    const db = admin.firestore();
+    const ref = buildRateLimitRef(subject, config.scope);
+
+    return db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const existingData = (snap.exists ? (snap.data() as RateLimitDoc) : undefined);
+
+      const baseCount = isSameWindow(existingData, windowStartMs)
+        ? Math.max(0, existingData?.count || 0)
+        : 0;
+      const reservations = isSameWindow(existingData, windowStartMs)
+        ? cleanReservations(existingData?.reservations, Date.now())
+        : {};
+      const confirmations = isSameWindow(existingData, windowStartMs)
+        ? cleanMapByMinTs(existingData?.confirmations, windowStartMs)
+        : {};
+
+      if (!confirmations[reservationId]) {
+        if (reservations[reservationId]) {
+          delete reservations[reservationId];
+          confirmations[reservationId] = Date.now();
+          const nextCount = Math.min(config.maxRequests, baseCount + 1);
+          tx.set(ref, {
+            count: nextCount,
+            windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
+            reservations,
+            confirmations,
+          }, { merge: true });
+          return {
+            limit: config.maxRequests,
+            used: nextCount,
+            remaining: Math.max(0, config.maxRequests - nextCount),
+            resetAt,
+          };
+        }
+      }
+
+      const used = Math.max(0, Math.min(baseCount, config.maxRequests));
+      tx.set(ref, {
+        count: used,
+        windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
+        reservations,
+        confirmations,
+      }, { merge: true });
+
+      return {
+        limit: config.maxRequests,
+        used,
+        remaining: Math.max(0, config.maxRequests - used),
+        resetAt,
+      };
+    });
+  } catch {
+    const fallback = checkRateLimit(`${config.scope}:${subject}`, {
+      windowMs: config.windowMs,
+      maxRequests: config.maxRequests,
+    });
+
+    return {
+      limit: fallback.limit,
+      used: Math.max(0, fallback.limit - fallback.remaining),
+      remaining: fallback.remaining,
+      resetAt: new Date(fallback.resetTime),
+    };
+  }
+}
+
+export async function releaseServerRateLimit(
+  subject: string,
+  config: ServerRateLimitConfig,
+  reservationId: string
+): Promise<void> {
+  const { windowStartMs } = getCurrentWindow(config);
+
+  try {
+    const db = admin.firestore();
+    const ref = buildRateLimitRef(subject, config.scope);
+
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists) return;
+
+      const data = snap.data() as RateLimitDoc;
+      const inWindow = isSameWindow(data, windowStartMs);
+      const reservations = inWindow
+        ? cleanReservations(data.reservations, Date.now())
+        : {};
+      const confirmations = inWindow
+        ? cleanMapByMinTs(data.confirmations, windowStartMs)
+        : {};
+
+      if (!reservations[reservationId]) {
+        return;
+      }
+
+      delete reservations[reservationId];
+      tx.set(ref, {
+        count: Math.max(0, data.count || 0),
+        windowStart: admin.firestore.Timestamp.fromMillis(windowStartMs),
+        reservations,
+        confirmations,
+      }, { merge: true });
+    });
+  } catch {
+    // Best effort release. In strict production mode, reservation TTL still prevents indefinite lockout.
+  }
 }
 
 export async function checkServerRateLimit(

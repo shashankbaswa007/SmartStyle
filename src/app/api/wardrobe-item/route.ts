@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { verifyBearerToken, AuthError } from '@/lib/server-auth';
-import { checkServerRateLimit } from '@/lib/server-rate-limiter';
+import { reserveServerRateLimit, confirmServerRateLimit, releaseServerRateLimit } from '@/lib/server-rate-limiter';
 import { addWardrobeItemWithCapacityServer } from '@/lib/wardrobeService.server';
 import { DAILY_WINDOW_MS, getTimezoneOffsetMinutesFromRequest, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 import { validateRequestOrigin } from '@/lib/csrf-protection';
+import { buildUsageIdempotencyKey } from '@/lib/usage-idempotency';
 
 const MAX_WARDROBE_ITEMS = 300;
 
@@ -30,6 +31,8 @@ interface WardrobeItemPayload {
 }
 
 export async function POST(request: Request) {
+  let reservation: { subject: string; reservationId: string; timezoneOffsetMinutes: number } | null = null;
+
   try {
     if (!validateRequestOrigin(request)) {
       return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
@@ -54,12 +57,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden - user mismatch' }, { status: 403 });
     }
 
-    const rateLimit = await checkServerRateLimit(userId, {
+    const reservationId = buildUsageIdempotencyKey({
+      scope: RATE_LIMIT_SCOPES.wardrobeUpload,
+      userId,
+      payload: {
+        itemType: itemData.itemType,
+        description: itemData.description,
+        category: itemData.category,
+        brand: itemData.brand,
+        imageUrl: itemData.imageUrl,
+      },
+      request,
+    });
+
+    const rateLimit = await reserveServerRateLimit(userId, {
       scope: RATE_LIMIT_SCOPES.wardrobeUpload,
       windowMs: DAILY_WINDOW_MS,
       maxRequests: USAGE_LIMITS.wardrobeUpload,
       timezoneOffsetMinutes,
-    });
+    }, reservationId, { reservationTtlMs: 15 * 60_000 });
+
+    reservation = { subject: userId, reservationId, timezoneOffsetMinutes };
 
     if (!rateLimit.allowed) {
       return NextResponse.json(
@@ -102,6 +120,14 @@ export async function POST(request: Request) {
     });
 
     if (!saveResult.success && saveResult.code === 'CAPACITY_REACHED') {
+      if (reservation) {
+        await releaseServerRateLimit(reservation.subject, {
+          scope: RATE_LIMIT_SCOPES.wardrobeUpload,
+          windowMs: DAILY_WINDOW_MS,
+          maxRequests: USAGE_LIMITS.wardrobeUpload,
+          timezoneOffsetMinutes: reservation.timezoneOffsetMinutes,
+        }, reservation.reservationId);
+      }
       return NextResponse.json(
         {
           error: 'Wardrobe capacity reached',
@@ -112,28 +138,52 @@ export async function POST(request: Request) {
     }
 
     if (!saveResult.success) {
+      if (reservation) {
+        await releaseServerRateLimit(reservation.subject, {
+          scope: RATE_LIMIT_SCOPES.wardrobeUpload,
+          windowMs: DAILY_WINDOW_MS,
+          maxRequests: USAGE_LIMITS.wardrobeUpload,
+          timezoneOffsetMinutes: reservation.timezoneOffsetMinutes,
+        }, reservation.reservationId);
+      }
       return NextResponse.json(
         { error: saveResult.message || 'Failed to save wardrobe item' },
         { status: 500 }
       );
     }
 
+    const confirmed = await confirmServerRateLimit(userId, {
+      scope: RATE_LIMIT_SCOPES.wardrobeUpload,
+      windowMs: DAILY_WINDOW_MS,
+      maxRequests: USAGE_LIMITS.wardrobeUpload,
+      timezoneOffsetMinutes,
+    }, reservationId);
+
     return NextResponse.json(
       {
         success: true,
         itemId: saveResult.itemId,
-        remaining: rateLimit.remaining,
-        resetAt: rateLimit.resetAt.toISOString(),
+        remaining: confirmed.remaining,
+        resetAt: confirmed.resetAt.toISOString(),
       },
       {
         status: 200,
         headers: {
-          'X-RateLimit-Remaining': String(rateLimit.remaining),
-          'X-RateLimit-Reset': rateLimit.resetAt.toISOString(),
+          'X-RateLimit-Remaining': String(confirmed.remaining),
+          'X-RateLimit-Reset': confirmed.resetAt.toISOString(),
         },
       }
     );
   } catch (error) {
+    if (reservation) {
+      await releaseServerRateLimit(reservation.subject, {
+        scope: RATE_LIMIT_SCOPES.wardrobeUpload,
+        windowMs: DAILY_WINDOW_MS,
+        maxRequests: USAGE_LIMITS.wardrobeUpload,
+        timezoneOffsetMinutes: reservation.timezoneOffsetMinutes,
+      }, reservation.reservationId);
+    }
+
     if (error instanceof AuthError) {
       return NextResponse.json(
         {

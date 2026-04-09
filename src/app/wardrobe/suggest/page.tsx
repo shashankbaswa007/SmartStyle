@@ -178,6 +178,10 @@ function WardrobeSuggestPageContent() {
       setWardrobeItemsMap(itemMap);
 
       const idToken = await user.getIdToken();
+      const outfitRequestId =
+        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+          ? crypto.randomUUID()
+          : `wardrobe_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
       const response = await fetch('/api/wardrobe-outfit', {
         method: 'POST',
@@ -185,6 +189,7 @@ function WardrobeSuggestPageContent() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${idToken}`,
           'x-timezone-offset-minutes': String(new Date().getTimezoneOffset()),
+          'x-idempotency-key': outfitRequestId,
         },
         body: JSON.stringify({
           userId: user.uid,

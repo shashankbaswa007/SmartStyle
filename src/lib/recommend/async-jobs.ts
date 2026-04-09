@@ -12,6 +12,8 @@ import { generateSessionId } from '@/lib/interaction-tracker';
 import saveRecommendation from '@/lib/firestoreRecommendations';
 import { getRedisClient } from '@/lib/redis';
 import { enforceAdaptive701020 } from '@/lib/recommend/diversification';
+import { confirmServerRateLimit, releaseServerRateLimit } from '@/lib/server-rate-limiter';
+import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 
 const JOB_TTL_SECONDS = 4 * 60 * 60;
 const DEDUPE_TTL_SECONDS = 2 * 60 * 60;
@@ -64,6 +66,12 @@ export interface RecommendProgress {
 export interface RecommendJobRecord {
   jobId: string;
   requestId?: string;
+  usageReservation?: {
+    subject: string;
+    reservationId: string;
+    timezoneOffsetMinutes?: number;
+    finalized?: boolean;
+  };
   status: RecommendJobStatus;
   dedupeKey: string;
   createdAt: number;
@@ -388,9 +396,24 @@ function isValidHexColor(value: string): boolean {
   return /^#[0-9A-Fa-f]{6}$/.test(value);
 }
 
+function sentenceCount(value: string): number {
+  return (value || '')
+    .split(/[.!?]+/)
+    .map((part) => part.trim())
+    .filter(Boolean).length;
+}
+
 function validateAnalysisResponse(analysis: AnalyzeImageAndProvideRecommendationsOutput): void {
   if (!analysis || !Array.isArray(analysis.outfitRecommendations)) {
     throw new RecommendJobError('INVALID_RESPONSE', 'AI response missing outfit recommendations.');
+  }
+
+  if (!analysis.feedback || typeof analysis.feedback !== 'string' || analysis.feedback.trim().length < 40) {
+    throw new RecommendJobError('INVALID_RESPONSE', 'AI response missing meaningful feedback.');
+  }
+
+  if (!Array.isArray(analysis.highlights) || analysis.highlights.length < 2) {
+    throw new RecommendJobError('INVALID_RESPONSE', 'AI response missing highlights.');
   }
 
   if (analysis.outfitRecommendations.length < 3) {
@@ -405,11 +428,36 @@ function validateAnalysisResponse(analysis: AnalyzeImageAndProvideRecommendation
     if (!color?.hex || !isValidHexColor(color.hex)) {
       throw new RecommendJobError('INVALID_RESPONSE', 'AI returned invalid color suggestions.');
     }
+
+    if (!color?.name || typeof color.name !== 'string') {
+      throw new RecommendJobError('INVALID_RESPONSE', 'AI returned invalid color suggestions.');
+    }
   }
 
   for (const outfit of analysis.outfitRecommendations.slice(0, 3)) {
     if (!outfit?.title || !outfit?.description || !Array.isArray(outfit.items) || outfit.items.length === 0) {
       throw new RecommendJobError('INVALID_RESPONSE', 'AI returned incomplete outfit recommendation data.');
+    }
+
+    if ((outfit.title || '').trim().length < 4) {
+      throw new RecommendJobError('INVALID_RESPONSE', 'AI returned incomplete outfit recommendation data.');
+    }
+
+    if ((outfit.description || '').trim().length < 80 || sentenceCount(outfit.description) < 2) {
+      throw new RecommendJobError('ML_EMPTY_RESPONSE', 'AI returned incomplete outfit recommendation details.');
+    }
+
+    if (!Array.isArray(outfit.colorPalette) || outfit.colorPalette.length < 3) {
+      throw new RecommendJobError('INVALID_RESPONSE', 'AI returned incomplete outfit color palettes.');
+    }
+
+    const invalidPalette = outfit.colorPalette.some((value) => !isValidHexColor(String(value || '')));
+    if (invalidPalette) {
+      throw new RecommendJobError('INVALID_RESPONSE', 'AI returned invalid outfit colors.');
+    }
+
+    if (!outfit.imagePrompt || typeof outfit.imagePrompt !== 'string') {
+      throw new RecommendJobError('INVALID_RESPONSE', 'AI returned incomplete outfit generation prompts.');
     }
   }
 }
@@ -550,6 +598,45 @@ async function saveJob(job: RecommendJobRecord): Promise<void> {
   await setDistributedJson(jobKey(job.jobId), job, JOB_TTL_SECONDS);
 }
 
+async function finalizeRecommendUsage(job: RecommendJobRecord, success: boolean): Promise<void> {
+  const reservation = job.usageReservation;
+  if (!reservation || reservation.finalized) return;
+
+  const config = {
+    scope: RATE_LIMIT_SCOPES.recommend,
+    windowMs: DAILY_WINDOW_MS,
+    maxRequests: USAGE_LIMITS.recommend,
+    timezoneOffsetMinutes: reservation.timezoneOffsetMinutes,
+  };
+
+  if (success) {
+    await confirmServerRateLimit(reservation.subject, config, reservation.reservationId);
+  } else {
+    await releaseServerRateLimit(reservation.subject, config, reservation.reservationId);
+  }
+
+  job.usageReservation = {
+    ...reservation,
+    finalized: true,
+  };
+}
+
+export async function setRecommendJobUsageReservation(jobId: string, reservation: {
+  subject: string;
+  reservationId: string;
+  timezoneOffsetMinutes?: number;
+}): Promise<void> {
+  const job = await getJob(jobId);
+  if (!job) return;
+
+  job.usageReservation = {
+    ...reservation,
+    finalized: false,
+  };
+  job.updatedAt = now();
+  await saveJob(job);
+}
+
 export async function enqueueRecommendJob(
   input: RecommendRequest,
   userId: string,
@@ -647,6 +734,8 @@ export async function startRecommendJob(jobId: string): Promise<void> {
 export async function markRecommendJobRateLimited(jobId: string, message: string): Promise<void> {
   const job = await getJob(jobId);
   if (!job) return;
+
+  await finalizeRecommendUsage(job, false);
 
   const updated: RecommendJobRecord = {
     ...job,
@@ -907,6 +996,8 @@ export async function processRecommendJob(jobId: string): Promise<void> {
 
     const result = await runWorkflow(job);
 
+    await finalizeRecommendUsage(job, true);
+
     job.status = 'completed';
     job.result = result;
     job.completedAt = now();
@@ -936,6 +1027,7 @@ export async function processRecommendJob(jobId: string): Promise<void> {
   } catch (error: any) {
     const failed = await getJob(jobId);
     if (!failed) return;
+    await finalizeRecommendUsage(failed, false);
     const uxVariant = normalizeVariant(failed.input.uxVariant);
 
     const errorCode: RecommendFailureCode =
@@ -982,6 +1074,7 @@ export async function getRecommendJobStatus(jobId: string): Promise<RecommendJob
 
   if ((job.status === 'queued' || job.status === 'processing') && now() - job.createdAt > RECOMMEND_JOB_TIMEOUT_MS) {
     const timeoutFallback = await buildFallbackResultWithRecovery(job, 'JOB_TIMEOUT_FALLBACK', 'ANALYSIS_TIMEOUT');
+    await finalizeRecommendUsage(job, false);
 
     const timedOut: RecommendJobRecord = {
       ...job,
@@ -1195,3 +1288,9 @@ export async function recordRecommendInteraction(variant?: string): Promise<void
   await incrMetric('interactions_total', 1);
   await incrVariantMetric(normalized, 'interactions', 1);
 }
+
+export const __testables = {
+  sentenceCount,
+  validateAnalysisResponse,
+  validateDiversificationConformance,
+};

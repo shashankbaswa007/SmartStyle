@@ -26,6 +26,19 @@ export default function StyleCheckPage() {
   const [showSplashCursor, setShowSplashCursor] = useState(false);
   const [showParticles, setShowParticles] = useState(false);
   const [isTabVisible, setIsTabVisible] = useState(true);
+  const [supportsWebGL, setSupportsWebGL] = useState(false);
+
+  useEffect(() => {
+    if (!isMounted) return;
+
+    try {
+      const canvas = document.createElement('canvas');
+      const webglContext = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+      setSupportsWebGL(Boolean(webglContext));
+    } catch {
+      setSupportsWebGL(false);
+    }
+  }, [isMounted]);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -61,7 +74,7 @@ export default function StyleCheckPage() {
       <div className="absolute inset-0 -z-10">
         {isMounted && (
           <>
-            {isTabVisible && showSplashCursor ? (
+            {isTabVisible && supportsWebGL && showSplashCursor ? (
               <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 via-transparent to-indigo-500/10" />}>
                 <div className="opacity-40">
                   <SplashCursor
@@ -75,7 +88,7 @@ export default function StyleCheckPage() {
                 </div>
               </Suspense>
             ) : null}
-            {isTabVisible && showParticles ? (
+            {isTabVisible && supportsWebGL && showParticles ? (
               <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-purple-500/10" />}>
                 <Particles
                   className="absolute inset-0"

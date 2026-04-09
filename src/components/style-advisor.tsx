@@ -23,6 +23,7 @@ import type { WeeklyWeatherForecast } from "@/lib/weather-service";
 import { cn } from "@/lib/utils";
 import { StyleAdvisorResults } from "./style-advisor-results";
 import { auth } from "@/lib/firebase";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { validateImageForStyleAnalysis, validateImageProperties } from "@/lib/image-validation";
 import { RecommendationProgress } from './RecommendationProgress';
 import { OutfitSkeletonGrid } from './OutfitCardSkeleton';
@@ -262,6 +263,14 @@ interface AnalysisFailureState {
   code?: string;
 }
 
+function isRenderableRecommendation(outfit: any): boolean {
+  const hasTitle = typeof outfit?.title === 'string' && outfit.title.trim().length >= 3;
+  const hasDescription = typeof outfit?.description === 'string' && outfit.description.trim().length >= 40;
+  const hasColorPalette = Array.isArray(outfit?.colorPalette) && outfit.colorPalette.length >= 3;
+  const hasImage = typeof outfit?.imageUrl === 'string' && outfit.imageUrl.trim().length > 0;
+  return hasTitle && hasDescription && hasColorPalette && hasImage;
+}
+
 interface StyleAdvisorProps {
   isLimitReached?: boolean;
 }
@@ -365,6 +374,8 @@ function getColorName(r: number, g: number, b: number): string {
  */
 
 export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
+  const { user: contextUser } = useAuth();
+  const activeUser = auth.currentUser ?? contextUser;
   const { toast } = useToast();
   const [weather, setWeather] = React.useState<string | null>(null);
   const [weatherForecast, setWeatherForecast] = React.useState<WeeklyWeatherForecast | null>(null);
@@ -392,6 +403,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   const [uxVariant, setUxVariant] = React.useState<'A' | 'B'>('A');
   const [resultMeta, setResultMeta] = React.useState<ResultMeta | null>(null);
   const [recommendCooldownUntil, setRecommendCooldownUntil] = React.useState<number | null>(null);
+  const [cooldownSecondsRemaining, setCooldownSecondsRemaining] = React.useState(0);
   const [isAutoRetrying, setIsAutoRetrying] = React.useState(false);
   const [analysisFailure, setAnalysisFailure] = React.useState<AnalysisFailureState | null>(null);
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -436,6 +448,25 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       { id: 'finalize', label: 'Loading and verifying all content', status: 'pending' },
     ]);
   }, []);
+
+  React.useEffect(() => {
+    if (!recommendCooldownUntil) {
+      setCooldownSecondsRemaining(0);
+      return;
+    }
+
+    const update = () => {
+      const remaining = Math.max(0, Math.ceil((recommendCooldownUntil - Date.now()) / 1000));
+      setCooldownSecondsRemaining(remaining);
+      if (remaining <= 0) {
+        setRecommendCooldownUntil(null);
+      }
+    };
+
+    update();
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [recommendCooldownUntil]);
 
   React.useEffect(() => {
     isMountedRef.current = true;
@@ -483,9 +514,9 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   }, [toast]);
 
   React.useEffect(() => {
-    const uid = auth.currentUser?.uid || 'anonymous';
+    const uid = activeUser?.uid || 'anonymous';
     setUxVariant(resolveUxVariant(uid));
-  }, []);
+  }, [activeUser?.uid]);
 
   // Cleanup camera and in-flight analysis on unmount
   React.useEffect(() => {
@@ -1433,7 +1464,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       if (typeof window !== 'undefined') {
         headers['x-timezone-offset-minutes'] = String(new Date().getTimezoneOffset());
       }
-      if (!auth.currentUser) {
+      if (!activeUser) {
         toast({
           variant: 'destructive',
           title: 'Sign in required',
@@ -1444,7 +1475,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
 
       let idToken: string;
       try {
-        idToken = await auth.currentUser.getIdToken();
+        idToken = await activeUser.getIdToken();
       } catch {
         toast({
           variant: 'destructive',
@@ -1460,10 +1491,11 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           ? crypto.randomUUID()
           : `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
       headers['X-Request-Id'] = requestCorrelationId;
+      headers['X-Idempotency-Key'] = requestCorrelationId;
 
       const apiRequest = {
         ...request,
-        userId: auth.currentUser.uid,
+        userId: activeUser.uid,
         uxVariant,
       };
 
@@ -1534,7 +1566,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           if (isStale()) return;
 
           const statusResponse = await requestWithRetry(
-            `/api/recommend/status?jobId=${encodeURIComponent(jobId)}&userId=${encodeURIComponent(auth.currentUser.uid)}`,
+            `/api/recommend/status?jobId=${encodeURIComponent(jobId)}&userId=${encodeURIComponent(activeUser.uid)}`,
             {
               method: 'GET',
               headers: {
@@ -1546,6 +1578,14 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           );
 
           if (!statusResponse.ok) {
+            if (statusResponse.status === 429) {
+              const retryAfterHeader = statusResponse.headers.get('retry-after');
+              const retryAfterSeconds = Number(retryAfterHeader);
+              if (!Number.isNaN(retryAfterSeconds) && retryAfterSeconds > 0) {
+                setRecommendCooldownUntil(Date.now() + retryAfterSeconds * 1000);
+              }
+            }
+
             if (statusResponse.status === 404) {
               // Eventual consistency across serverless instances can briefly miss queued jobs.
               // Treat as in-progress and continue polling instead of surfacing an error.
@@ -1630,23 +1670,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       }
 
       const enrichedOutfits = result.outfitRecommendations;
-      
-      // ✅ VALIDATION: Ensure all outfits have complete data
-      const hasCompleteData = enrichedOutfits.every((outfit: any) => {
-        const hasImage = !!outfit.imageUrl;
-        const hasColors = outfit.colorPalette && outfit.colorPalette.length > 0;
-        const hasLinks = outfit.shoppingLinks && (
-          outfit.shoppingLinks.amazon || 
-          outfit.shoppingLinks.myntra || 
-          outfit.shoppingLinks.tatacliq
-        );
-        
-        
-        return hasImage && hasColors && hasLinks;
-      });
 
-      if (!hasCompleteData) {
-      } else {
+      const renderableOutfits = enrichedOutfits.filter((outfit: any) => isRenderableRecommendation(outfit));
+      if (renderableOutfits.length < 3) {
+        const incompleteError = new Error('We could not assemble complete recommendations. Please retry.') as Error & { code?: string };
+        incompleteError.code = data?.code || 'ML_EMPTY_RESPONSE';
+        throw incompleteError;
       }
       
       updateStep('analyze', 'complete');
@@ -1695,16 +1724,24 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       setLoadingMessage('');
 
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'recommend' } }));
+        if (String(data?.status || '').toLowerCase() === 'completed') {
+          window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'recommend' } }));
+        }
       }
 
-      
-      // Show success toast
-      toast({
-        title: "✨ Success!",
-        description: `Your personalized recommendations are ready!`,
-        duration: 3000,
-      });
+      if (String(data?.status || '').toLowerCase() === 'failed' || usedFallback) {
+        toast({
+          title: 'Recommendations Ready (Fallback)',
+          description: 'We delivered the best available result while some services were temporarily unstable.',
+          duration: 3500,
+        });
+      } else {
+        toast({
+          title: '✨ Success!',
+          description: 'Your personalized recommendations are ready!',
+          duration: 3000,
+        });
+      }
 
     } catch (e) {
       if (!isMountedRef.current) return;
@@ -1926,7 +1963,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         ctx?.drawImage(imageElement, 0, 0);
 
         // Get user ID for personalization
-        const userId = auth.currentUser?.uid;
+        const userId = activeUser?.uid;
         const occasion = normalizePromptInput(values.occasion);
         const genre = normalizePromptInput(values.genre);
 
@@ -2032,7 +2069,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
             <CardDescription>
               Tell us a bit about your look, and our AI will provide personalized feedback.
             </CardDescription>
-            {!auth.currentUser && (
+            {!activeUser && (
               <Alert className="mt-4 border-blue-500/50 bg-blue-500/10">
                 <AlertCircle className="h-4 w-4 text-blue-600" />
                 <AlertTitle className="text-blue-700 dark:text-blue-400">💡 Get Personalized Recommendations</AlertTitle>
@@ -2257,6 +2294,16 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
                     )}
                   />
                 </div>
+
+                {cooldownSecondsRemaining > 0 && (
+                  <Alert className="w-full border-amber-300 bg-amber-50/70 dark:bg-amber-950/20">
+                    <AlertCircle className="h-4 w-4 text-amber-700 dark:text-amber-400" />
+                    <AlertTitle className="text-amber-800 dark:text-amber-300">Service Cooldown Active</AlertTitle>
+                    <AlertDescription className="text-amber-700 dark:text-amber-200">
+                      Please wait about {cooldownSecondsRemaining}s before requesting another style analysis.
+                    </AlertDescription>
+                  </Alert>
+                )}
 
                 <Button 
                   type="submit" 

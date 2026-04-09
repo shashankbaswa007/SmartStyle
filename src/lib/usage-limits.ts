@@ -22,8 +22,10 @@ export function getTimezoneOffsetMinutesFromRequest(request: Request): number {
 export const USAGE_LIMITS = {
   recommend: 10,
   wardrobeOutfit: 10,
-  wardrobeUpload: 20,
+  wardrobeUpload: 10,
 } as const;
+
+export const USAGE_IDEMPOTENCY_WINDOW_MS = 15 * 60 * 1000;
 
 export const RATE_LIMIT_SCOPES = {
   recommend: 'recommend',

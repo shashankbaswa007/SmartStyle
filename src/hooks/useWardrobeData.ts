@@ -6,6 +6,7 @@ import { auth } from '@/lib/firebase';
 import { getWardrobeItems, type WardrobeItemData } from '@/lib/wardrobeService';
 import { RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 import { logUxEvent } from '@/lib/ux-events';
+import { fetchUsageStatus } from '@/lib/usage-status-service';
 
 type UsageWindow = { remaining: number; limit: number; resetAt?: string };
 
@@ -32,25 +33,6 @@ interface UseWardrobeDataResult {
 }
 
 const FETCH_TIMEOUT_MS = 10_000;
-
-function getTimezoneHeader(): Record<string, string> {
-  if (typeof window === 'undefined') return {};
-  return { 'x-timezone-offset-minutes': String(new Date().getTimezoneOffset()) };
-}
-
-function parseUsageWindow(data: unknown): UsageWindow | undefined {
-  if (!data || typeof data !== 'object') return undefined;
-  const candidate = data as { remaining?: unknown; limit?: unknown; resetAt?: unknown };
-  if (typeof candidate.remaining !== 'number' || typeof candidate.limit !== 'number') {
-    return undefined;
-  }
-
-  return {
-    remaining: candidate.remaining,
-    limit: candidate.limit,
-    resetAt: typeof candidate.resetAt === 'string' ? candidate.resetAt : undefined,
-  };
-}
 
 export function useWardrobeData(): UseWardrobeDataResult {
   const [wardrobeItems, setWardrobeItems] = useState<WardrobeItemData[]>([]);
@@ -164,57 +146,13 @@ export function useWardrobeData(): UseWardrobeDataResult {
     try {
       setUsageLoading(true);
       setUsageError(null);
-      const fetchUsageStatus = async (forceRefreshToken = false) => {
-        const freshTokenUser = authUserRef.current || auth.currentUser;
-        if (!freshTokenUser) {
-          throw new Error('AUTH_USER_NOT_READY');
-        }
-
-        const idToken = await freshTokenUser.getIdToken(forceRefreshToken);
-        const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), 6000);
-        try {
-          return await fetch('/api/usage-status', {
-            cache: 'no-store',
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-              'Cache-Control': 'no-cache',
-              ...getTimezoneHeader(),
-            },
-            signal: controller.signal,
-          });
-        } finally {
-          window.clearTimeout(timeoutId);
-        }
-      };
-
-      let response = await fetchUsageStatus(false);
-      if (response.status === 401) {
-        if (Date.now() - lastForcedRefreshFailureAtRef.current < 120_000) {
-          setUsageLimits({});
-          setUsageError('Session refresh is cooling down. Please try again in a moment.');
-          return;
-        }
-
-        try {
-          response = await fetchUsageStatus(true);
-        } catch {
-          lastForcedRefreshFailureAtRef.current = Date.now();
-          setUsageLimits({});
-          setUsageError('Session refresh failed. Please sign in again and retry.');
-          return;
-        }
-      }
-
-      if (!response.ok) {
-        setUsageLimits({});
-        setUsageError('Unable to load daily limits right now. Please retry.');
-        return;
-      }
-
-      const data = await response.json();
-      const outfitWindow = parseUsageWindow(data?.usage?.[RATE_LIMIT_SCOPES.wardrobeOutfit]);
-      const uploadWindow = parseUsageWindow(data?.usage?.[RATE_LIMIT_SCOPES.wardrobeUpload]);
+      const data = await fetchUsageStatus({
+        user: tokenUser,
+        scopes: [RATE_LIMIT_SCOPES.wardrobeOutfit, RATE_LIMIT_SCOPES.wardrobeUpload],
+        lastForcedRefreshFailureAtRef,
+      });
+      const outfitWindow = data.usage[RATE_LIMIT_SCOPES.wardrobeOutfit];
+      const uploadWindow = data.usage[RATE_LIMIT_SCOPES.wardrobeUpload];
 
       setUsageLimits({
         wardrobeOutfit: outfitWindow,
@@ -224,9 +162,10 @@ export function useWardrobeData(): UseWardrobeDataResult {
       if (!outfitWindow && !uploadWindow) {
         setUsageError('Daily limits are temporarily unavailable. Please retry.');
       }
-    } catch {
+    } catch (error) {
       setUsageLimits({});
-      setUsageError('Unable to load usage status. Please try again.');
+      const typed = error as { message?: string };
+      setUsageError(typed?.message || 'Unable to load usage status. Please try again.');
     } finally {
       setUsageLoading(false);
     }

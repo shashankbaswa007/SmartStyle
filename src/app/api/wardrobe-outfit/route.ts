@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateWardrobeOutfits } from '@/lib/wardrobeOutfitGenerator';
 import { fetchWeatherForecast } from '@/lib/weather-service';
 import { verifyBearerToken, AuthError } from '@/lib/server-auth';
-import { checkServerRateLimit } from '@/lib/server-rate-limiter';
+import { reserveServerRateLimit, confirmServerRateLimit, releaseServerRateLimit } from '@/lib/server-rate-limiter';
 import { DAILY_WINDOW_MS, getTimezoneOffsetMinutesFromRequest, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 import { 
   generateWardrobeHash, 
@@ -11,9 +11,12 @@ import {
   cacheRecommendation 
 } from '@/lib/recommendations-cache';
 import { validateRequestOrigin } from '@/lib/csrf-protection';
+import { buildUsageIdempotencyKey } from '@/lib/usage-idempotency';
 const MAX_REQUESTS_PER_DAY = USAGE_LIMITS.wardrobeOutfit;
 
 export async function POST(request: NextRequest) {
+  let reservation: { subject: string; reservationId: string; timezoneOffsetMinutes: number } | null = null;
+
   try {
     if (!validateRequestOrigin(request)) {
       return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
@@ -58,13 +61,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Shared, persistent rate limiting for AI-intensive endpoint.
-    const rateLimit = await checkServerRateLimit(userId, {
+    const reservationId = buildUsageIdempotencyKey({
+      scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
+      userId,
+      payload: {
+        occasion,
+        date,
+        itemIds: wardrobeItems.map((item: { id?: string }) => item.id || '').sort(),
+      },
+      request,
+    });
+
+    // Reserve a slot, then confirm only after successful generation.
+    const rateLimit = await reserveServerRateLimit(userId, {
       scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
       windowMs: DAILY_WINDOW_MS,
       maxRequests: MAX_REQUESTS_PER_DAY,
       timezoneOffsetMinutes,
-    });
+    }, reservationId, { reservationTtlMs: 15 * 60_000 });
+
+    reservation = { subject: userId, reservationId, timezoneOffsetMinutes };
 
     if (!rateLimit.allowed) {
       return NextResponse.json(
@@ -107,6 +123,14 @@ export async function POST(request: NextRequest) {
     // Check cache first for instant results
     const cachedResult = getCachedRecommendation(requestHash, wardrobeHash);
     if (cachedResult) {
+      if (reservation) {
+        await releaseServerRateLimit(reservation.subject, {
+          scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
+          windowMs: DAILY_WINDOW_MS,
+          maxRequests: MAX_REQUESTS_PER_DAY,
+          timezoneOffsetMinutes: reservation.timezoneOffsetMinutes,
+        }, reservation.reservationId);
+      }
       return NextResponse.json(
         { 
           ...cachedResult,
@@ -140,6 +164,14 @@ export async function POST(request: NextRequest) {
       // Handle specific errors
       if (generationError instanceof Error) {
         if (generationError.message.includes('No wardrobe items')) {
+          if (reservation) {
+            await releaseServerRateLimit(reservation.subject, {
+              scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
+              windowMs: DAILY_WINDOW_MS,
+              maxRequests: MAX_REQUESTS_PER_DAY,
+              timezoneOffsetMinutes: reservation.timezoneOffsetMinutes,
+            }, reservation.reservationId);
+          }
           return NextResponse.json(
             { 
               error: 'Empty wardrobe',
@@ -150,6 +182,14 @@ export async function POST(request: NextRequest) {
           );
         }
         if (generationError.message.includes('Not enough items')) {
+          if (reservation) {
+            await releaseServerRateLimit(reservation.subject, {
+              scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
+              windowMs: DAILY_WINDOW_MS,
+              maxRequests: MAX_REQUESTS_PER_DAY,
+              timezoneOffsetMinutes: reservation.timezoneOffsetMinutes,
+            }, reservation.reservationId);
+          }
           return NextResponse.json(
             { 
               error: 'Insufficient items',
@@ -159,6 +199,15 @@ export async function POST(request: NextRequest) {
             { status: 400 }
           );
         }
+      }
+
+      if (reservation) {
+        await releaseServerRateLimit(reservation.subject, {
+          scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
+          windowMs: DAILY_WINDOW_MS,
+          maxRequests: MAX_REQUESTS_PER_DAY,
+          timezoneOffsetMinutes: reservation.timezoneOffsetMinutes,
+        }, reservation.reservationId);
       }
 
       return NextResponse.json(
@@ -171,17 +220,44 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const confirmed = await confirmServerRateLimit(userId, {
+      scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
+      windowMs: DAILY_WINDOW_MS,
+      maxRequests: MAX_REQUESTS_PER_DAY,
+      timezoneOffsetMinutes,
+    }, reservationId);
+
     // Return successful response with weather data
     return NextResponse.json(
       { 
         ...result,
         weather: weatherData,
         cached: false, // Freshly generated
+        usage: {
+          remaining: confirmed.remaining,
+          limit: confirmed.limit,
+          resetAt: confirmed.resetAt.toISOString(),
+        },
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          'X-RateLimit-Remaining': String(confirmed.remaining),
+          'X-RateLimit-Reset': confirmed.resetAt.toISOString(),
+        },
+      }
     );
 
   } catch (error) {
+    if (reservation) {
+      await releaseServerRateLimit(reservation.subject, {
+        scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
+        windowMs: DAILY_WINDOW_MS,
+        maxRequests: MAX_REQUESTS_PER_DAY,
+        timezoneOffsetMinutes: reservation.timezoneOffsetMinutes,
+      }, reservation.reservationId);
+    }
+
     if (error instanceof AuthError) {
       return NextResponse.json(
         {

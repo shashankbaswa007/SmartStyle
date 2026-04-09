@@ -12,10 +12,13 @@ import { enforceRecommendAuth, enforceRecommendRateLimit, AuthError } from '@/li
 import {
   enqueueRecommendJob,
   markRecommendJobRateLimited,
+  setRecommendJobUsageReservation,
   startRecommendJob,
   awaitRecommendJobTerminalState,
   RECOMMEND_JOB_TIMEOUT_MS,
 } from '@/lib/recommend/async-jobs';
+import { buildUsageIdempotencyKey } from '@/lib/usage-idempotency';
+import { getTimezoneOffsetMinutesFromRequest, RATE_LIMIT_SCOPES } from '@/lib/usage-limits';
 
 function buildErrorResponse(
   status: number,
@@ -106,6 +109,23 @@ export async function POST(req: Request) {
 
   const queued = await enqueueRecommendJob(normalizedInput, userId, { autoStart: false, requestId });
 
+  const usageSubject = userId !== 'anonymous'
+    ? userId
+    : `anon:${req.headers.get('x-forwarded-for') || 'unknown'}`;
+  const usageReservationId = buildUsageIdempotencyKey({
+    scope: RATE_LIMIT_SCOPES.recommend,
+    userId: usageSubject,
+    payload: {
+      requestId,
+      dedupeKeySeed: queued.jobId,
+      occasion: normalizedInput.occasion,
+      genre: normalizedInput.genre,
+      userId: normalizedInput.userId,
+    },
+    request: req,
+  });
+  const timezoneOffsetMinutes = getTimezoneOffsetMinutesFromRequest(req);
+
   if (queued.deduped) {
     if (queued.status === 'completed' || queued.status === 'failed') {
       const terminalJob = await awaitRecommendJobTerminalState(queued.jobId, {
@@ -165,7 +185,11 @@ export async function POST(req: Request) {
   }
 
   try {
-    const limitResult = await enforceRecommendRateLimit(req, userId === 'anonymous' ? undefined : userId);
+    const limitResult = await enforceRecommendRateLimit(
+      req,
+      userId === 'anonymous' ? undefined : userId,
+      usageReservationId
+    );
     if (!limitResult.rateLimit.allowed) {
       const retryAfterSeconds = Math.max(
         1,
@@ -198,6 +222,12 @@ export async function POST(req: Request) {
         }
       );
     }
+
+    await setRecommendJobUsageReservation(queued.jobId, {
+      subject: usageSubject,
+      reservationId: usageReservationId,
+      timezoneOffsetMinutes,
+    });
 
   } catch {
     await markRecommendJobRateLimited(
