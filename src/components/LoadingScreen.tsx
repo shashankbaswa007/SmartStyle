@@ -64,13 +64,13 @@ export function LoadingScreen() {
                     <rect x="0" y="0" width="100" height="100" fill="black" />
                     <text
                       x="50"
-                      y="52"
+                      y="51.5"
                       textAnchor="middle"
                       dominantBaseline="middle"
                       fill="white"
                       fontWeight="600"
-                      letterSpacing="1.4"
-                      fontSize="22"
+                      letterSpacing="0.9"
+                      fontSize="20"
                     >
                       SS
                     </text>
