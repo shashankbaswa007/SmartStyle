@@ -1,4 +1,4 @@
-const STATIC_CACHE = 'smartstyle-static-v10';
+const STATIC_CACHE = 'smartstyle-static-v11';
 const OFFLINE_FALLBACK_URL = '/offline.html';
 
 const IS_DEV = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
@@ -7,8 +7,14 @@ const STATIC_ASSETS = [
   '/',
   OFFLINE_FALLBACK_URL,
   '/manifest.json',
+  '/icons/brand-icon.svg',
   '/icons/icon-192x192.png',
+  '/icons/icon-maskable-192x192.png',
   '/icons/icon-512x512.png',
+  '/icons/icon-maskable-512x512.png',
+  '/favicon-16x16.png',
+  '/favicon-32x32.png',
+  '/favicon-48x48.png',
 ];
 
 function debugLog(...args) {
