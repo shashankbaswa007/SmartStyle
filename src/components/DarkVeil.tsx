@@ -86,6 +86,29 @@ type Props = {
   resolutionScale?: number;
 };
 
+function createProgramWithSanitizedShaderWarnings(
+  gl: ConstructorParameters<typeof Program>[0],
+  options: ConstructorParameters<typeof Program>[1]
+) {
+  const originalWarn = console.warn;
+  const isNullShaderLog = (message: unknown) =>
+    typeof message === 'string' &&
+    (message.startsWith('null\nVertex Shader\n') || message.startsWith('null\nFragment Shader\n'));
+
+  console.warn = (...args: unknown[]) => {
+    if (isNullShaderLog(args[0])) {
+      return;
+    }
+    originalWarn(...args);
+  };
+
+  try {
+    return new Program(gl, options);
+  } finally {
+    console.warn = originalWarn;
+  }
+}
+
 function setFallbackVisible(fallback: HTMLDivElement, canvas: HTMLCanvasElement) {
   fallback.style.opacity = '1';
   canvas.style.opacity = '0';
@@ -147,7 +170,7 @@ export default function DarkVeil({
       };
       const geometry = new Triangle(gl);
 
-      const program = new Program(gl, {
+      const program = createProgramWithSanitizedShaderWarnings(gl, {
         vertex,
         fragment,
         uniforms: {

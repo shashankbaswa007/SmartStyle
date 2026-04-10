@@ -18,6 +18,7 @@ import { Upload, Camera, X, Loader2, Info, Shield, Shirt } from 'lucide-react';
 import Image from 'next/image';
 import { generateOptimizedImages, type OptimizedImages } from '@/lib/image-optimization';
 import { extractColorsFromDescription } from '@/lib/color-name-extraction';
+import { emitUsageConsumed } from '@/lib/usage-events';
 
 interface WardrobeItemUploadProps {
   open: boolean;
@@ -734,8 +735,8 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
           const payload = await response.json().catch(() => ({}));
 
           if (!response.ok) {
-            if (response.status === 429 && typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'wardrobe-upload' } }));
+            if (response.status === 429) {
+              emitUsageConsumed({ scope: 'wardrobe-upload' });
             }
             throw new Error(payload?.message || payload?.error || 'Failed to save wardrobe item');
           }
@@ -764,9 +765,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
       setUploadStatus('complete');
       setUploadProgress(100);
 
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'wardrobe-upload' } }));
-      }
+      emitUsageConsumed({ scope: 'wardrobe-upload' });
       
       // Colors already extracted during upload - no background processing needed
       

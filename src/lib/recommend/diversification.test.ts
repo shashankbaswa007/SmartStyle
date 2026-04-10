@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { enforceAdaptive701020, orderOutfitsByAdaptive701020, scoreOutfitInterestAlignment } from './diversification';
+import { enforceStrict701020, orderOutfitsByStrict701020, scoreOutfitInterestAlignment } from './diversification';
 import type { RecommendRequest } from '../validation';
 
 const baseInput: RecommendRequest = {
@@ -35,14 +35,14 @@ describe('recommend diversification', () => {
     expect(strongScore).toBeGreaterThan(weakScore);
   });
 
-  it('returns deterministic 3-slot ordering for adaptive 70-20-10', () => {
+  it('returns deterministic 3-slot ordering for strict 70-20-10', () => {
     const outfits = [
       outfit('Safe', 'minimalist', 'office', ['#1F2937', '#F8F5F0']),
       outfit('Adjacent', 'minimal', 'work', ['#1F2937', '#A0AEC0']),
       outfit('Explore', 'streetwear', 'casual', ['#FF00AA', '#00FFAA']),
     ];
 
-    const ordered = orderOutfitsByAdaptive701020(outfits, {
+    const ordered = orderOutfitsByStrict701020(outfits, {
       ...baseInput,
       userId: 'user-123',
     });
@@ -71,7 +71,7 @@ describe('recommend diversification', () => {
       provider: 'gemini' as const,
     };
 
-    const enriched = enforceAdaptive701020(analysis, { ...baseInput, userId: 'user-123' });
+    const enriched = enforceStrict701020(analysis, { ...baseInput, userId: 'user-123' });
     const [first, second, third] = enriched.outfitRecommendations;
 
     expect(first.strategyBucket).toBe('70');

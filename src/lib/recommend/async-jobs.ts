@@ -12,7 +12,7 @@ import { generateSessionId } from '@/lib/interaction-tracker';
 import saveRecommendation from '@/lib/firestoreRecommendations';
 import { getRedisClient } from '@/lib/redis';
 import { featureFlags } from '@/lib/feature-flags';
-import { enforceAdaptive701020 } from '@/lib/recommend/diversification';
+import { enforceStrict701020 } from '@/lib/recommend/diversification';
 import { confirmServerRateLimit, releaseServerRateLimit } from '@/lib/server-rate-limiter';
 import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 
@@ -436,7 +436,7 @@ async function buildFallbackResultWithRecovery(
     };
   }
 
-  const fallbackAnalysis = enforceAdaptive701020(createFallbackAnalysis(job.input), job.input);
+  const fallbackAnalysis = enforceStrict701020(createFallbackAnalysis(job.input), job.input);
   const fallbackAnalysisWithImages = {
     ...fallbackAnalysis,
     outfitRecommendations: fallbackAnalysis.outfitRecommendations.slice(0, 3).map((outfit, index) => ({
@@ -502,8 +502,8 @@ function validateAnalysisResponse(analysis: AnalyzeImageAndProvideRecommendation
     throw new RecommendJobError('INVALID_RESPONSE', 'AI response missing primary image prompt.');
   }
 
-  if (analysis.outfitRecommendations.length < 3) {
-    throw new RecommendJobError('ML_EMPTY_RESPONSE', 'AI returned insufficient outfit recommendations.');
+  if (analysis.outfitRecommendations.length !== 3) {
+    throw new RecommendJobError('ML_EMPTY_RESPONSE', 'AI must return exactly three outfit recommendations.');
   }
 
   if (!Array.isArray(analysis.colorSuggestions) || analysis.colorSuggestions.length < 3) {
@@ -549,10 +549,13 @@ function validateAnalysisResponse(analysis: AnalyzeImageAndProvideRecommendation
 }
 
 function validateDiversificationConformance(analysis: AnalyzeImageAndProvideRecommendationsOutput): void {
-  const topThree = analysis.outfitRecommendations.slice(0, 3);
-  if (topThree.length < 3) {
-    throw new RecommendJobError('INVALID_RESPONSE', 'Diversification requires three outfit recommendations.');
+  if (analysis.outfitRecommendations.length !== 3) {
+    throw new RecommendJobError('INVALID_RESPONSE', 'Diversification requires exactly three outfit recommendations.');
   }
+
+  const topThree = analysis.outfitRecommendations;
+  const expectedBuckets: Array<'70' | '20' | '10'> = ['70', '20', '10'];
+  const expectedCategories: Array<'perfect' | 'great' | 'exploring'> = ['perfect', 'great', 'exploring'];
 
   const uniqueTitles = new Set(topThree.map((outfit) => normalizeText(outfit.title)));
   if (uniqueTitles.size < 3) {
@@ -562,6 +565,21 @@ function validateDiversificationConformance(analysis: AnalyzeImageAndProvideReco
   const uniqueStyles = new Set(topThree.map((outfit) => normalizeText(outfit.styleType || '')));
   if (uniqueStyles.size < 2) {
     throw new RecommendJobError('INVALID_RESPONSE', 'Outfit recommendations lack style diversity.');
+  }
+
+  for (let index = 0; index < topThree.length; index += 1) {
+    const outfit = topThree[index];
+    if (outfit.strategyBucket !== expectedBuckets[index]) {
+      throw new RecommendJobError('INVALID_RESPONSE', 'Outfit recommendations violate strict 70-20-10 bucket ordering.');
+    }
+
+    if (outfit.matchCategory !== expectedCategories[index]) {
+      throw new RecommendJobError('INVALID_RESPONSE', 'Outfit recommendations violate strict 70-20-10 category ordering.');
+    }
+
+    if (outfit.position !== index + 1) {
+      throw new RecommendJobError('INVALID_RESPONSE', 'Outfit recommendations violate strict ranking positions.');
+    }
   }
 }
 
@@ -726,6 +744,10 @@ async function finalizeRecommendUsage(job: RecommendJobRecord, success: boolean)
     ...reservation,
     finalized: true,
   };
+}
+
+function shouldChargeUsageForRecommendTerminalState(status: RecommendJobStatus): boolean {
+  return status === 'completed';
 }
 
 export async function setRecommendJobUsageReservation(jobId: string, reservation: {
@@ -939,7 +961,7 @@ async function runWorkflow(job: RecommendJobRecord): Promise<any> {
   }
 
   validateAnalysisResponse(analysis);
-  analysis = enforceAdaptive701020(analysis, job.input);
+  analysis = enforceStrict701020(analysis, job.input);
   validateDiversificationConformance(analysis);
 
   job.partialPayload = buildPartialPayload(analysis);
@@ -1114,7 +1136,7 @@ export async function processRecommendJob(jobId: string): Promise<void> {
 
     const result = await runWorkflow(job);
 
-    await finalizeRecommendUsage(job, true);
+    await finalizeRecommendUsage(job, shouldChargeUsageForRecommendTerminalState('completed'));
 
     job.status = 'completed';
     job.result = result;
@@ -1153,8 +1175,7 @@ export async function processRecommendJob(jobId: string): Promise<void> {
         : 'JOB_PROCESSING_FAILED';
 
     const fallback = await buildFallbackResultWithRecovery(failed, 'JOB_FALLBACK', errorCode);
-    const fallbackDeliveredPayload = Boolean(fallback.result?.success && fallback.result?.payload);
-    await finalizeRecommendUsage(failed, fallbackDeliveredPayload);
+    await finalizeRecommendUsage(failed, shouldChargeUsageForRecommendTerminalState('failed'));
 
     failed.status = 'failed';
     failed.error = error?.message || 'Job processing failed';
@@ -1424,4 +1445,5 @@ export const __testables = {
   sentenceCount,
   validateAnalysisResponse,
   validateDiversificationConformance,
+  shouldChargeUsageForRecommendTerminalState,
 };

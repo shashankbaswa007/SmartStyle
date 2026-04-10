@@ -7,8 +7,18 @@ import { getWardrobeItems, type WardrobeItemData } from '@/lib/wardrobeService';
 import { RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
 import { logUxEvent } from '@/lib/ux-events';
 import { fetchUsageStatus } from '@/lib/usage-status-service';
+import {
+  parseUsageConsumedStorageValue,
+  USAGE_CONSUMED_EVENT,
+  USAGE_CONSUMED_STORAGE_KEY,
+} from '@/lib/usage-events';
 
 type UsageWindow = { remaining: number; limit: number; resetAt?: string };
+
+function debugWardrobeUsage(message: string, context: Record<string, unknown>): void {
+  if (process.env.NODE_ENV === 'production') return;
+  console.info('[usage-sync][wardrobe]', message, context);
+}
 
 interface UseWardrobeDataResult {
   wardrobeItems: WardrobeItemData[];
@@ -54,6 +64,14 @@ export function useWardrobeData(): UseWardrobeDataResult {
   const lastForcedRefreshFailureAtRef = useRef(0);
   const authUserRef = useRef<User | null>(null);
   const userIdRef = useRef<string | null>(null);
+  const usageResetRefreshTimerRef = useRef<number | null>(null);
+
+  const clearUsageResetRefreshTimer = useCallback(() => {
+    if (usageResetRefreshTimerRef.current !== null) {
+      window.clearTimeout(usageResetRefreshTimerRef.current);
+      usageResetRefreshTimerRef.current = null;
+    }
+  }, []);
 
   const fetchWardrobeItems = useCallback(async (
     uid: string,
@@ -137,6 +155,9 @@ export function useWardrobeData(): UseWardrobeDataResult {
     const tokenUser = authUserRef.current || auth.currentUser;
     const activeUser = uid || tokenUser?.uid;
     if (!activeUser || !tokenUser) {
+      debugWardrobeUsage('no_active_user_for_usage_fetch', {
+        uid,
+      });
       setUsageLimits({});
       setUsageError(null);
       setUsageLoading(false);
@@ -159,13 +180,27 @@ export function useWardrobeData(): UseWardrobeDataResult {
         wardrobeUpload: uploadWindow,
       });
 
+      debugWardrobeUsage('usage_applied_from_backend', {
+        activeUser,
+        requestId: data.requestId,
+        timezoneStrategy: data.timezoneStrategy,
+        usage: {
+          wardrobeOutfit: outfitWindow,
+          wardrobeUpload: uploadWindow,
+        },
+      });
+
       if (!outfitWindow || !uploadWindow) {
         setUsageError('Daily limits are temporarily unavailable. Please retry.');
       }
     } catch (error) {
-      setUsageLimits({});
       const typed = error as { message?: string };
       setUsageError(typed?.message || 'Unable to load usage status. Please try again.');
+
+      debugWardrobeUsage('usage_fetch_failed', {
+        activeUser,
+        error: typed?.message || String(error),
+      });
     } finally {
       setUsageLoading(false);
     }
@@ -247,16 +282,70 @@ export function useWardrobeData(): UseWardrobeDataResult {
   }, [userId]);
 
   useEffect(() => {
-    const onUsageConsumed = (event: Event) => {
-      const customEvent = event as CustomEvent<{ scope?: string }>;
-      if (customEvent.detail?.scope === RATE_LIMIT_SCOPES.wardrobeOutfit || customEvent.detail?.scope === RATE_LIMIT_SCOPES.wardrobeUpload) {
+    const onUsageConsumed = (scope?: string) => {
+      if (scope === RATE_LIMIT_SCOPES.wardrobeOutfit || scope === RATE_LIMIT_SCOPES.wardrobeUpload) {
         void fetchUsageLimits(userIdRef.current);
       }
     };
 
-    window.addEventListener('usage:consumed', onUsageConsumed as EventListener);
-    return () => window.removeEventListener('usage:consumed', onUsageConsumed as EventListener);
+    const onUsageConsumedEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<{ scope?: string }>;
+      onUsageConsumed(customEvent.detail?.scope);
+    };
+
+    const onUsageConsumedStorage = (event: StorageEvent) => {
+      if (event.key !== USAGE_CONSUMED_STORAGE_KEY || !event.newValue) {
+        return;
+      }
+
+      const detail = parseUsageConsumedStorageValue(event.newValue);
+      onUsageConsumed(detail?.scope);
+    };
+
+    window.addEventListener(USAGE_CONSUMED_EVENT, onUsageConsumedEvent as EventListener);
+    window.addEventListener('storage', onUsageConsumedStorage);
+    return () => {
+      window.removeEventListener(USAGE_CONSUMED_EVENT, onUsageConsumedEvent as EventListener);
+      window.removeEventListener('storage', onUsageConsumedStorage);
+    };
   }, [fetchUsageLimits]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    clearUsageResetRefreshTimer();
+
+    const resetCandidates = [
+      usageLimits.wardrobeOutfit?.resetAt,
+      usageLimits.wardrobeUpload?.resetAt,
+    ]
+      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .map((value) => new Date(value).getTime())
+      .filter((value) => !Number.isNaN(value));
+
+    if (resetCandidates.length === 0) {
+      return;
+    }
+
+    const nextResetAtMs = Math.min(...resetCandidates);
+    const delayMs = Math.max(0, nextResetAtMs - Date.now() + 1_200);
+
+    usageResetRefreshTimerRef.current = window.setTimeout(() => {
+      void fetchUsageLimits(userIdRef.current);
+    }, delayMs);
+
+    return clearUsageResetRefreshTimer;
+  }, [
+    clearUsageResetRefreshTimer,
+    fetchUsageLimits,
+    usageLimits.wardrobeOutfit?.resetAt,
+    usageLimits.wardrobeUpload?.resetAt,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      clearUsageResetRefreshTimer();
+    };
+  }, [clearUsageResetRefreshTimer]);
 
   const isOutfitLimitReached = !usageLoading && !!usageLimits.wardrobeOutfit && usageLimits.wardrobeOutfit.remaining <= 0;
   const isUploadLimitReached = !usageLoading && !!usageLimits.wardrobeUpload && usageLimits.wardrobeUpload.remaining <= 0;

@@ -1,9 +1,9 @@
 'use server';
 
 import { z } from 'zod';
-import admin from '@/lib/firebase-admin';
 import { executeWithTimeoutAndRetry } from '@/lib/external-request';
 import { featureFlags } from '@/lib/feature-flags';
+import { verifyFirebaseIdToken } from '@/lib/server-auth';
 import {
   buildWeeklyWeatherSummary,
   fetchWeeklyWeatherForecast,
@@ -50,12 +50,7 @@ async function fetchExternal(
  * Verify Firebase ID token and return user ID.
  */
 async function verifyUserToken(idToken: string): Promise<string | null> {
-  try {
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    return decoded.uid || null;
-  } catch {
-    return null;
-  }
+  return verifyFirebaseIdToken(idToken, { allowDevFallback: true });
 }
 
 const WeatherSchema = z.object({

@@ -26,6 +26,7 @@ import { auth } from "@/lib/firebase";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { validateImageForStyleAnalysis, validateImageProperties } from "@/lib/image-validation";
 import { RATE_LIMIT_SCOPES } from "@/lib/usage-limits";
+import { emitUsageConsumed } from "@/lib/usage-events";
 import { RecommendationProgress } from './RecommendationProgress';
 import { OutfitSkeletonGrid } from './OutfitCardSkeleton';
 
@@ -1263,7 +1264,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
 
   const performAnalysis = async (
     request: AnalyzeImageAndProvideRecommendationsInput,
-    options: { retryAttempt?: number; preserveState?: boolean } = {}
+    options: { retryAttempt?: number; preserveState?: boolean; requestCorrelationId?: string } = {}
   ) => {
     const retryAttempt = options.retryAttempt ?? 0;
     const preserveState = options.preserveState ?? false;
@@ -1427,6 +1428,8 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       setIsAutoRetrying(true);
     }
 
+    let requestCorrelationId = options.requestCorrelationId;
+
     try {
       if (!request.previousRecommendation) {
         updateStep('extract', 'processing');
@@ -1498,10 +1501,11 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       }
       headers['Authorization'] = `Bearer ${idToken}`;
 
-      const requestCorrelationId =
-        typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      requestCorrelationId =
+        requestCorrelationId ||
+        (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
           ? crypto.randomUUID()
-          : `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+          : `req_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`);
       headers['X-Request-Id'] = requestCorrelationId;
       headers['X-Idempotency-Key'] = requestCorrelationId;
 
@@ -1824,14 +1828,10 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         const terminalStatus = String(data?.status || '').toLowerCase();
         if (terminalStatus === 'completed' || terminalStatus === 'failed') {
           const usageEventId = `recommend:${String(data?.jobId || recId)}:${terminalStatus}`;
-          window.dispatchEvent(
-            new CustomEvent('usage:consumed', {
-              detail: {
-                scope: RATE_LIMIT_SCOPES.recommend,
-                eventId: usageEventId,
-              },
-            })
-          );
+          emitUsageConsumed({
+            scope: RATE_LIMIT_SCOPES.recommend,
+            eventId: usageEventId,
+          });
         }
       }
 
@@ -1885,7 +1885,11 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         const backoffMs = nextAttempt === 1 ? 1200 : 2200;
         setLoadingMessage(`Connection hiccup detected. Retrying automatically (${nextAttempt}/${maxAutoRetries})...`);
         await new Promise((resolve) => window.setTimeout(resolve, backoffMs));
-        await performAnalysis(request, { retryAttempt: retryAttempt + 1, preserveState: true });
+        await performAnalysis(request, {
+          retryAttempt: retryAttempt + 1,
+          preserveState: true,
+          requestCorrelationId,
+        });
         return;
       }
 
@@ -1906,16 +1910,10 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
       } else if (normalizedError.includes('rate limit') || normalizedError.includes('quota')) {
         title = "Rate Limit Reached";
         description = "Daily analysis quota reached. Please wait for reset and try again.";
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(
-            new CustomEvent('usage:consumed', {
-              detail: {
-                scope: RATE_LIMIT_SCOPES.recommend,
-                eventId: `recommend:rate-limit:${Date.now()}`,
-              },
-            })
-          );
-        }
+        emitUsageConsumed({
+          scope: RATE_LIMIT_SCOPES.recommend,
+          eventId: `recommend:rate-limit:${Date.now()}`,
+        });
       } else if (normalizedError.includes('ml_empty_response') || normalizedError.includes('invalid_response')) {
         title = "Incomplete AI Response";
         description = "We got an incomplete analysis result. Retry once with the same image, or upload a clearer photo.";
@@ -2688,6 +2686,8 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
                   recommendationId={recommendationId}
                   gender={lastAnalysisRequest?.gender}
                   detectedDressColors={lastAnalysisRequest?.dressColors || extractedData?.dressColors}
+                  weatherSummary={weather}
+                  weatherForecast={weatherForecast}
                 />
               </CardContent>
               <CardFooter className="flex flex-col md:flex-row gap-4 p-6 bg-primary/20">

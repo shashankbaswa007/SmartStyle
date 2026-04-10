@@ -22,7 +22,6 @@ import { useWardrobeData } from '@/hooks/useWardrobeData';
 import { useWardrobeItemActions } from '@/hooks/useWardrobeItemActions';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { WardrobeItemData } from '@/lib/wardrobeService';
-import { USAGE_LIMITS } from '@/lib/usage-limits';
 import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -860,7 +859,7 @@ function WardrobePageContent() {
                     title="AI Outfit Suggestions"
                     subtitle="Daily generation limit"
                     remaining={usageLimits.wardrobeOutfit?.remaining}
-                    limit={usageLimits.wardrobeOutfit?.limit ?? USAGE_LIMITS.wardrobeOutfit}
+                    limit={usageLimits.wardrobeOutfit?.limit}
                     resetAt={usageLimits.wardrobeOutfit?.resetAt}
                     className="rounded-md"
                     isLoading={usageLoading}
@@ -872,7 +871,7 @@ function WardrobePageContent() {
                     title="Daily Wardrobe Uploads"
                     subtitle="New items you can add"
                     remaining={usageLimits.wardrobeUpload?.remaining}
-                    limit={usageLimits.wardrobeUpload?.limit ?? USAGE_LIMITS.wardrobeUpload}
+                    limit={usageLimits.wardrobeUpload?.limit}
                     resetAt={usageLimits.wardrobeUpload?.resetAt}
                     className="rounded-md"
                     isLoading={usageLoading}

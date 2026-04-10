@@ -35,6 +35,14 @@ jest.mock('@/lib/server-rate-limiter', () => ({
   getServerRateLimitStatus: (...args: any[]) => mockGetServerRateLimitStatus(...args),
 }));
 
+jest.mock('@/lib/logger', () => ({
+  logger: {
+    info: jest.fn<(...args: any[]) => void>(),
+    warn: jest.fn<(...args: any[]) => void>(),
+    error: jest.fn<(...args: any[]) => void>(),
+  },
+}));
+
 import { GET } from './route';
 
 describe('GET /api/usage-status', () => {
@@ -160,7 +168,7 @@ describe('GET /api/usage-status', () => {
     );
   });
 
-  it('returns valid JSON with fallback usage payload on internal server errors', async () => {
+  it('returns a strict failure payload on internal server errors without synthetic usage values', async () => {
     mockGetServerRateLimitStatus.mockReset();
     mockGetServerRateLimitStatus.mockRejectedValue(new Error('database unavailable'));
 
@@ -176,7 +184,6 @@ describe('GET /api/usage-status', () => {
     const payload = await response.json();
     expect(payload.success).toBe(false);
     expect(payload.code).toBe('USAGE_STATUS_FAILED');
-    expect(payload.usage?.recommend?.limit).toBe(10);
-    expect(payload.usage?.recommend?.remaining).toBe(10);
+    expect(payload.usage).toBeUndefined();
   });
 });

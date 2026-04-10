@@ -2,7 +2,14 @@ import { NextResponse } from 'next/server';
 import { verifyBearerToken, verifyFirebaseIdToken, AuthError } from '@/lib/server-auth';
 import admin from '@/lib/firebase-admin';
 import { getServerRateLimitStatus } from '@/lib/server-rate-limiter';
-import { DAILY_WINDOW_MS, getTimezoneOffsetMinutesFromRequest, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
+import { logger } from '@/lib/logger';
+import {
+  DAILY_WINDOW_MS,
+  getTimezoneOffsetMinutesFromRequest,
+  RATE_LIMIT_SCOPES,
+  USAGE_LIMITS,
+  USAGE_TIMEZONE_STRATEGY,
+} from '@/lib/usage-limits';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -117,30 +124,6 @@ function sanitizeUsageStatus(status: { limit: number; used: number; remaining: n
   };
 }
 
-function getDefaultUsagePayload() {
-  const resetAt = new Date(Date.now() + DAILY_WINDOW_MS).toISOString();
-  return {
-    recommend: {
-      limit: USAGE_LIMITS.recommend,
-      used: 0,
-      remaining: USAGE_LIMITS.recommend,
-      resetAt,
-    },
-    [RATE_LIMIT_SCOPES.wardrobeOutfit]: {
-      limit: USAGE_LIMITS.wardrobeOutfit,
-      used: 0,
-      remaining: USAGE_LIMITS.wardrobeOutfit,
-      resetAt,
-    },
-    [RATE_LIMIT_SCOPES.wardrobeUpload]: {
-      limit: USAGE_LIMITS.wardrobeUpload,
-      used: 0,
-      remaining: USAGE_LIMITS.wardrobeUpload,
-      resetAt,
-    },
-  };
-}
-
 export async function GET(request: Request) {
   const requestId = request.headers.get('x-request-id') || `usage-status-${Date.now()}`;
 
@@ -169,23 +152,46 @@ export async function GET(request: Request) {
       }),
     ]);
 
+    const recommendUsage = sanitizeUsageStatus(recommend);
+    const wardrobeOutfitUsage = sanitizeUsageStatus(wardrobeOutfit);
+    const wardrobeUploadUsage = sanitizeUsageStatus(wardrobeUpload);
+
+    logger.info('Usage status fetched', {
+      requestId,
+      userId,
+      timezoneOffsetMinutes,
+      timezoneStrategy: USAGE_TIMEZONE_STRATEGY,
+      usage: {
+        recommend: recommendUsage,
+        [RATE_LIMIT_SCOPES.wardrobeOutfit]: wardrobeOutfitUsage,
+        [RATE_LIMIT_SCOPES.wardrobeUpload]: wardrobeUploadUsage,
+      },
+    });
+
     return NextResponse.json(
       {
         success: true,
         requestId,
+        timezoneStrategy: USAGE_TIMEZONE_STRATEGY,
         usage: {
-          recommend: sanitizeUsageStatus(recommend),
-          [RATE_LIMIT_SCOPES.wardrobeOutfit]: sanitizeUsageStatus(wardrobeOutfit),
-          [RATE_LIMIT_SCOPES.wardrobeUpload]: sanitizeUsageStatus(wardrobeUpload),
+          recommend: recommendUsage,
+          [RATE_LIMIT_SCOPES.wardrobeOutfit]: wardrobeOutfitUsage,
+          [RATE_LIMIT_SCOPES.wardrobeUpload]: wardrobeUploadUsage,
           // Temporary legacy aliases for backward compatibility during rollout.
-          wardrobeOutfit: sanitizeUsageStatus(wardrobeOutfit),
-          wardrobeUpload: sanitizeUsageStatus(wardrobeUpload),
+          wardrobeOutfit: wardrobeOutfitUsage,
+          wardrobeUpload: wardrobeUploadUsage,
         },
       },
       { headers: NO_STORE_HEADERS }
     );
   } catch (error) {
     if (error instanceof AuthError) {
+      logger.warn('Usage status auth failed', {
+        requestId,
+        status: error.status,
+        message: error.message,
+      });
+
       return NextResponse.json(
         {
           success: false,
@@ -197,13 +203,17 @@ export async function GET(request: Request) {
       );
     }
 
+    logger.error('Usage status fetch failed', {
+      requestId,
+      error,
+    });
+
     return NextResponse.json(
       {
         success: false,
         requestId,
         error: 'Failed to fetch usage status',
         code: 'USAGE_STATUS_FAILED',
-        usage: getDefaultUsagePayload(),
       },
       { status: 500, headers: NO_STORE_HEADERS }
     );

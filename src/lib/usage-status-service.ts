@@ -8,6 +8,8 @@ export type UsageWindow = {
 
 export type UsageStatusResponse = {
   usage: Record<string, UsageWindow | undefined>;
+  requestId?: string;
+  timezoneStrategy?: string;
 };
 
 const LEGACY_SCOPE_ALIASES: Record<string, string[]> = {
@@ -19,6 +21,11 @@ interface HttpLikeError {
   status: number;
   message: string;
   retryAfter: string | null;
+}
+
+function debugUsageStatus(message: string, context: Record<string, unknown>): void {
+  if (process.env.NODE_ENV === 'production') return;
+  console.info('[usage-status-service]', message, context);
 }
 
 function getTimezoneHeader(): Record<string, string> {
@@ -165,6 +172,12 @@ export async function fetchUsageStatus(params: {
   }
 
   if (!response.ok) {
+    debugUsageStatus('backend_usage_fetch_failed', {
+      status: response.status,
+      scopes: params.scopes,
+      hasUser: Boolean(params.user),
+    });
+
     throw {
       status: response.status,
       message: 'Unable to load daily limits right now. Please retry.',
@@ -206,5 +219,20 @@ export async function fetchUsageStatus(params: {
     } as HttpLikeError;
   }
 
-  return { usage: parsed };
+  const requestId = typeof payloadObject.requestId === 'string' ? payloadObject.requestId : undefined;
+  const timezoneStrategy =
+    typeof payloadObject.timezoneStrategy === 'string' ? payloadObject.timezoneStrategy : undefined;
+
+  debugUsageStatus('backend_usage_fetch_succeeded', {
+    requestId,
+    timezoneStrategy,
+    scopes: params.scopes,
+    usage: parsed,
+  });
+
+  return {
+    usage: parsed,
+    requestId,
+    timezoneStrategy,
+  };
 }

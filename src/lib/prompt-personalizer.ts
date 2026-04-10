@@ -219,7 +219,7 @@ function buildStrategySection(confidence: number, interactions: number): string 
   section += `- Current session context (occasion/genre/weather/current colors): ${interestWeights.session}%\n`;
   section += `Use these weights to resolve conflicts between signals.\n\n`;
 
-  section += `**ADAPTIVE 70-20-10 RECOMMENDATION STRATEGY:**\n`;
+  section += `**STRICT 70-20-10 RECOMMENDATION STRATEGY:**\n`;
   section += `- Position 1 (70): Safe recommendation, strongest preference fit\n`;
   section += `- Position 2 (20): Adjacent recommendation, slight stretch from proven taste\n`;
   section += `- Position 3 (10): Exploratory recommendation, controlled boundary test\n`;

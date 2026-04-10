@@ -2,18 +2,16 @@
 
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Sparkles, Palette, Shirt, PenTool, Wand2, ShoppingCart, ShoppingBag, ExternalLink, Check, Heart, Info, ChevronDown, ChevronUp, Star, Lightbulb, Eye } from "lucide-react";
+import { Sparkles, Palette, Shirt, PenTool, Wand2, ShoppingCart, ShoppingBag, ExternalLink, Check, Heart, Info, ChevronDown, ChevronUp, Star, Lightbulb, Eye, CloudSun, Thermometer } from "lucide-react";
 import type { AnalyzeImageAndProvideRecommendationsOutput } from "@/ai/flows/analyze-image-and-provide-recommendations";
 import type { ShoppingLinkResult, ItemShoppingLinks, ProductLink } from "@/lib/tavily";
 import { optimizeItemLinks, buildOutfitSearchUrls } from "@/lib/shopping-query-optimizer";
-import { Separator } from "./ui/separator";
 import { RecommendationFeedback } from "./RecommendationFeedback";
-import { auth, db } from "@/lib/firebase";
-import { onAuthStateChanged } from "firebase/auth";
-import { collection, addDoc, query, where, getDocs, serverTimestamp } from "firebase/firestore";
+import { auth } from "@/lib/firebase";
+import type { User } from "firebase/auth";
 import { useEffect, useState } from "react";
 import { trackOutfitSelection } from "@/lib/personalization";
-import { saveLikedOutfit } from "@/lib/likedOutfits";
+import { saveLikedOutfitWithSession } from "@/lib/likedOutfits";
 import { useToast } from "@/hooks/use-toast";
 import { updatePreferencesFromLike, updatePreferencesFromWear, trackShoppingClick } from "@/lib/preference-engine";
 import { Badge } from "./ui/badge";
@@ -22,6 +20,8 @@ import { Button } from "./ui/button";
 import { saveRecommendationUsage } from "@/app/actions";
 import { EnhancedColorPalette } from "./EnhancedColorPalette";
 import { MatchScoreBadge } from "./match-score-badge";
+import type { WeeklyWeatherForecast } from "@/lib/weather-service";
+import { useAuth } from "@/components/auth/AuthProvider";
 
 interface StyleAdvisorResultsProps {
   analysisResult: AnalyzeImageAndProvideRecommendationsOutput;
@@ -30,6 +30,8 @@ interface StyleAdvisorResultsProps {
   recommendationId: string | null;
   gender?: string; // Add gender for better shopping link results
   detectedDressColors?: string;
+  weatherSummary?: string | null;
+  weatherForecast?: WeeklyWeatherForecast | null;
   // NEW: Enhanced shopping links from structured analysis
   enhancedShoppingLinks?: ShoppingLinkResult[];
 }
@@ -376,75 +378,6 @@ const neutralColors = new Set([
   'black', 'white', 'gray', 'grey', 'beige', 'cream', 'ivory', 'tan', 'taupe', 'navy',
 ]);
 
-const hexToCommonColorName: Record<string, string> = {
-  '#000000': 'Black',
-  '#FFFFFF': 'White',
-  '#808080': 'Gray',
-  '#FF0000': 'Red',
-  '#0000FF': 'Blue',
-  '#008000': 'Green',
-  '#FFFF00': 'Yellow',
-  '#FFA500': 'Orange',
-  '#800080': 'Purple',
-  '#FFC0CB': 'Pink',
-  '#A52A2A': 'Brown',
-  '#000080': 'Navy',
-  '#008080': 'Teal',
-  '#FFD700': 'Gold',
-  '#F5F5DC': 'Beige',
-  '#D2B48C': 'Tan',
-  '#F0E68C': 'Khaki',
-  '#FF7F50': 'Coral',
-  '#FA8072': 'Salmon',
-  '#DC143C': 'Crimson',
-  '#800020': 'Burgundy',
-  '#4B0082': 'Indigo',
-  '#EE82EE': 'Violet',
-  '#ADD8E6': 'Light Blue',
-  '#90EE90': 'Light Green',
-  '#FFB6C1': 'Light Pink',
-  '#228B22': 'Forest Green',
-  '#4682B4': 'Steel Blue',
-  '#98FF98': 'Mint',
-  '#FFDAB9': 'Peach',
-  '#9DC183': 'Sage',
-  '#40E0D0': 'Turquoise',
-  '#C8A2C8': 'Lilac',
-};
-
-function toTitleCase(value: string): string {
-  return value
-    .trim()
-    .split(/\s+/)
-    .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-    .join(' ');
-}
-
-function isHexLike(value?: string): boolean {
-  if (!value) return false;
-  return /^#?[0-9a-fA-F]{3,8}$/.test(value.trim());
-}
-
-function normalizeHex(hex?: string): string | null {
-  if (!hex) return null;
-  const trimmed = hex.trim().toUpperCase();
-  if (!trimmed) return null;
-  return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
-}
-
-function resolveDisplayColorName(name: string | undefined, hex: string | undefined, index: number): string {
-  if (name && !isHexLike(name)) {
-    return toTitleCase(name);
-  }
-
-  const normalizedHex = normalizeHex(hex);
-  if (normalizedHex && hexToCommonColorName[normalizedHex]) {
-    return hexToCommonColorName[normalizedHex];
-  }
-
-  return `Accent Color ${index + 1}`;
-}
-
 function parseDetectedColors(detectedDressColors?: string): string[] {
   if (!detectedDressColors) return [];
   return detectedDressColors
@@ -476,6 +409,89 @@ function buildColorCombinationInsight(colors: string[]): string {
   return `${statement} The layered palette adds depth, and the recommendations below refine it into a more occasion-appropriate finish.`;
 }
 
+function truncateText(value: string, maxChars = 170): string {
+  const compact = value.replace(/\s+/g, ' ').trim();
+  if (compact.length <= maxChars) return compact;
+  return `${compact.slice(0, maxChars - 1).trim()}...`;
+}
+
+function toConciseBulletPoints(value: string, maxPoints = 4): string[] {
+  const compact = value.replace(/\s+/g, ' ').trim();
+  if (!compact) return [];
+
+  const sentencePoints = compact
+    .split(/(?<=[.!?])\s+/)
+    .map((point) => point.trim())
+    .filter(Boolean)
+    .map((point) => truncateText(point, 120));
+
+  if (sentencePoints.length > 0) {
+    return sentencePoints.slice(0, maxPoints);
+  }
+
+  return [truncateText(compact, 120)];
+}
+
+function parseWeatherSummary(summary?: string | null): {
+  location?: string;
+  tempC?: number;
+  condition?: string;
+  weeklySummary?: string;
+} {
+  if (!summary) return {};
+
+  const temperatureMatch = summary.match(/(-?\d+)\s*°?\s*C/i);
+  const locationMatch = summary.match(/weather in\s+([^.,]+?)\s+is/i);
+  const conditionMatch = summary.match(/with\s+([^.,]+)(?:[.,]|$)/i);
+  const summarySentences = summary
+    .split('.')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+  return {
+    location: locationMatch?.[1]?.trim(),
+    tempC: temperatureMatch ? Number(temperatureMatch[1]) : undefined,
+    condition: conditionMatch?.[1]?.trim(),
+    weeklySummary: summarySentences.length > 1 ? summarySentences.slice(1).join('. ') : undefined,
+  };
+}
+
+function buildWeatherActionTips(
+  forecast: WeeklyWeatherForecast | null | undefined,
+  fallbackCondition?: string,
+  fallbackTemp?: number
+): string[] {
+  const tips: string[] = [];
+  const days = forecast?.days ?? [];
+  const warmDay = days.find((day) => day.tempMax >= 32);
+  const rainyDay = days.find((day) => day.precipitationProbability >= 50);
+  const humidDay = days.find((day) => day.humidity >= 70);
+  const windyDay = days.find((day) => day.windSpeed >= 7);
+
+  if (warmDay || (typeof fallbackTemp === 'number' && fallbackTemp >= 32)) {
+    tips.push('Prioritize breathable fabrics and lighter layers during peak heat windows.');
+  }
+
+  if (rainyDay || fallbackCondition?.toLowerCase().includes('rain')) {
+    tips.push('Keep a lightweight water-resistant layer nearby for sudden rain chances.');
+  }
+
+  if (humidDay) {
+    tips.push('Use moisture-wicking bases to keep structure and comfort through humidity.');
+  }
+
+  if (windyDay) {
+    tips.push('Anchor the look with a structured outer layer for windy spells.');
+  }
+
+  if (tips.length === 0) {
+    tips.push('Build with adaptable layers so your outfit stays comfortable through shifts in weather.');
+    tips.push('Balance polish and comfort with one weather-ready outer option.');
+  }
+
+  return tips.slice(0, 3);
+}
+
 export function StyleAdvisorResults({
   analysisResult,
   generatedImageUrls,
@@ -483,29 +499,39 @@ export function StyleAdvisorResults({
   recommendationId,
   gender,
   detectedDressColors,
+  weatherSummary,
+  weatherForecast,
   enhancedShoppingLinks,
 }: StyleAdvisorResultsProps) {
-  const [userId, setUserId] = useState<string | null>(null);
+  const { user: contextUser, loading: authLoading, initialized: authInitialized } = useAuth();
+  const activeUser = auth.currentUser ?? contextUser;
+  const userId = activeUser?.uid || null;
+  const isAnonymous = !activeUser || activeUser.isAnonymous;
+  const authChecked = authInitialized && !authLoading;
   const [selectedOutfit, setSelectedOutfit] = useState<string | null>(null);
   const [isUsing, setIsUsing] = useState<number | null>(null);
   const [wornOutfits, setWornOutfits] = useState<Set<number>>(new Set());
   const [isMarkingWorn, setIsMarkingWorn] = useState<number | null>(null);
   const { toast } = useToast();
-  const [isAnonymous, setIsAnonymous] = useState(true);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [enrichedOutfits, setEnrichedOutfits] = useState(analysisResult.outfitRecommendations);
-  const [loadingLinks, setLoadingLinks] = useState(true);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [enrichedOutfits, setEnrichedOutfits] = useState(analysisResult.outfitRecommendations.slice(0, 3));
   const detectedColors = parseDetectedColors(detectedDressColors);
   const colorCombinationInsight = buildColorCombinationInsight(detectedColors);
-  const suggestedAccentColors = analysisResult.colorSuggestions.slice(0, 3).map((color, index) => {
-    const displayHex = normalizeHex(color.hex) ?? convertColorNameToHex(color.name || 'gray');
-    return {
-      ...color,
-      displayHex,
-      displayName: resolveDisplayColorName(color.name, color.hex, index),
-    };
-  });
+  const professionalReadPoints = toConciseBulletPoints(colorCombinationInsight, 4);
+  const fitFeedbackPoints = toConciseBulletPoints(analysisResult.feedback, 4);
+  const highlightPoints = analysisResult.highlights
+    .map((highlight) => truncateText(highlight, 105))
+    .slice(0, 5);
+  const proTipPoints = toConciseBulletPoints(analysisResult.notes, 2);
+  const parsedWeather = parseWeatherSummary(weatherSummary);
+  const currentForecast = weatherForecast?.days?.[0];
+  const weatherTemp = typeof currentForecast?.tempAvg === 'number' ? currentForecast.tempAvg : parsedWeather.tempC;
+  const weatherCondition = currentForecast?.condition || parsedWeather.condition || 'Moderate weather conditions';
+  const weatherLocation = weatherForecast?.location || parsedWeather.location;
+  const weeklyWeatherSummary = weatherForecast?.trendSummary || parsedWeather.weeklySummary || 'Weekly conditions remain fairly balanced. Keep one flexible layer ready.';
+  const weatherActionTips = buildWeatherActionTips(weatherForecast, weatherCondition, weatherTemp);
+  const topThreeOutfits = enrichedOutfits.slice(0, 3);
+  const topPick = topThreeOutfits[0] || null;
+  const secondaryLooks = topThreeOutfits.slice(1);
   
   // Track per-image loading state: 'loading' | 'loaded' | 'error' | 'placeholder'
   const [imageStates, setImageStates] = useState<Map<number, 'loading' | 'loaded' | 'error' | 'placeholder'>>(new Map());
@@ -551,60 +577,107 @@ export function StyleAdvisorResults({
     setImageStates(prev => new Map(prev).set(index, 'error'));
   };
 
-  useEffect(() => {
-    
-    // Direct Firebase auth state listener (bypassing custom wrapper)
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setUserId(user.uid);
-        setUserEmail(user.email);
-        setIsAnonymous(user.isAnonymous);
-      } else {
-        setUserId(null);
-        setUserEmail(null);
-        setIsAnonymous(true);
-      }
-      
-      setAuthChecked(true);
+  const showSignInRequiredToast = (description = "Please sign in to save outfits") => {
+    toast({
+      title: "Sign in required",
+      description,
+      action: (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => window.location.href = '/auth'}
+        >
+          Sign In
+        </Button>
+      ),
     });
+  };
 
-    // Also check current user immediately
-    const currentUser = auth.currentUser;
-
-    return () => {
-      unsubscribe();
+  const resolveLikeAuthUser = async (): Promise<{ user: User | null; sessionAuthenticated: boolean }> => {
+    const getResolvedUser = () => {
+      const candidate = auth.currentUser ?? contextUser;
+      if (!candidate || candidate.isAnonymous) {
+        return null;
+      }
+      return candidate;
     };
-  }, []);
+
+    const immediate = getResolvedUser();
+    if (immediate) {
+      return { user: immediate, sessionAuthenticated: true };
+    }
+
+    const checks = authLoading || !authInitialized ? 6 : 2;
+    for (let attempt = 0; attempt < checks; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 200 + attempt * 150));
+      const delayed = getResolvedUser();
+      if (delayed) {
+        return { user: delayed, sessionAuthenticated: true };
+      }
+    }
+
+    let sessionAuthenticated = false;
+    try {
+      const sessionResponse = await fetch('/api/auth/session', {
+        method: 'GET',
+        cache: 'no-store',
+        credentials: 'include',
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      });
+
+      if (sessionResponse.ok) {
+        const payload = await sessionResponse.json().catch(() => null);
+        sessionAuthenticated = payload?.authenticated === true;
+      }
+    } catch {
+      sessionAuthenticated = false;
+    }
+
+    if (sessionAuthenticated) {
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      const synced = getResolvedUser();
+      if (synced) {
+        return { user: synced, sessionAuthenticated: true };
+      }
+    }
+
+    return { user: null, sessionAuthenticated };
+  };
 
   const handleUseOutfit = async (outfitIndex: number, outfitTitle: string) => {
-    if (!userId || !recommendationId || isAnonymous) {
-      
+    if (!recommendationId) {
       toast({
-        title: "Sign in required",
-        description: "Please sign in to save outfits",
-        action: (
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => window.location.href = '/auth'}
-          >
-            Sign In
-          </Button>
-        ),
+        title: "Recommendation unavailable",
+        description: "Please generate a fresh recommendation and try again.",
+        variant: "destructive",
       });
+      return;
+    }
+
+    const { user: resolvedUser, sessionAuthenticated } = await resolveLikeAuthUser();
+    if (!resolvedUser) {
+      if (sessionAuthenticated) {
+        toast({
+          title: "Restoring your session",
+          description: "You appear to be signed in. Please tap Like again in a moment.",
+        });
+      } else {
+        showSignInRequiredToast();
+      }
       return;
     }
 
     setIsUsing(outfitIndex);
     try {
-      // Get the current user's ID token for server authentication
-      const currentUser = auth.currentUser;
-      if (!currentUser) {
-        throw new Error('User not authenticated');
+      let idToken: string;
+      try {
+        idToken = await resolvedUser.getIdToken();
+      } catch {
+        idToken = await resolvedUser.getIdToken(true);
       }
-      
-      const idToken = await currentUser.getIdToken();
-      
+
       const result = await saveRecommendationUsage(idToken, recommendationId, outfitIndex, outfitTitle);
       
       if (result.success) {
@@ -612,7 +685,7 @@ export function StyleAdvisorResults({
         
         // Also track for personalization (wrapped in try-catch to prevent errors)
         try {
-          await trackOutfitSelection(userId, recommendationId, `outfit${outfitIndex + 1}` as any);  // Fixed: Add + 1
+          await trackOutfitSelection(resolvedUser.uid, recommendationId, `outfit${outfitIndex + 1}` as any);  // Fixed: Add + 1
         } catch (trackError) {
           // Don't throw - this is non-critical, the like still succeeded
         }
@@ -654,7 +727,7 @@ export function StyleAdvisorResults({
           
           let likedOutfitResult: { success: boolean; message: string; isDuplicate?: boolean } | undefined;
           try {
-            likedOutfitResult = await saveLikedOutfit(userId, {
+            likedOutfitResult = await saveLikedOutfitWithSession(resolvedUser.uid, recommendationId, {
               imageUrl,
               title: outfit.title || 'Untitled Outfit',
               description: outfit.description || outfit.title || 'No description',
@@ -670,7 +743,7 @@ export function StyleAdvisorResults({
               itemShoppingLinks, // Save individual item links
               likedAt: Date.now(),
               recommendationId: recommendationId || `rec_${Date.now()}`,
-            });
+            }, { idToken });
           } catch (saveError) {
             throw saveError; // Re-throw to be caught by outer try-catch
           }
@@ -686,7 +759,7 @@ export function StyleAdvisorResults({
             // Update preferences from like (+2 weight)
             try {
               const season = getCurrentSeason();
-              const prefResult = await updatePreferencesFromLike(userId, outfit, {
+              const prefResult = await updatePreferencesFromLike(resolvedUser.uid, outfit, {
                 occasion: outfit.occasion || 'casual',
                 season,
               });
@@ -719,19 +792,7 @@ export function StyleAdvisorResults({
         }
       } else {
         if (result.error?.includes('sign in')) {
-          toast({
-            title: "Sign in required",
-            description: result.error,
-            action: (
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => window.location.href = '/auth'}
-              >
-                Sign In
-              </Button>
-            ),
-          });
+          showSignInRequiredToast(result.error);
         } else if (result.error?.includes('not found')) {
           toast({
             title: "Recommendation Expired",
@@ -797,10 +858,8 @@ export function StyleAdvisorResults({
 
     const fetchShoppingLinks = async () => {
       try {
-        setLoadingLinks(true);
-
         const maxConcurrency = 2;
-        const outfits = analysisResult.outfitRecommendations;
+        const outfits = analysisResult.outfitRecommendations.slice(0, 3);
         const updatedOutfits = [...outfits];
 
         let cursor = 0;
@@ -865,8 +924,6 @@ export function StyleAdvisorResults({
         setEnrichedOutfits(updatedOutfits);
       } catch (error) {
         // Keep original outfits on error
-      } finally {
-        setLoadingLinks(false);
       }
     };
 
@@ -958,12 +1015,289 @@ export function StyleAdvisorResults({
     }
   };
 
+  const renderOutfitCard = (
+    outfit: AnalyzeImageAndProvideRecommendationsOutput['outfitRecommendations'][0],
+    index: number,
+    featured = false
+  ) => {
+    const outfitWithLinks = outfit as OutfitWithLinks;
+    const outfitId = `outfit${index + 1}` as 'outfit1' | 'outfit2' | 'outfit3';
+    const isSelected = selectedOutfit === outfitId;
+    const isLoading = isUsing === index;
+    const matchPercent = typeof outfitWithLinks.matchScore === 'number' ? Math.round(outfitWithLinks.matchScore) : null;
+
+    const imgUrl = generatedImageUrls[index] || '';
+    const imgState = imageStates.get(index) || 'placeholder';
+    const hasOutfitError = (outfit as any).error && !(outfit as any).shoppingError;
+    const isDataUri = imgUrl.startsWith('data:');
+    const isPlaceholderUrl = imgUrl.includes('via.placeholder.com');
+    const hasRealImage = imgUrl && !isPlaceholderUrl && !hasOutfitError;
+
+    const colorHexes = (outfit.colorPalette || []).map((c: ColorValue) => {
+      if (typeof c === 'object' && c !== null && 'hex' in c) return c.hex || '#808080';
+      if (typeof c === 'string') {
+        const hm = c.match(/#[0-9A-Fa-f]{6}/);
+        if (hm) return hm[0];
+        if (c.startsWith('#')) return c;
+        return convertColorNameToHex(c);
+      }
+      return '#808080';
+    }).slice(0, 6) as string[];
+
+    const gradientBg = colorHexes.length >= 2
+      ? `linear-gradient(135deg, ${colorHexes.join(', ')})`
+      : colorHexes.length === 1
+      ? colorHexes[0]
+      : 'linear-gradient(135deg, #6366f1, #a78bfa, #c4b5fd)';
+
+    const rankLabels = ['Top Pick', 'Look 2', 'Look 3'];
+    const rankColors = [
+      'bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/35',
+      'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/25',
+      'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/25',
+    ];
+
+    const hasEnhanced = enhancedShoppingLinks && enhancedShoppingLinks[index];
+    const hasLegacy = !hasEnhanced && outfitWithLinks.items && outfitWithLinks.items.length > 0;
+
+    return (
+      <motion.div
+        key={`${outfit.title}-${index}`}
+        variants={itemVariants}
+        className={`relative rounded-2xl overflow-hidden bg-card/80 dark:bg-card/50 backdrop-blur-xl border transition-all duration-300 ${
+          featured
+            ? 'border-accent/45 ring-1 ring-accent/25 shadow-md'
+            : 'border-border/20 shadow-sm hover:shadow-md'
+        }`}
+      >
+        <div className="h-1.5 w-full" style={{ background: gradientBg }} />
+
+        <div className="p-4 sm:p-6 space-y-5">
+          <div className="flex flex-wrap items-start gap-2.5">
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${rankColors[index] || rankColors[2]}`}>
+              {rankLabels[index] || `Look ${index + 1}`}
+            </span>
+            <h4 className="text-lg sm:text-xl font-bold text-foreground flex-1 min-w-0 break-words">
+              {outfit.title}
+            </h4>
+            {matchPercent !== null && (
+              <span className="inline-flex items-center rounded-full border border-accent/30 bg-accent/10 px-2.5 py-1 text-xs font-semibold text-accent">
+                {matchPercent}% Match
+              </span>
+            )}
+            <MatchScoreBadge
+              matchScore={outfitWithLinks.matchScore}
+              matchCategory={outfitWithLinks.matchCategory}
+              showScore={true}
+            />
+          </div>
+
+          <p
+            className="text-sm text-foreground/85 leading-relaxed"
+            style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}
+          >
+            {truncateText(outfitWithLinks.explanation || outfit.description || 'A polished look tailored to your selected style context.', 240)}
+          </p>
+
+          <div className={`grid gap-5 ${hasRealImage ? 'md:grid-cols-[minmax(190px,1.4fr)_2fr]' : ''}`}>
+            {hasRealImage && (
+              <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden shadow-sm border border-border/20">
+                {imgState === 'loading' && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse z-10">
+                    <div className="text-center space-y-2">
+                      <div className="w-7 h-7 border-[3px] border-accent border-t-transparent rounded-full animate-spin mx-auto" />
+                      <p className="text-xs text-muted-foreground">Loading...</p>
+                    </div>
+                  </div>
+                )}
+                {imgState === 'error' && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted/80 z-10">
+                    <div className="text-center space-y-2 p-4">
+                      <Eye className="w-8 h-8 text-muted-foreground/40 mx-auto" />
+                      <p className="text-xs text-muted-foreground">Couldn&apos;t load image</p>
+                    </div>
+                  </div>
+                )}
+                <Image
+                  src={imgUrl}
+                  alt={`Generated outfit: ${outfit.title}`}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 280px"
+                  style={{ objectFit: 'cover' }}
+                  className={`transition-opacity duration-300 ${imgState === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+                  data-ai-hint="fashion outfit"
+                  priority={index === 0}
+                  onLoad={() => handleImageLoad(index)}
+                  onError={() => handleImageError(index)}
+                  unoptimized={
+                    isDataUri ||
+                    imgUrl.includes('together.xyz') ||
+                    imgUrl.includes('together.ai') ||
+                    imgUrl.includes('replicate.delivery')
+                  }
+                />
+              </div>
+            )}
+
+            <div className="space-y-4 min-w-0">
+              {colorHexes.length > 0 && (
+                <div className="space-y-2">
+                  <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Palette className="w-3.5 h-3.5" /> Color Palette
+                  </h5>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {colorHexes.map((hex, ci) => (
+                      <button
+                        key={ci}
+                        onClick={() => {
+                          navigator.clipboard?.writeText(hex);
+                          toast({ title: 'Copied!', description: `${hex} copied to clipboard`, duration: 1500 });
+                        }}
+                        className="w-8 h-8 rounded-lg border border-white/30 shadow-sm hover:scale-105 transition-all duration-200 cursor-pointer"
+                        style={{ backgroundColor: hex }}
+                        title={hex}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {outfit.items && outfit.items.length > 0 && (
+                <div className="space-y-2">
+                  <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Shirt className="w-3.5 h-3.5" /> Items
+                  </h5>
+                  <ul className="space-y-1.5 list-disc pl-5 text-sm text-foreground/85">
+                    {outfit.items.slice(0, 5).map((item, idx) => (
+                      <li key={idx} className="leading-relaxed break-words">{truncateText(item, 90)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {(hasEnhanced || hasLegacy) && (
+            <details className="group/shop pt-4 border-t border-border/15">
+              <summary className="flex items-center justify-between cursor-pointer list-none py-2 select-none [&::-webkit-details-marker]:hidden">
+                <h5 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4 text-accent" />
+                  Shop This Look
+                </h5>
+                <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open/shop:rotate-180" />
+              </summary>
+
+              <div className="pt-3 space-y-2">
+                {hasEnhanced ? (
+                  <EnhancedShoppingSection
+                    shoppingLinks={enhancedShoppingLinks![index]}
+                    outfitTitle={outfit.title}
+                  />
+                ) : (
+                  <>
+                    {outfitWithLinks.items!.map((item, itemIndex) => {
+                      let itemLinks;
+                      if (outfitWithLinks.itemShoppingLinks && outfitWithLinks.itemShoppingLinks[itemIndex]) {
+                        itemLinks = outfitWithLinks.itemShoppingLinks[itemIndex];
+                      } else {
+                        itemLinks = optimizeItemLinks(item, gender);
+                      }
+
+                      return (
+                        <div
+                          key={itemIndex}
+                          className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-accent/5 hover:bg-accent/10 transition-all duration-200 border border-border/10 hover:border-accent/30"
+                        >
+                          <span className="text-xs font-medium text-foreground flex-1 min-w-0 truncate">{item}</span>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            <a href={itemLinks.amazon} target="_blank" rel="noopener noreferrer" onClick={() => handleShoppingClick('amazon', item)}
+                              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 transition-all border border-orange-200/40">
+                              <ShoppingBag className="w-3 h-3" /><span className="hidden sm:inline">Amazon</span>
+                            </a>
+                            <a href={itemLinks.tatacliq} target="_blank" rel="noopener noreferrer" onClick={() => handleShoppingClick('tatacliq', item)}
+                              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 transition-all border border-blue-200/40">
+                              <ShoppingCart className="w-3 h-3" /><span className="hidden sm:inline">CLiQ</span>
+                            </a>
+                            <a href={itemLinks.myntra} target="_blank" rel="noopener noreferrer" onClick={() => handleShoppingClick('myntra', item)}
+                              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 transition-all border border-pink-200/40">
+                              <ShoppingBag className="w-3 h-3" /><span className="hidden sm:inline">Myntra</span>
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            </details>
+          )}
+
+          <div className="pt-4 border-t border-border/15 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3">
+            {!authChecked ? (
+              <button
+                disabled
+                className="flex-1 min-w-0 sm:min-w-[140px] px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-semibold text-sm bg-accent/25 text-accent-foreground/80 cursor-wait flex items-center justify-center gap-2"
+              >
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                Checking session...
+              </button>
+            ) : (
+              <>
+                <button
+                  onClick={() => handleUseOutfit(index, outfit.title)}
+                  disabled={isSelected || isLoading}
+                  className={`flex-1 min-w-0 sm:min-w-[120px] px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
+                    isSelected
+                      ? 'bg-green-500/15 text-green-600 dark:text-green-400 border-2 border-green-500/40 cursor-default'
+                      : isLoading
+                      ? 'bg-accent/50 text-white cursor-wait'
+                      : 'bg-gradient-to-r from-accent to-accent/80 text-white shadow-sm hover:shadow-md'
+                  }`}
+                >
+                  {isLoading ? (
+                    <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
+                  ) : isSelected ? (
+                    <><Check className="w-4 h-4" /> Liked</>
+                  ) : (
+                    <><Heart className="w-4 h-4" /> Like</>
+                  )}
+                </button>
+
+                {isSelected && (
+                  <button
+                    onClick={() => handleMarkAsWorn(index, outfit)}
+                    disabled={wornOutfits.has(index) || isMarkingWorn === index}
+                    className={`px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-2 ${
+                      wornOutfits.has(index)
+                        ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-2 border-purple-500/40 cursor-default'
+                        : isMarkingWorn === index
+                        ? 'bg-purple-500/50 text-white cursor-wait'
+                        : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm hover:shadow-md'
+                    }`}
+                  >
+                    {isMarkingWorn === index ? (
+                      <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving...</>
+                    ) : wornOutfits.has(index) ? (
+                      <><Check className="w-4 h-4" /> Worn</>
+                    ) : (
+                      <><Shirt className="w-4 h-4" /> I Wore This!</>
+                    )}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+
   return (
     <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="visible"
-      className="w-full space-y-8 relative"
+      className="w-full space-y-6 relative"
     >
       <header className="text-center">
         <h2 className="text-3xl md:text-4xl font-headline font-bold text-foreground flex items-center justify-center gap-3">
@@ -971,427 +1305,146 @@ export function StyleAdvisorResults({
         </h2>
       </header>
 
-      <motion.div variants={itemVariants} className={cardClasses}>
-        <div className="p-5 sm:p-6 space-y-6">
-          <div className="space-y-1.5">
-            <h3 className="font-bold text-xl text-foreground flex items-center gap-2">
-              <Palette className="text-accent" /> Your Current Color Combination
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              A concise color-direction brief with practical upgrades for your look.
-            </p>
+      {isAnonymous && authChecked && (
+        <Alert className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800 rounded-2xl">
+          <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between flex-1 gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">Sign in to save outfits</h4>
+              <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Create an account to save your favorite outfits and improve recommendation accuracy over time.</p>
+            </div>
+            <Button
+              variant="default"
+              size="sm"
+              className="whitespace-nowrap"
+              onClick={() => {
+                window.location.href = '/auth';
+              }}
+            >
+              Sign In Now
+            </Button>
           </div>
+        </Alert>
+      )}
 
-          <div className="rounded-xl border border-border/30 bg-accent/5 p-4 sm:p-5 space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Professional Read</p>
-                <p className="text-sm leading-relaxed text-foreground/90">{colorCombinationInsight}</p>
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fit and Styling Feedback</p>
-                <p className="text-sm leading-relaxed text-muted-foreground">{analysisResult.feedback}</p>
-              </div>
+      {topPick && (
+        <section className="space-y-3">
+          <h3 className="font-bold text-2xl text-foreground flex items-center gap-2">
+            <Star className="text-accent w-5 h-5" /> Top Pick Recommendation
+          </h3>
+          {renderOutfitCard(topPick, 0, true)}
+        </section>
+      )}
+
+      {secondaryLooks.length > 0 && (
+        <section className="space-y-3">
+          <h3 className="font-bold text-xl text-foreground flex items-center gap-2">
+            <Shirt className="text-accent w-5 h-5" /> Other Outfit Recommendations
+          </h3>
+          <div className="space-y-4">
+            {secondaryLooks.map((outfit, idx) => renderOutfitCard(outfit, idx + 1, false))}
+          </div>
+        </section>
+      )}
+
+      <motion.div variants={itemVariants} className={cardClasses}>
+        <div className="p-4 sm:p-6 space-y-4">
+          <h3 className="font-bold text-xl text-foreground flex items-center gap-2">
+            <Sparkles className="text-accent" /> Style Insights
+          </h3>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="rounded-xl border border-border/30 bg-accent/5 p-4 space-y-3">
+              <h4 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">Professional Read</h4>
+              <ul className="space-y-2">
+                {professionalReadPoints.map((point, idx) => (
+                  <li key={idx} className="flex gap-2 text-sm text-foreground/90 leading-relaxed">
+                    <span className="text-emerald-500">✔</span>
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="rounded-xl border border-border/30 bg-background/70 p-4 space-y-3">
+              <h4 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">Fit and Styling Feedback</h4>
+              <ul className="space-y-2">
+                {fitFeedbackPoints.map((point, idx) => (
+                  <li key={idx} className="flex gap-2 text-sm text-foreground/85 leading-relaxed">
+                    <span className="text-accent">→</span>
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
 
-          {suggestedAccentColors.length > 0 && (
-            <div className="rounded-xl border border-border/30 bg-background/60 p-4 sm:p-5 space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                  Quick Upgrade Colors To Try
-                </p>
-                <span className="text-[11px] text-muted-foreground">Tap any card to copy hex</span>
-              </div>
-
-              <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                {suggestedAccentColors.map((color, idx) => (
-                  <button
-                    key={`${color.displayName}-${idx}`}
-                    onClick={() => {
-                      navigator.clipboard?.writeText(color.displayHex);
-                      toast({ title: 'Copied!', description: `${color.displayName} (${color.displayHex}) copied to clipboard`, duration: 1500 });
-                    }}
-                    className="group inline-flex w-full items-center gap-3 rounded-lg border border-border/30 bg-card/80 px-3 py-2.5 text-left transition-colors hover:bg-card"
-                    title={`${color.displayName} (${color.displayHex})`}
-                  >
-                    <span
-                      className="h-8 w-8 shrink-0 rounded-md border border-black/10 shadow-sm"
-                      style={{ backgroundColor: color.displayHex }}
-                    />
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold text-foreground truncate">{color.displayName}</span>
-                      <span className="block text-xs text-muted-foreground truncate">{color.displayHex}</span>
-                    </span>
-                  </button>
+          {highlightPoints.length > 0 && (
+            <div className="rounded-xl border border-border/30 bg-background/60 p-4 space-y-2">
+              <h4 className="text-sm font-semibold uppercase tracking-[0.12em] text-muted-foreground">Highlights</h4>
+              <ul className="space-y-1.5">
+                {highlightPoints.map((point, idx) => (
+                  <li key={idx} className="flex gap-2 text-sm text-muted-foreground leading-relaxed">
+                    <span className="text-accent">•</span>
+                    <span>{point}</span>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           )}
         </div>
       </motion.div>
-      
-      <Separator />
 
-      {/* Feedback and Color Suggestions - Top Section */}
-      <div className="grid md:grid-cols-2 gap-8">
+      {(weatherSummary || weatherForecast) && (
         <motion.div variants={itemVariants} className={cardClasses}>
-          <div className="p-6">
-            <h3 className="font-bold text-xl mb-4 text-foreground flex items-center gap-2"><Sparkles className="text-accent" /> Highlights</h3>
-            <ul className="space-y-2 list-disc pl-5 text-muted-foreground">
-              {analysisResult.highlights.map((highlight, i) => (
-                <li key={i}>{highlight}</li>
-              ))}
-            </ul>
+          <div className="p-4 sm:p-6 space-y-4">
+            <h3 className="font-bold text-xl text-foreground flex items-center gap-2">
+              <CloudSun className="text-accent" /> Weather
+            </h3>
+
+            <div className="grid gap-4 md:grid-cols-[minmax(170px,220px)_1fr]">
+              <div className="rounded-xl border border-border/30 bg-accent/5 p-4 space-y-2">
+                <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground font-semibold">Current Conditions</p>
+                <div className="flex items-end gap-2">
+                  <Thermometer className="w-4 h-4 text-accent mb-1" />
+                  <span className="text-2xl font-bold text-foreground">{typeof weatherTemp === 'number' ? `${Math.round(weatherTemp)}°C` : '--'}</span>
+                </div>
+                <p className="text-sm text-foreground/90">{truncateText(weatherCondition, 45)}</p>
+                {weatherLocation && <p className="text-xs text-muted-foreground">{weatherLocation}</p>}
+              </div>
+
+              <div className="rounded-xl border border-border/30 bg-background/70 p-4 space-y-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-muted-foreground font-semibold">Weekly Summary</p>
+                <p className="text-sm text-foreground/90 leading-relaxed">{truncateText(weeklyWeatherSummary, 220)}</p>
+                <ul className="space-y-2">
+                  {weatherActionTips.map((tip, idx) => (
+                    <li key={idx} className="flex gap-2 text-sm text-muted-foreground leading-relaxed">
+                      <span className="text-accent">→</span>
+                      <span>{tip}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
           </div>
         </motion.div>
-      </div>
+      )}
 
       <motion.div variants={itemVariants} className={cardClasses}>
-        <div className="p-6">
-          <h3 className="font-bold text-xl mb-4 text-foreground flex items-center gap-2"><PenTool className="text-accent" /> Pro Tip</h3>
-          <p className="text-muted-foreground italic">&ldquo;{analysisResult.notes}&rdquo;</p>
+        <div className="p-4 sm:p-6 space-y-3">
+          <h3 className="font-bold text-xl text-foreground flex items-center gap-2">
+            <PenTool className="text-accent" /> Pro Tip
+          </h3>
+          <ul className="space-y-2">
+            {(proTipPoints.length > 0 ? proTipPoints : [truncateText(analysisResult.notes, 120)]).map((point, idx) => (
+              <li key={idx} className="flex gap-2 text-sm text-muted-foreground leading-relaxed">
+                <span className="text-accent">→</span>
+                <span>{point}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       </motion.div>
-
-      {/* Outfit Recommendations - Full Width with Side-by-Side Layout */}
-      <div className="space-y-6">
-        <h3 className="font-bold text-2xl text-foreground flex items-center gap-2">
-          <Shirt className="text-accent" /> Your Outfit Recommendations
-        </h3>
-
-        {/* Anonymous User Alert */}
-        {isAnonymous && authChecked && (
-          <Alert className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
-            <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between flex-1 gap-3">
-              <div>
-                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">Sign in to save outfits</h4>
-                <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Create an account to save your favorite outfits and get personalized recommendations!</p>
-              </div>
-              <Button 
-                variant="default" 
-                size="sm"
-                className="whitespace-nowrap"
-                onClick={() => {
-                  window.location.href = '/auth';
-                }}
-              >
-                Sign In Now →
-              </Button>
-            </div>
-          </Alert>
-        )}
-
-        {enrichedOutfits.map((outfit, index) => {
-          const outfitWithLinks = outfit as OutfitWithLinks;
-          const outfitId = `outfit${index + 1}` as 'outfit1' | 'outfit2' | 'outfit3';
-          const isSelected = selectedOutfit === outfitId;
-          const isLoading = isUsing === index;
-
-          const imgUrl = generatedImageUrls[index] || '';
-          const imgState = imageStates.get(index) || 'placeholder';
-          const hasOutfitError = (outfit as any).error && !(outfit as any).shoppingError;
-          const isDataUri = imgUrl.startsWith('data:');
-          const isPlaceholderUrl = imgUrl.includes('via.placeholder.com');
-          const hasRealImage = imgUrl && !isPlaceholderUrl && !hasOutfitError; // Data URIs ARE real images!
-
-          // Extract color hex codes for accent strip + compact dots
-          const colorHexes = (outfit.colorPalette || []).map((c: ColorValue) => {
-            if (typeof c === 'object' && c !== null && 'hex' in c) return c.hex || '#808080';
-            if (typeof c === 'string') {
-              const hm = c.match(/#[0-9A-Fa-f]{6}/);
-              if (hm) return hm[0];
-              if (c.startsWith('#')) return c;
-              return convertColorNameToHex(c);
-            }
-            return '#808080';
-          }).slice(0, 6) as string[];
-
-          const gradientBg = colorHexes.length >= 2
-            ? `linear-gradient(135deg, ${colorHexes.join(', ')})`
-            : colorHexes.length === 1
-            ? colorHexes[0]
-            : 'linear-gradient(135deg, #6366f1, #a78bfa, #c4b5fd)';
-
-          const rankLabels = ['✦ Top Pick', '✦✦ Look 2', '✦✦✦ Look 3'];
-          const rankColors = [
-            'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
-            'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
-            'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
-          ];
-
-          return (
-            <motion.div
-              key={index}
-              variants={itemVariants}
-              className="group relative rounded-2xl overflow-hidden bg-card/70 dark:bg-card/50 backdrop-blur-xl border border-border/20 shadow-lg hover:shadow-2xl transition-shadow duration-300"
-            >
-              {/* ── Color Accent Strip ── */}
-              <div className="h-1.5 w-full" style={{ background: gradientBg }} />
-
-              {/* ── Card Body ── */}
-              <div className="p-5 sm:p-6 space-y-5">
-
-                {/* ── Header Row: Rank + Title + Match Badge ── */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${rankColors[index] || rankColors[2]}`}>
-                    {rankLabels[index] || `Look ${index + 1}`}
-                  </span>
-                  <h4 className="text-lg sm:text-xl font-bold text-foreground flex-1 min-w-0 truncate">
-                    {outfit.title}
-                  </h4>
-                  {outfitWithLinks.strategyBucket && (
-                    <Badge
-                      variant="outline"
-                      className={`${getStrategyBadgeClasses(outfitWithLinks.strategyBucket)} font-medium px-3 py-1 text-xs`}
-                    >
-                      {outfitWithLinks.strategyLabel || `${outfitWithLinks.strategyBucket}% Strategy`}
-                    </Badge>
-                  )}
-                  <MatchScoreBadge
-                    matchScore={outfitWithLinks.matchScore}
-                    matchCategory={outfitWithLinks.matchCategory}
-                    showScore={true}
-                  />
-                </div>
-
-                {/* ── Explanation ── */}
-                {outfitWithLinks.explanation && (
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-accent/5 border border-accent/15 text-sm text-muted-foreground">
-                    <Lightbulb className="w-4 h-4 text-accent mt-0.5 flex-shrink-0" />
-                    <p>{outfitWithLinks.explanation}</p>
-                  </div>
-                )}
-
-                {/* ── Main Content Grid ── */}
-                <div className={`grid gap-5 ${hasRealImage ? 'md:grid-cols-[minmax(200px,2fr)_3fr]' : ''}`}>
-
-                  {/* Image column — only for real AI-generated images */}
-                  {hasRealImage && (
-                    <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden shadow-md border border-border/20">
-                      {imgState === 'loading' && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-muted animate-pulse z-10">
-                          <div className="text-center space-y-2">
-                            <div className="w-7 h-7 border-[3px] border-accent border-t-transparent rounded-full animate-spin mx-auto" />
-                            <p className="text-xs text-muted-foreground">Loading…</p>
-                          </div>
-                        </div>
-                      )}
-                      {imgState === 'error' && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-muted/80 z-10">
-                          <div className="text-center space-y-2 p-4">
-                            <Eye className="w-8 h-8 text-muted-foreground/40 mx-auto" />
-                            <p className="text-xs text-muted-foreground">Couldn&apos;t load image</p>
-                          </div>
-                        </div>
-                      )}
-                      <Image
-                        src={imgUrl}
-                        alt={`Generated outfit: ${outfit.title}`}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 300px"
-                        style={{ objectFit: 'cover' }}
-                        className={`transition-opacity duration-300 ${imgState === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
-                        data-ai-hint="fashion outfit"
-                        priority={index === 0}
-                        onLoad={() => handleImageLoad(index)}
-                        onError={() => handleImageError(index)}
-                        unoptimized={
-                          isDataUri ||
-                          imgUrl.includes('together.xyz') ||
-                          imgUrl.includes('together.ai') ||
-                          imgUrl.includes('replicate.delivery')
-                        }
-                      />
-                    </div>
-                  )}
-
-                  {/* Details column */}
-                  <div className="space-y-4 min-w-0">
-                    {/* Description */}
-                    {outfit.description && (
-                      <p className="text-sm text-foreground/85 leading-relaxed">
-                        {outfit.description}
-                      </p>
-                    )}
-
-                    {/* Color Palette — compact inline dots */}
-                    {colorHexes.length > 0 && (
-                      <div className="space-y-1.5">
-                        <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                          <Palette className="w-3.5 h-3.5" /> Palette
-                        </h5>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {colorHexes.map((hex, ci) => (
-                            <button
-                              key={ci}
-                              onClick={() => {
-                                navigator.clipboard?.writeText(hex);
-                                toast({ title: 'Copied!', description: `${hex} copied to clipboard`, duration: 1500 });
-                              }}
-                              className="w-8 h-8 rounded-lg border-2 border-white/30 shadow-sm hover:scale-110 hover:shadow-md transition-all duration-200 cursor-pointer"
-                              style={{ backgroundColor: hex }}
-                              title={hex}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Outfit Items — chips/tags */}
-                    {outfit.items && outfit.items.length > 0 && (
-                      <div className="space-y-1.5">
-                        <h5 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                          <Shirt className="w-3.5 h-3.5" /> Items
-                        </h5>
-                        <div className="flex flex-wrap gap-1.5">
-                          {outfit.items.map((item, idx) => (
-                            <span
-                              key={idx}
-                              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-muted/60 text-foreground/80 border border-border/20 hover:bg-accent/10 hover:border-accent/30 transition-colors"
-                            >
-                              {item}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* ── Shopping Links — collapsible ── */}
-                {(() => {
-                  const hasEnhanced = enhancedShoppingLinks && enhancedShoppingLinks[index];
-                  const hasLegacy = !hasEnhanced && outfitWithLinks.items && outfitWithLinks.items.length > 0;
-
-                  if (!hasEnhanced && !hasLegacy) return null;
-
-                  return (
-                    <details className="group/shop pt-4 border-t border-border/15">
-                      <summary className="flex items-center justify-between cursor-pointer list-none py-2 select-none [&::-webkit-details-marker]:hidden">
-                        <h5 className="text-sm font-bold text-foreground flex items-center gap-2">
-                          <ShoppingBag className="w-4 h-4 text-accent" />
-                          Shop This Look
-                        </h5>
-                        <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform group-open/shop:rotate-180" />
-                      </summary>
-
-                      <div className="pt-3 space-y-2">
-                        {hasEnhanced ? (
-                          <EnhancedShoppingSection
-                            shoppingLinks={enhancedShoppingLinks![index]}
-                            outfitTitle={outfit.title}
-                          />
-                        ) : (
-                          <>
-                            {outfitWithLinks.items!.map((item, itemIndex) => {
-                              let itemLinks;
-                              if (outfitWithLinks.itemShoppingLinks && outfitWithLinks.itemShoppingLinks[itemIndex]) {
-                                itemLinks = outfitWithLinks.itemShoppingLinks[itemIndex];
-                              } else {
-                                // Use optimized query builder instead of raw AI text
-                                itemLinks = optimizeItemLinks(item, gender);
-                              }
-
-                              return (
-                                <div
-                                  key={itemIndex}
-                                  className="flex items-center justify-between gap-3 p-2.5 rounded-lg bg-accent/5 hover:bg-accent/10 transition-all duration-200 border border-border/10 hover:border-accent/30"
-                                >
-                                  <span className="text-xs font-medium text-foreground flex-1 min-w-0 truncate">{item}</span>
-                                  <div className="flex gap-1.5 flex-shrink-0">
-                                    <a href={itemLinks.amazon} target="_blank" rel="noopener noreferrer" onClick={() => handleShoppingClick('amazon', item)}
-                                      className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 hover:scale-105 transition-all border border-orange-200/40">
-                                      <ShoppingBag className="w-3 h-3" /><span className="hidden sm:inline">Amazon</span>
-                                    </a>
-                                    <a href={itemLinks.tatacliq} target="_blank" rel="noopener noreferrer" onClick={() => handleShoppingClick('tatacliq', item)}
-                                      className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 hover:scale-105 transition-all border border-blue-200/40">
-                                      <ShoppingCart className="w-3 h-3" /><span className="hidden sm:inline">CLiQ</span>
-                                    </a>
-                                    <a href={itemLinks.myntra} target="_blank" rel="noopener noreferrer" onClick={() => handleShoppingClick('myntra', item)}
-                                      className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 hover:scale-105 transition-all border border-pink-200/40">
-                                      <ShoppingBag className="w-3 h-3" /><span className="hidden sm:inline">Myntra</span>
-                                    </a>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </>
-                        )}
-                      </div>
-                    </details>
-                  );
-                })()}
-
-                {/* ── Action Bar ── */}
-                <div className="pt-4 border-t border-border/15 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2 sm:gap-3">
-                  {(!userId || !recommendationId || isAnonymous) ? (
-                    <button
-                      onClick={() => {
-                        toast({
-                          title: "Sign in required",
-                          description: "Create an account to save outfits and get personalized recommendations!",
-                          action: <Button variant="outline" size="sm" onClick={() => window.location.href = '/auth'}>Sign In</Button>,
-                        });
-                      }}
-                      className="flex-1 min-w-0 sm:min-w-[140px] px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-semibold text-sm bg-gradient-to-r from-accent to-accent/80 text-white shadow-md hover:shadow-lg hover:scale-[1.02] transition-all duration-200 flex items-center justify-center gap-2"
-                    >
-                      <Heart className="w-4 h-4" /> Like This Outfit
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => handleUseOutfit(index, outfit.title)}
-                        disabled={isSelected || isLoading}
-                        className={`flex-1 min-w-0 sm:min-w-[120px] px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
-                          isSelected
-                            ? 'bg-green-500/15 text-green-600 dark:text-green-400 border-2 border-green-500/40 cursor-default'
-                            : isLoading
-                            ? 'bg-accent/50 text-white cursor-wait'
-                            : 'bg-gradient-to-r from-accent to-accent/80 text-white shadow-md hover:shadow-lg hover:scale-[1.02]'
-                        }`}
-                      >
-                        {isLoading ? (
-                          <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</>
-                        ) : isSelected ? (
-                          <><Check className="w-4 h-4" /> Liked ✓</>
-                        ) : (
-                          <><Heart className="w-4 h-4" /> Like</>
-                        )}
-                      </button>
-
-                      {/* Mark as Worn — only visible after Like */}
-                      {isSelected && (
-                        <button
-                          onClick={() => handleMarkAsWorn(index, outfit)}
-                          disabled={wornOutfits.has(index) || isMarkingWorn === index}
-                          className={`px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-2 ${
-                            wornOutfits.has(index)
-                              ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-2 border-purple-500/40 cursor-default'
-                              : isMarkingWorn === index
-                              ? 'bg-purple-500/50 text-white cursor-wait'
-                              : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md hover:shadow-lg hover:scale-[1.02]'
-                          }`}
-                        >
-                          {isMarkingWorn === index ? (
-                            <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Saving…</>
-                          ) : wornOutfits.has(index) ? (
-                            <><Check className="w-4 h-4" /> Worn ✓</>
-                          ) : (
-                            <><Shirt className="w-4 h-4" /> I Wore This!</>
-                          )}
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
     </motion.div>
   );
 }

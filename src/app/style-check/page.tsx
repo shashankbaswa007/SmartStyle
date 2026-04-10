@@ -10,7 +10,6 @@ import UsageLimitMeter from '@/components/UsageLimitMeter';
 import FirstTimeTip from '@/components/FirstTimeTip';
 import PageStatusAlert from '@/components/PageStatusAlert';
 import QuickStartEmptyState from '@/components/QuickStartEmptyState';
-import { USAGE_LIMITS } from '@/lib/usage-limits';
 import { Calendar, Shirt } from 'lucide-react';
 
 // Lazy load heavy components for better performance
@@ -140,7 +139,7 @@ export default function StyleCheckPage() {
                 title="Daily Analysis Limit"
                 subtitle="Analyses remaining today"
                 remaining={usage?.remaining}
-                limit={usage?.limit ?? USAGE_LIMITS.recommend}
+                limit={usage?.limit}
                 resetAt={usage?.resetAt}
                 className="rounded-lg"
                 isLoading={usageLoading}

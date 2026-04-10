@@ -139,12 +139,12 @@ const AnalyzeImageAndProvideRecommendationsOutputSchema = z.object({
     isExistingMatch: z.boolean().describe('True if the outfit matches well with current styling trends and user preferences.'),
     items: z.array(z.string()).describe('A list of 2-4 clothing items for this outfit.'),
     matchScore: z.number().min(0).max(100).optional().describe('Post-processed interest alignment score for this recommendation.'),
-    matchCategory: z.enum(['perfect', 'great', 'exploring']).optional().describe('Post-processed recommendation category aligned with adaptive 70-20-10.'),
-    strategyBucket: z.enum(['70', '20', '10']).optional().describe('Adaptive 70-20-10 bucket assignment for the recommendation rank.'),
+    matchCategory: z.enum(['perfect', 'great', 'exploring']).optional().describe('Post-processed recommendation category aligned with strict 70-20-10.'),
+    strategyBucket: z.enum(['70', '20', '10']).optional().describe('Strict 70-20-10 bucket assignment for the recommendation rank.'),
     strategyLabel: z.string().optional().describe('Human-readable label for the assigned strategy bucket.'),
     explanation: z.string().optional().describe('Short explanation for why this recommendation sits in its current strategy bucket.'),
-    position: z.number().int().min(1).max(3).optional().describe('One-based ranking position after adaptive diversification ordering.'),
-  })).describe('A list of 2-3 complete outfit recommendations.'),
+    position: z.number().int().min(1).max(3).optional().describe('One-based ranking position after strict 70-20-10 ordering.'),
+  })).length(3).describe('A list of exactly 3 complete outfit recommendations.'),
   notes: z.string().describe('A concluding pro tip or a gentle style note in a single sentence.'),
   imagePrompt: z.string().describe('A concise, descriptive prompt for an image generation model, describing the top recommended outfit on a mannequin or person.'),
   provider: z.enum(['gemini', 'groq']).optional().describe('The AI provider used for recommendations (gemini or groq).'),
@@ -235,7 +235,7 @@ const prompt = ai.definePrompt({
   {{#if validationFeedback}}
   **SCHEMA VALIDATION NOTICE:** {{{validationFeedback}}}
   - You previously omitted required JSON fields. This time produce a VALID JSON object that satisfies the output schema exactly.
-  - Include every required top-level field: feedback, highlights, colorSuggestions (8-10 entries), outfitRecommendations (2-3 entries each with title, description, colorPalette (hex only), imagePrompt, shoppingLinks {amazon, tatacliq, myntra}, isExistingMatch, items), notes, imagePrompt.
+  - Include every required top-level field: feedback, highlights, colorSuggestions (8-10 entries), outfitRecommendations (exactly 3 entries each with title, description, colorPalette (hex only), imagePrompt, shoppingLinks {amazon, tatacliq, myntra}, isExistingMatch, items), notes, imagePrompt.
   - If exact shopping URLs are unknown, set the value to null but keep the keys.
   - Do not stop mid-sentence; provide complete content for each field.
   {{/if}}
@@ -335,7 +335,7 @@ const prompt = ai.definePrompt({
     Explicit profile preferences (favorite/disliked colors/styles): 30%
     Current session context (occasion/genre/weather/current outfit): 40%
 
-  **Adaptive 70-20-10 recommendation mandate:**
+  **Strict 70-20-10 recommendation mandate:**
   - Recommendation 1 (70): safest match to strongest signals and proven interests.
   - Recommendation 2 (20): adjacent option with moderate exploration.
   - Recommendation 3 (10): controlled exploratory option that still respects hard constraints.
@@ -376,7 +376,7 @@ const prompt = ai.definePrompt({
   - Include colors that work across different seasons and occasions
   - Make each color perceptually distinct (avoid similar shades like #FF0000 and #FF1111)
   
-  **Outfit Recommendations (2-3 complete looks):**
+  **Outfit Recommendations (EXACTLY 3 complete looks):**
   Each outfit must be meticulously detailed and ready-to-wear:
   
   **OUTFIT STRUCTURE:**
@@ -469,7 +469,7 @@ const prompt = ai.definePrompt({
     * Cover the spectrum: neutrals, brights, pastels, earth tones, jewel tones
     * Example: {"name": "Midnight Navy", "hex": "#1A237E", "reason": "Creates sophisticated depth and complements your warm skin tone beautifully"}
   
-  - **outfitRecommendations**: EXACTLY 2-3 complete outfits (required)
+  - **outfitRecommendations**: EXACTLY 3 complete outfits (required)
     Each outfit object MUST include ALL of these fields:
     * **title** (string): Creative, aspirational outfit name
     * **description** (string): MANDATORY - MUST BE EXACTLY 3 COMPLETE SENTENCES (minimum 100 characters total)
@@ -538,7 +538,7 @@ const prompt = ai.definePrompt({
   ✅ feedback is 2-3 complete paragraphs (not empty)
   ✅ highlights is array with 2-3 strings (not empty)
   ✅ colorSuggestions is array with 8-10 color objects (each with name, hex, reason)
-  ✅ outfitRecommendations is array with 2-3 outfit objects (each complete with ALL required fields)
+  ✅ outfitRecommendations is array with exactly 3 outfit objects (each complete with ALL required fields)
   ✅ colorPalette in each outfit contains ONLY hex codes, NO color names
   ✅ notes is one complete sentence
   ✅ imagePrompt is detailed and complete
@@ -561,7 +561,7 @@ const GEMINI_MODEL_SEQUENCE: GeminiModelCandidate[] = [
 
 const GEMINI_MODEL_CONFIG = {
   temperature: 0.9,        // INCREASED: Higher for more diverse, creative recommendations
-  maxOutputTokens: 1800,   // Reduced further - 2-3 outfits don't need 2048 tokens
+  maxOutputTokens: 1800,   // Reduced further - 3 outfits don't need 2048 tokens
   topK: 40,                // INCREASED: Higher for more diverse token selection
   topP: 0.95,              // INCREASED: Higher for more varied outputs
 };

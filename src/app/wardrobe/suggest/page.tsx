@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, Suspense, useCallback } from 'react';
+import { useState, useEffect, Suspense, useCallback, useRef } from 'react';
+import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -26,7 +27,16 @@ import { toast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useSearchParams } from 'next/navigation';
+import UsageLimitMeter from '@/components/UsageLimitMeter';
 import { getWardrobeItems, WardrobeItemData } from '@/lib/wardrobeService';
+import { RATE_LIMIT_SCOPES } from '@/lib/usage-limits';
+import { fetchUsageStatus } from '@/lib/usage-status-service';
+import {
+  emitUsageConsumed,
+  parseUsageConsumedStorageValue,
+  USAGE_CONSUMED_EVENT,
+  USAGE_CONSUMED_STORAGE_KEY,
+} from '@/lib/usage-events';
 
 interface OutfitItem {
   itemId: string;
@@ -57,6 +67,17 @@ interface OutfitResult {
   };
 }
 
+type UsageWindow = {
+  remaining: number;
+  limit: number;
+  resetAt?: string;
+};
+
+function debugWardrobeSuggestUsage(message: string, context: Record<string, unknown>): void {
+  if (process.env.NODE_ENV === 'production') return;
+  console.info('[usage-sync][wardrobe-suggest]', message, context);
+}
+
 export default function WardrobeSuggestPage() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>}>
@@ -79,6 +100,67 @@ function WardrobeSuggestPageContent() {
   const [isOutfitLimitReached, setIsOutfitLimitReached] = useState(false);
   const [wardrobeItemsMap, setWardrobeItemsMap] = useState<Map<string, WardrobeItemData>>(new Map());
   const [expandedOutfit, setExpandedOutfit] = useState<number | null>(null);
+  const [outfitUsage, setOutfitUsage] = useState<UsageWindow | null>(null);
+  const [usageLoading, setUsageLoading] = useState(true);
+  const [usageError, setUsageError] = useState<string | null>(null);
+  const authUserRef = useRef<User | null>(null);
+  const lastForcedRefreshFailureAtRef = useRef(0);
+  const usageResetTimerRef = useRef<number | null>(null);
+
+  const clearUsageResetTimer = useCallback(() => {
+    if (usageResetTimerRef.current !== null) {
+      window.clearTimeout(usageResetTimerRef.current);
+      usageResetTimerRef.current = null;
+    }
+  }, []);
+
+  const fetchOutfitUsage = useCallback(async (userOverride?: User | null) => {
+    const activeUser = userOverride || authUserRef.current || auth.currentUser;
+    if (!activeUser) {
+      debugWardrobeSuggestUsage('no_active_user_for_usage_fetch', {});
+      setOutfitUsage(null);
+      setUsageError(null);
+      setUsageLoading(false);
+      setIsOutfitLimitReached(false);
+      return;
+    }
+
+    try {
+      setUsageLoading(true);
+      setUsageError(null);
+
+      const data = await fetchUsageStatus({
+        user: activeUser,
+        scopes: [RATE_LIMIT_SCOPES.wardrobeOutfit],
+        lastForcedRefreshFailureAtRef,
+      });
+
+      const windowUsage = data.usage[RATE_LIMIT_SCOPES.wardrobeOutfit] || null;
+      setOutfitUsage(windowUsage);
+      setIsOutfitLimitReached(Boolean(windowUsage && windowUsage.remaining <= 0));
+
+      debugWardrobeSuggestUsage('usage_applied_from_backend', {
+        activeUser: activeUser.uid,
+        requestId: data.requestId,
+        timezoneStrategy: data.timezoneStrategy,
+        usage: windowUsage,
+      });
+
+      if (!windowUsage) {
+        setUsageError('Daily limits are temporarily unavailable. Please retry.');
+      }
+    } catch (usageFetchError) {
+      const typed = usageFetchError as { message?: string };
+      setUsageError(typed?.message || 'Unable to load daily limit status. Please try again.');
+
+      debugWardrobeSuggestUsage('usage_fetch_failed', {
+        activeUser: activeUser.uid,
+        error: typed?.message || String(usageFetchError),
+      });
+    } finally {
+      setUsageLoading(false);
+    }
+  }, []);
 
   // Read context from URL params or sessionStorage
   const [activeContext, setActiveContext] = useState<ContextMode>(() => {
@@ -105,6 +187,68 @@ function WardrobeSuggestPageContent() {
     }
   }, [activeContext]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      authUserRef.current = user;
+      void fetchOutfitUsage(user);
+    });
+
+    return () => unsubscribe();
+  }, [fetchOutfitUsage]);
+
+  useEffect(() => {
+    const onUsageConsumed = (scope?: string) => {
+      if (scope === RATE_LIMIT_SCOPES.wardrobeOutfit) {
+        void fetchOutfitUsage(authUserRef.current);
+      }
+    };
+
+    const onUsageConsumedEvent = (event: Event) => {
+      const customEvent = event as CustomEvent<{ scope?: string }>;
+      onUsageConsumed(customEvent.detail?.scope);
+    };
+
+    const onUsageConsumedStorage = (event: StorageEvent) => {
+      if (event.key !== USAGE_CONSUMED_STORAGE_KEY || !event.newValue) {
+        return;
+      }
+
+      const detail = parseUsageConsumedStorageValue(event.newValue);
+      onUsageConsumed(detail?.scope);
+    };
+
+    window.addEventListener(USAGE_CONSUMED_EVENT, onUsageConsumedEvent as EventListener);
+    window.addEventListener('storage', onUsageConsumedStorage);
+    return () => {
+      window.removeEventListener(USAGE_CONSUMED_EVENT, onUsageConsumedEvent as EventListener);
+      window.removeEventListener('storage', onUsageConsumedStorage);
+    };
+  }, [fetchOutfitUsage]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    clearUsageResetTimer();
+
+    const resetAt = outfitUsage?.resetAt;
+    if (!resetAt) return;
+
+    const resetAtMs = new Date(resetAt).getTime();
+    if (Number.isNaN(resetAtMs)) return;
+
+    const delayMs = Math.max(0, resetAtMs - Date.now() + 1_200);
+    usageResetTimerRef.current = window.setTimeout(() => {
+      void fetchOutfitUsage(authUserRef.current);
+    }, delayMs);
+
+    return clearUsageResetTimer;
+  }, [clearUsageResetTimer, fetchOutfitUsage, outfitUsage?.resetAt]);
+
+  useEffect(() => {
+    return () => {
+      clearUsageResetTimer();
+    };
+  }, [clearUsageResetTimer]);
+
   // Build back link with context preserved
   const backToWardrobeHref = activeContext !== 'all'
     ? `/wardrobe?context=${activeContext}`
@@ -117,10 +261,13 @@ function WardrobeSuggestPageContent() {
 
   const handleGetSuggestions = async () => {
     if (isOutfitLimitReached) {
+      const resetHint = outfitUsage?.resetAt
+        ? ` Limit resets ${format(new Date(outfitUsage.resetAt), 'PPP p')}.`
+        : '';
       toast({
         variant: 'destructive',
         title: 'Daily limit reached',
-        description: 'You have used all outfit suggestions for today. Try again after reset.',
+        description: `You have used all outfit suggestions for today.${resetHint}`,
       });
       return;
     }
@@ -203,10 +350,31 @@ function WardrobeSuggestPageContent() {
         const errorData = await response.json().catch(() => null);
 
         if (response.status === 429) {
+          const resetAt = typeof errorData?.resetAt === 'string' ? errorData.resetAt : undefined;
+          const remaining =
+            typeof errorData?.remaining === 'number'
+              ? Math.max(0, Math.floor(errorData.remaining))
+              : 0;
+          const limitFromError =
+            typeof errorData?.limit === 'number'
+              ? Math.max(0, Math.floor(errorData.limit))
+              : undefined;
+
+          setOutfitUsage((previous) => {
+            const derivedLimit = limitFromError ?? previous?.limit;
+            if (typeof derivedLimit !== 'number') {
+              return previous ?? null;
+            }
+
+            return {
+              remaining: Math.min(remaining, derivedLimit),
+              limit: derivedLimit,
+              resetAt: resetAt || previous?.resetAt,
+            };
+          });
           setIsOutfitLimitReached(true);
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'wardrobe-outfit' } }));
-          }
+          emitUsageConsumed({ scope: RATE_LIMIT_SCOPES.wardrobeOutfit });
+          void fetchOutfitUsage(authUserRef.current);
         }
 
         const apiError = errorData?.message || errorData?.error;
@@ -220,15 +388,44 @@ function WardrobeSuggestPageContent() {
         throw new Error('Invalid outfit response from server');
       }
 
+      if (data?.usage && typeof data.usage === 'object') {
+        const usagePayload = data.usage as { remaining?: unknown; limit?: unknown; resetAt?: unknown };
+        const parsedRemaining =
+          typeof usagePayload.remaining === 'number'
+            ? usagePayload.remaining
+            : typeof usagePayload.remaining === 'string'
+              ? Number(usagePayload.remaining)
+              : NaN;
+        const parsedLimit =
+          typeof usagePayload.limit === 'number'
+            ? usagePayload.limit
+            : typeof usagePayload.limit === 'string'
+              ? Number(usagePayload.limit)
+              : NaN;
+        const parsedResetAt =
+          typeof usagePayload.resetAt === 'string' && !Number.isNaN(new Date(usagePayload.resetAt).getTime())
+            ? usagePayload.resetAt
+            : undefined;
+
+        if (Number.isFinite(parsedRemaining) && Number.isFinite(parsedLimit)) {
+          const limit = Math.max(0, Math.floor(parsedLimit));
+          const remaining = Math.max(0, Math.min(limit, Math.floor(parsedRemaining)));
+          setOutfitUsage({
+            remaining,
+            limit,
+            resetAt: parsedResetAt,
+          });
+          setIsOutfitLimitReached(remaining <= 0);
+        }
+      }
+
       setResult(data);
       // Auto-expand first outfit
       if (data.outfits && data.outfits.length > 0) {
         setExpandedOutfit(0);
       }
 
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('usage:consumed', { detail: { scope: 'wardrobe-outfit' } }));
-      }
+      emitUsageConsumed({ scope: RATE_LIMIT_SCOPES.wardrobeOutfit });
 
       toast({
         title: 'Outfits Generated!',
@@ -440,6 +637,26 @@ function WardrobeSuggestPageContent() {
                 </Popover>
                 <p className="text-sm text-violet-600">We&apos;ll check the weather forecast for that day!</p>
               </div>
+
+              <div className="rounded-lg p-1 bg-gradient-to-r from-violet-500/15 to-purple-500/15 border border-violet-200/40">
+                <UsageLimitMeter
+                  variant="wardrobe"
+                  title="Daily Outfit Suggestions"
+                  subtitle="Suggestions remaining today"
+                  remaining={outfitUsage?.remaining}
+                  limit={outfitUsage?.limit}
+                  resetAt={outfitUsage?.resetAt}
+                  className="rounded-md"
+                  isLoading={usageLoading}
+                />
+              </div>
+
+              {usageError && (
+                <Alert variant="destructive" className="border-red-200 bg-red-50/60">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{usageError}</AlertDescription>
+                </Alert>
+              )}
 
               <Button
                 onClick={handleGetSuggestions}

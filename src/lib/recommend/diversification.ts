@@ -50,22 +50,6 @@ function tokenize(input: string): string[] {
     .filter(Boolean);
 }
 
-function getAdaptiveTargets(input: RecommendRequest): [number, number, number] {
-  const hasUser = !!input.userId && input.userId !== 'anonymous';
-  const hasStrongContext = !!input.occasion && !!input.genre;
-  const hasColorSignal = Array.isArray(input.dressColors) && input.dressColors.length > 0;
-
-  if (hasUser && hasStrongContext && hasColorSignal) {
-    return [82, 64, 42];
-  }
-
-  if (hasUser || hasStrongContext) {
-    return [74, 56, 36];
-  }
-
-  return [66, 50, 32];
-}
-
 export function scoreOutfitInterestAlignment(outfit: Outfit, input: RecommendRequest): number {
   let score = 45;
 
@@ -103,55 +87,32 @@ export function scoreOutfitInterestAlignment(outfit: Outfit, input: RecommendReq
   return Math.max(0, Math.min(100, score));
 }
 
-export function orderOutfitsByAdaptive701020(
+export function orderOutfitsByStrict701020(
   outfits: Outfit[],
   input: RecommendRequest
 ): Outfit[] {
-  if (outfits.length <= 1) return outfits;
+  if (outfits.length <= 1) return outfits.slice(0, 3);
 
-  const scored = outfits.map((outfit) => ({
-    outfit,
-    score: scoreOutfitInterestAlignment(outfit, input),
-  }));
-
-  const targets = getAdaptiveTargets(input);
-  const selected: typeof scored = [];
-
-  for (const target of targets) {
-    const candidates = scored
-      .filter((entry) => !selected.some((picked) => picked.outfit.title === entry.outfit.title))
-      .sort((a, b) => {
-        const aDistance = Math.abs(a.score - target);
-        const bDistance = Math.abs(b.score - target);
-        if (aDistance !== bDistance) return aDistance - bDistance;
-        return b.score - a.score;
-      });
-
-    if (candidates.length > 0) {
-      selected.push(candidates[0]);
-    }
-  }
-
-  if (selected.length < Math.min(3, scored.length)) {
-    const remainder = scored
-      .filter((entry) => !selected.some((picked) => picked.outfit.title === entry.outfit.title))
-      .sort((a, b) => b.score - a.score);
-
-    for (const candidate of remainder) {
-      selected.push(candidate);
-      if (selected.length >= Math.min(3, scored.length)) break;
-    }
-  }
-
-  return selected.map((entry) => entry.outfit);
+  return outfits
+    .map((outfit) => ({
+      outfit,
+      score: scoreOutfitInterestAlignment(outfit, input),
+    }))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const titleCompare = normalize(a.outfit.title || '').localeCompare(normalize(b.outfit.title || ''));
+      if (titleCompare !== 0) return titleCompare;
+      return normalize(a.outfit.styleType || '').localeCompare(normalize(b.outfit.styleType || ''));
+    })
+    .slice(0, 3)
+    .map((entry) => entry.outfit);
 }
 
-export function enforceAdaptive701020(
+export function enforceStrict701020(
   analysis: AnalyzeImageAndProvideRecommendationsOutput,
   input: RecommendRequest
 ): AnalyzeImageAndProvideRecommendationsOutput {
-  const topThree = analysis.outfitRecommendations.slice(0, 3);
-  const ordered = orderOutfitsByAdaptive701020(topThree, input);
+  const ordered = orderOutfitsByStrict701020(analysis.outfitRecommendations, input);
 
   const withMetadata = ordered.map((outfit, index) => {
     const bucket = STRATEGY_BUCKETS[index] || '10';

@@ -33,16 +33,16 @@ export default function UsageLimitMeter({
   showIcon = true,
   isLoading = false,
 }: UsageLimitMeterProps) {
-  const hasUsageData = typeof remaining === 'number';
+  const hasUsageData = typeof remaining === 'number' && typeof limit === 'number';
   const isUnavailable = !isLoading && !hasUsageData;
-  const resolvedLimit = limit ?? 0;
-  const resolvedRemaining = hasUsageData ? remaining : resolvedLimit;
+  const resolvedLimit = hasUsageData ? Math.max(0, Math.floor(limit as number)) : 0;
+  const resolvedRemaining = hasUsageData
+    ? Math.max(0, Math.min(resolvedLimit, Math.floor(remaining as number)))
+    : 0;
   const safeLimit = Math.max(1, resolvedLimit);
-  const safeRemaining = hasUsageData
-    ? Math.max(0, Math.min(resolvedLimit, resolvedRemaining))
-    : safeLimit;
+  const safeRemaining = hasUsageData ? resolvedRemaining : 0;
   const used = Math.max(0, safeLimit - safeRemaining);
-  const usedPercent = hasUsageData ? Math.min(100, Math.round((used / safeLimit) * 100)) : 0;
+  const usedPercent = hasUsageData && resolvedLimit > 0 ? Math.min(100, Math.round((used / safeLimit) * 100)) : 0;
   const tone = hasUsageData ? getStatusTone(safeRemaining, safeLimit) : 'healthy';
 
   const isStyle = variant === 'styleCheck';
@@ -82,7 +82,7 @@ export default function UsageLimitMeter({
     ? new Date(resetAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
     : null;
 
-  const valueText = isLoading ? 'Checking...' : isUnavailable ? '--' : `${safeRemaining}/${safeLimit}`;
+  const valueText = isLoading ? 'Checking...' : isUnavailable ? '--' : `${resolvedRemaining}/${resolvedLimit}`;
   const availabilityText = isLoading
     ? 'Checking daily usage...'
     : isUnavailable

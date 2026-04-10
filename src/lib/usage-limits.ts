@@ -1,5 +1,9 @@
 export const DAILY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
+// Strategy: derive a local-day window from client offset, then keep that
+// window stable until it expires (no mid-window shifts from header jitter).
+export const USAGE_TIMEZONE_STRATEGY = 'client-offset-local-day-window-freeze' as const;
+
 const MAX_TZ_OFFSET_MINUTES = 14 * 60;
 
 export function normalizeTimezoneOffsetMinutes(value: number | undefined): number {

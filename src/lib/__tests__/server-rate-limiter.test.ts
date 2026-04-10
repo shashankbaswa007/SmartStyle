@@ -64,10 +64,10 @@ describe('server-rate-limiter production safeguards', () => {
     return import('../server-rate-limiter');
   }
 
-  it('uses in-memory reserve/status fallback in strict production when available', async () => {
+  it('uses in-memory reserve/status fallback only when explicitly enabled', async () => {
     const mod = await loadLimiterModule({
       nodeEnv: 'production',
-      allowInMemoryFallback: undefined,
+      allowInMemoryFallback: '1',
     });
 
     const reserveResult = await mod.reserveServerRateLimit('user-1', {
@@ -90,7 +90,7 @@ describe('server-rate-limiter production safeguards', () => {
     expect(statusResult.remaining).toBe(7);
   });
 
-  it('returns conservative exhausted status only when both backends are unavailable', async () => {
+  it('fails closed for status when persistent backends are unavailable and fallback is disabled', async () => {
     const mod = await loadLimiterModule({
       nodeEnv: 'production',
       allowInMemoryFallback: undefined,
@@ -107,15 +107,13 @@ describe('server-rate-limiter production safeguards', () => {
     expect(reserveResult.remaining).toBe(0);
     expect(reserveResult.message).toContain('temporarily unavailable');
 
-    const statusResult = await mod.getServerRateLimitStatus('user-1', {
-      scope: 'recommend',
-      maxRequests: 10,
-      windowMs: 60_000,
-    });
-
-    expect(statusResult.limit).toBe(10);
-    expect(statusResult.used).toBe(10);
-    expect(statusResult.remaining).toBe(0);
+    await expect(
+      mod.getServerRateLimitStatus('user-1', {
+        scope: 'recommend',
+        maxRequests: 10,
+        windowMs: 60_000,
+      })
+    ).rejects.toThrow('Persistent rate limit status backend unavailable');
   });
 
   it('uses in-memory fallback outside strict production mode', async () => {
@@ -264,6 +262,128 @@ describe('server-rate-limiter production safeguards', () => {
 
     expect(result.used).toBe(8);
     expect(result.remaining).toBe(2);
+    dateNowSpy.mockRestore();
+  });
+
+  it('keeps the existing active window when computed window start differs', async () => {
+    const now = 1_700_000_030_000;
+    const existingWindowStart = now - 20_000;
+    const dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(now);
+
+    process.env = {
+      ...originalEnv,
+      NODE_ENV: 'test',
+    };
+
+    const updateMock = jest.fn(async () => undefined);
+
+    jest.doMock('@/lib/distributed-rate-limiter', () => ({
+      checkDistributedRateLimit: jest.fn(async () => null),
+      getDistributedRateLimitStatus: jest.fn(async () => null),
+    }));
+
+    jest.doMock('@/lib/firebase-admin', () => ({
+      __esModule: true,
+      default: {
+        firestore: jest.fn(() => ({
+          collection: jest.fn(() => ({
+            doc: jest.fn(() => ({
+              get: jest.fn(async () => ({
+                exists: true,
+                data: () => ({
+                  count: 4,
+                  windowStart: { toMillis: () => existingWindowStart },
+                  reservations: {},
+                }),
+              })),
+              update: updateMock,
+            })),
+          })),
+        })),
+      },
+    }));
+
+    jest.doMock('@/lib/rate-limiter', () => ({
+      checkRateLimit: jest.fn(),
+      getRateLimitStatus: jest.fn(),
+    }));
+
+    const mod = await import('../server-rate-limiter');
+    const result = await mod.getServerRateLimitStatus('user-window-freeze', {
+      scope: 'recommend',
+      maxRequests: 10,
+      windowMs: 60_000,
+      timezoneOffsetMinutes: 240,
+    });
+
+    expect(result.used).toBe(4);
+    expect(result.remaining).toBe(6);
+    expect(result.resetAt.getTime()).toBe(existingWindowStart + 60_000);
+    expect(updateMock).not.toHaveBeenCalled();
+
+    dateNowSpy.mockRestore();
+  });
+
+  it('uses Firestore reset window when both backends are available', async () => {
+    const now = 1_700_200_000_000;
+    const dateNowSpy = jest.spyOn(Date, 'now').mockReturnValue(now);
+
+    process.env = {
+      ...originalEnv,
+      NODE_ENV: 'test',
+    };
+
+    const distributedResetAt = new Date(now + 30_000);
+    const firestoreWindowStart = now - (now % 60_000);
+    const firestoreResetAt = new Date(firestoreWindowStart + 60_000);
+
+    jest.doMock('@/lib/distributed-rate-limiter', () => ({
+      checkDistributedRateLimit: jest.fn(async () => null),
+      getDistributedRateLimitStatus: jest.fn(async () => ({
+        limit: 10,
+        used: 6,
+        remaining: 4,
+        resetAt: distributedResetAt,
+      })),
+    }));
+
+    jest.doMock('@/lib/firebase-admin', () => ({
+      __esModule: true,
+      default: {
+        firestore: jest.fn(() => ({
+          collection: jest.fn(() => ({
+            doc: jest.fn(() => ({
+              get: jest.fn(async () => ({
+                exists: true,
+                data: () => ({
+                  count: 6,
+                  windowStart: { toMillis: () => firestoreWindowStart },
+                  reservations: {},
+                }),
+              })),
+              update: jest.fn(async () => undefined),
+            })),
+          })),
+        })),
+      },
+    }));
+
+    jest.doMock('@/lib/rate-limiter', () => ({
+      checkRateLimit: jest.fn(),
+      getRateLimitStatus: jest.fn(),
+    }));
+
+    const mod = await import('../server-rate-limiter');
+    const result = await mod.getServerRateLimitStatus('user-reset-tie', {
+      scope: 'recommend',
+      maxRequests: 10,
+      windowMs: 60_000,
+    });
+
+    expect(result.used).toBe(6);
+    expect(result.remaining).toBe(4);
+    expect(result.resetAt.getTime()).toBe(firestoreResetAt.getTime());
+
     dateNowSpy.mockRestore();
   });
 });

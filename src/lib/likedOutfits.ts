@@ -27,6 +27,12 @@ export interface LikedOutfitData {
   recommendationId: string;
 }
 
+export interface LikedOutfitSaveResult {
+  success: boolean;
+  message: string;
+  isDuplicate?: boolean;
+}
+
 const LIKED_OUTFIT_PLACEHOLDER_IMAGE = 'https://via.placeholder.com/800x1000/6366f1/ffffff?text=Outfit+Preview';
 
 function normalizeLikedOutfitImageUrl(imageUrl?: string): string {
@@ -40,6 +46,116 @@ function normalizeLikedOutfitImageUrl(imageUrl?: string): string {
   }
 }
 
+async function parseLikeApiResponse(response: Response): Promise<LikedOutfitSaveResult> {
+  let payload: any = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (response.ok && payload?.success) {
+    return {
+      success: true,
+      message: payload.message || 'Outfit saved to likes successfully',
+      isDuplicate: payload.isDuplicate === true,
+    };
+  }
+
+  if (response.status === 401) {
+    return {
+      success: false,
+      message: payload?.error || 'Please sign in to save outfits to your favorites',
+      isDuplicate: false,
+    };
+  }
+
+  return {
+    success: false,
+    message: payload?.error || payload?.message || 'Failed to save outfit',
+    isDuplicate: false,
+  };
+}
+
+/**
+ * Save a liked outfit through the authenticated backend route first.
+ * Falls back to the legacy client Firestore path if the backend is unavailable.
+ */
+export async function saveLikedOutfitWithSession(
+  userId: string,
+  recommendationId: string,
+  outfitData: LikedOutfitData,
+  options?: { idToken?: string | null }
+): Promise<LikedOutfitSaveResult> {
+  const currentUser = auth.currentUser;
+
+  const executeRequest = async (token: string | null): Promise<Response> => {
+    return fetch('/api/likes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      credentials: 'include',
+      cache: 'no-store',
+      body: JSON.stringify({
+        recommendationId,
+        outfit: {
+          imageUrl: outfitData.imageUrl,
+          title: outfitData.title,
+          description: outfitData.description,
+          items: outfitData.items || [],
+          colorPalette: outfitData.colorPalette || [],
+          styleType: outfitData.styleType,
+          occasion: outfitData.occasion,
+          shoppingLinks: outfitData.shoppingLinks || {
+            amazon: null,
+            tatacliq: null,
+            myntra: null,
+          },
+          itemShoppingLinks: outfitData.itemShoppingLinks || [],
+          likedAt: outfitData.likedAt || Date.now(),
+        },
+      }),
+    });
+  };
+
+  try {
+    let token: string | null = options?.idToken ?? null;
+
+    if (!token && currentUser && currentUser.uid === userId && !currentUser.isAnonymous) {
+      try {
+        token = await currentUser.getIdToken();
+      } catch {
+        token = null;
+      }
+    }
+
+    let response = await executeRequest(token);
+
+    if (response.status === 401 && currentUser && currentUser.uid === userId && !currentUser.isAnonymous) {
+      try {
+        const refreshedToken = await currentUser.getIdToken(true);
+        response = await executeRequest(refreshedToken);
+      } catch {
+        // Fall through to cookie-only retry below.
+      }
+    }
+
+    if (response.status === 401 && token) {
+      response = await executeRequest(null);
+    }
+
+    if (!response.ok && (response.status === 500 || response.status === 503)) {
+      return await saveLikedOutfit(userId, outfitData);
+    }
+
+    return parseLikeApiResponse(response);
+  } catch {
+    return await saveLikedOutfit(userId, outfitData);
+  }
+}
+
 /**
  * Save a liked outfit to Firebase with duplicate prevention
  * @param userId - The user's ID
@@ -49,7 +165,7 @@ function normalizeLikedOutfitImageUrl(imageUrl?: string): string {
 export async function saveLikedOutfit(
   userId: string,
   outfitData: LikedOutfitData
-): Promise<{ success: boolean; message: string; isDuplicate?: boolean }> {
+): Promise<LikedOutfitSaveResult> {
   
   try {
 

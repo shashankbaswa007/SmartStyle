@@ -37,6 +37,9 @@ type AnalysisShape = {
     colorPalette: string[];
     imagePrompt: string;
     styleType?: string;
+    matchCategory?: 'perfect' | 'great' | 'exploring';
+    strategyBucket?: '70' | '20' | '10';
+    position?: number;
   }>;
   notes: string;
   imagePrompt: string;
@@ -61,6 +64,9 @@ function validAnalysis(): AnalysisShape {
         colorPalette: ['#1E3A8A', '#F8F5F0', '#166534'],
         imagePrompt: 'Tailored overshirt and knit layered with trousers in navy ivory green',
         styleType: 'smart-casual',
+        strategyBucket: '70',
+        matchCategory: 'perfect',
+        position: 1,
       },
       {
         title: 'Weekend Relaxed',
@@ -70,6 +76,9 @@ function validAnalysis(): AnalysisShape {
         colorPalette: ['#334155', '#E2E8F0', '#0F766E'],
         imagePrompt: 'Relaxed weekend outfit with camp collar shirt and denim',
         styleType: 'relaxed',
+        strategyBucket: '20',
+        matchCategory: 'great',
+        position: 2,
       },
       {
         title: 'Evening Contrast',
@@ -79,6 +88,9 @@ function validAnalysis(): AnalysisShape {
         colorPalette: ['#111827', '#FAFAF9', '#7C2D12'],
         imagePrompt: 'Evening contrast outfit with dark blazer and crisp tee',
         styleType: 'elevated',
+        strategyBucket: '10',
+        matchCategory: 'exploring',
+        position: 3,
       },
     ],
     notes: 'Good base proportions.',
@@ -96,6 +108,13 @@ function expectJobError(fn: () => void, code: string): void {
 }
 
 describe('recommend async job validation', () => {
+  it('charges usage only for completed recommendation jobs', () => {
+    expect(__testables.shouldChargeUsageForRecommendTerminalState('completed')).toBe(true);
+    expect(__testables.shouldChargeUsageForRecommendTerminalState('failed')).toBe(false);
+    expect(__testables.shouldChargeUsageForRecommendTerminalState('queued')).toBe(false);
+    expect(__testables.shouldChargeUsageForRecommendTerminalState('processing')).toBe(false);
+  });
+
   it('accepts a complete recommendation payload', () => {
     const payload = validAnalysis();
     expect(() => __testables.validateAnalysisResponse(payload as any)).not.toThrow();
@@ -156,6 +175,14 @@ describe('recommend async job validation', () => {
     payload.outfitRecommendations[1].title = payload.outfitRecommendations[0].title;
     payload.outfitRecommendations[1].styleType = payload.outfitRecommendations[0].styleType;
     payload.outfitRecommendations[2].styleType = payload.outfitRecommendations[0].styleType;
+
+    expectJobError(() => __testables.validateDiversificationConformance(payload as any), 'INVALID_RESPONSE');
+  });
+
+  it('rejects invalid strict 70-20-10 ordering metadata as INVALID_RESPONSE', () => {
+    const payload = validAnalysis();
+    payload.outfitRecommendations[1].strategyBucket = '10';
+    payload.outfitRecommendations[1].matchCategory = 'exploring';
 
     expectJobError(() => __testables.validateDiversificationConformance(payload as any), 'INVALID_RESPONSE');
   });
