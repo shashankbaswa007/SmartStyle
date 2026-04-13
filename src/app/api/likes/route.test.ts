@@ -37,7 +37,7 @@ jest.mock('@/lib/logger', () => ({
   logger: mockLogger,
 }));
 
-import { POST } from './route';
+import { POST, GET } from './route';
 
 function createMockFirestore({
   duplicateDocs,
@@ -233,5 +233,140 @@ describe('POST /api/likes', () => {
     );
 
     expect(response.status).toBe(403);
+  });
+});
+
+describe('GET /api/likes', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockValidateRequestOrigin.mockReturnValue(true);
+    mockVerifyFirebaseIdToken.mockResolvedValue('user-1');
+  });
+
+  it('retrieves liked outfits for authenticated user', async () => {
+    const mockOutfits = [
+      {
+        id: 'like-1',
+        title: 'Outfit 1',
+        imageUrl: 'https://example.com/1.jpg',
+        likedAt: 1000000,
+      },
+      {
+        id: 'like-2',
+        title: 'Outfit 2',
+        imageUrl: 'https://example.com/2.jpg',
+        likedAt: 2000000,
+      },
+    ];
+
+    const get = jest.fn().mockResolvedValue({
+      forEach: (callback: (doc: any) => void) => {
+        mockOutfits.forEach((outfit) => {
+          callback({
+            id: outfit.id,
+            data: () => outfit,
+          });
+        });
+      },
+    });
+    const orderBy = jest.fn().mockReturnValue({
+      limit: jest.fn().mockReturnValue({ get }),
+    });
+
+    const likedOutfitsCollection = { orderBy };
+    const userDoc = {
+      collection: jest.fn().mockReturnValue(likedOutfitsCollection),
+    };
+    const usersCollection = {
+      doc: jest.fn().mockReturnValue(userDoc),
+    };
+
+    mockGetFirestore.mockReturnValue({
+      collection: jest.fn().mockReturnValue(usersCollection),
+    });
+
+    const response = await GET(
+      new Request('http://localhost/api/likes', {
+        method: 'GET',
+        headers: {
+          authorization: 'Bearer valid-token',
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.success).toBe(true);
+    expect(payload.data).toHaveLength(2);
+    expect(payload.count).toBe(2);
+  });
+
+  it('returns empty array when user has no liked outfits', async () => {
+    const get = jest.fn().mockResolvedValue({
+      forEach: jest.fn(),
+    });
+    const orderBy = jest.fn().mockReturnValue({
+      limit: jest.fn().mockReturnValue({ get }),
+    });
+
+    const likedOutfitsCollection = { orderBy };
+    const userDoc = {
+      collection: jest.fn().mockReturnValue(likedOutfitsCollection),
+    };
+    const usersCollection = {
+      doc: jest.fn().mockReturnValue(userDoc),
+    };
+
+    mockGetFirestore.mockReturnValue({
+      collection: jest.fn().mockReturnValue(usersCollection),
+    });
+
+    const response = await GET(
+      new Request('http://localhost/api/likes', {
+        method: 'GET',
+        headers: {
+          authorization: 'Bearer valid-token',
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.success).toBe(true);
+    expect(payload.data).toHaveLength(0);
+    expect(payload.count).toBe(0);
+  });
+
+  it('returns 401 for unauthorized requests', async () => {
+    mockVerifyFirebaseIdToken.mockResolvedValue(null);
+
+    const response = await GET(
+      new Request('http://localhost/api/likes', {
+        method: 'GET',
+      })
+    );
+
+    expect(response.status).toBe(401);
+    const payload = await response.json();
+    expect(payload.code).toBe('UNAUTHORIZED');
+  });
+
+  it('returns 503 when Firestore is unavailable', async () => {
+    mockGetFirestore.mockImplementation(() => {
+      throw new Error('Firestore unavailable');
+    });
+
+    const response = await GET(
+      new Request('http://localhost/api/likes', {
+        method: 'GET',
+        headers: {
+          authorization: 'Bearer valid-token',
+        },
+      })
+    );
+
+    expect(response.status).toBe(503);
+    const payload = await response.json();
+    expect(payload.code).toBe('LIKES_BACKEND_UNAVAILABLE');
   });
 });

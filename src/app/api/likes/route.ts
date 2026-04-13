@@ -271,3 +271,103 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export async function GET(request: Request) {
+  const requestId = request.headers.get('x-request-id') || `likes-get-${Date.now()}`;
+
+  try {
+    const auth = await resolveAuthenticatedUser(request, requestId);
+    logger.info('Likes GET: authenticated request', {
+      requestId,
+      userId: auth.uid,
+      source: auth.source,
+    });
+
+    let db;
+    try {
+      db = getFirestore();
+    } catch (error) {
+      logger.error('Likes GET: Firestore Admin unavailable', {
+        requestId,
+        error,
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Likes service is temporarily unavailable',
+          code: 'LIKES_BACKEND_UNAVAILABLE',
+        },
+        { status: 503 }
+      );
+    }
+
+    const likesRef = db.collection('users').doc(auth.uid).collection('likedOutfits');
+    const snapshot = await likesRef.orderBy('likedAt', 'desc').limit(200).get();
+
+    const outfits: any[] = [];
+    snapshot.forEach((doc) => {
+      try {
+        const data = doc.data();
+        // Validate essential fields before adding
+        if (data && data.title) {
+          outfits.push({
+            id: doc.id,
+            ...data,
+          });
+        }
+      } catch (error) {
+        logger.warn('Likes GET: Failed to parse document', {
+          requestId,
+          docId: doc.id,
+          error,
+        });
+        // Skip malformed documents
+      }
+    });
+
+    logger.info('Likes GET: retrieved outfits', {
+      requestId,
+      userId: auth.uid,
+      count: outfits.length,
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        data: outfits,
+        count: outfits.length,
+      },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      }
+    );
+  } catch (error) {
+    if (error instanceof AuthError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: error.message,
+          code: 'UNAUTHORIZED',
+        },
+        { status: error.status }
+      );
+    }
+
+    logger.error('Likes GET failed unexpectedly', {
+      requestId,
+      error,
+    });
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: 'Failed to retrieve liked outfits',
+        code: 'LIKE_RETRIEVAL_FAILED',
+      },
+      { status: 500 }
+    );
+  }
+}

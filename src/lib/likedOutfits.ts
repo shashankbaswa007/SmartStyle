@@ -372,16 +372,16 @@ export async function getLikedOutfits(userId: string): Promise<LikedOutfitData[]
             id: doc.id, // Include the document ID
           });
         }
-      } catch {
+      } catch (error) {
+        console.warn('[getLikedOutfits] Failed to parse document:', error);
         // Skip malformed documents
       }
     });
     
-    
     return outfits;
   } catch (error) {
-    
-    // Return empty array instead of throwing
+    console.error('[getLikedOutfits] Error fetching liked outfits:', error);
+    // Return empty array instead of throwing, but log the error
     return [];
   }
 }
