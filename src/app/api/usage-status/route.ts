@@ -203,6 +203,28 @@ export async function GET(request: Request) {
       );
     }
 
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const persistentBackendUnavailable =
+      errorMessage.includes('Persistent rate limit status backend unavailable') ||
+      errorMessage.includes('Firebase Admin SDK not initialized');
+
+    if (persistentBackendUnavailable) {
+      logger.error('Usage status backend unavailable', {
+        requestId,
+        error,
+      });
+
+      return NextResponse.json(
+        {
+          success: false,
+          requestId,
+          error: 'Usage backend is temporarily unavailable',
+          code: 'USAGE_BACKEND_UNAVAILABLE',
+        },
+        { status: 503, headers: NO_STORE_HEADERS }
+      );
+    }
+
     logger.error('Usage status fetch failed', {
       requestId,
       error,

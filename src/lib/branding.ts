@@ -40,3 +40,4 @@ export const BRAND = {
 
 export const INTRO_STORAGE_KEY = 'smartstyle_intro_seen';
 export const INTRO_REPLAY_QUERY = 'replayIntro';
+export const APP_LOADER_SESSION_KEY = 'smartstyle:app-loader:shown';

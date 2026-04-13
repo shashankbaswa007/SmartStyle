@@ -178,6 +178,29 @@ export async function fetchUsageStatus(params: {
       hasUser: Boolean(params.user),
     });
 
+    if (response.status === 503) {
+      let payload: unknown = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+
+      const payloadObject = payload && typeof payload === 'object'
+        ? (payload as Record<string, unknown>)
+        : {};
+      const code = typeof payloadObject.code === 'string' ? payloadObject.code : undefined;
+
+      if (code === 'USAGE_BACKEND_UNAVAILABLE') {
+        throw {
+          status: response.status,
+          message:
+            'Daily usage backend is unavailable in production. Configure FIREBASE_SERVICE_ACCOUNT_KEY (or Redis fallback) in Vercel and redeploy.',
+          retryAfter: response.headers.get('retry-after'),
+        } as HttpLikeError;
+      }
+    }
+
     throw {
       status: response.status,
       message: 'Unable to load daily limits right now. Please retry.',

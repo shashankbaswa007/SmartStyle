@@ -265,11 +265,6 @@ export function useWardrobeData(): UseWardrobeDataResult {
   }, [fetchWardrobeItems, userId]);
 
   useEffect(() => {
-    if (!userId) return;
-    void fetchUsageLimits(userId);
-  }, [fetchUsageLimits, userId]);
-
-  useEffect(() => {
     return () => {
       if (!userId || !hasTaskStartedRef.current || hasTaskCompletedRef.current) return;
 

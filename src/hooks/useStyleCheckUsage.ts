@@ -35,7 +35,6 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
   const [usage, setUsage] = useState<UsageWindow>(null);
   const [usageLoading, setUsageLoading] = useState(true);
   const [usageError, setUsageError] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
   const hasTaskStartedRef = useRef(false);
   const hasTaskCompletedRef = useRef(false);
   const lastForcedRefreshFailureAtRef = useRef(0);
@@ -109,7 +108,6 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       authUserRef.current = user;
       if (!user) {
-        setUserId(null);
         userIdRef.current = null;
         hasTaskStartedRef.current = false;
         hasTaskCompletedRef.current = false;
@@ -119,7 +117,6 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
         return;
       }
 
-      setUserId(user.uid);
       userIdRef.current = user.uid;
 
       void logUxEvent(user.uid, 'task_started', {
@@ -150,11 +147,6 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
       unsubscribe();
     };
   }, [fetchUsageForUser]);
-
-  useEffect(() => {
-    if (!userId) return;
-    void fetchUsageForUser(userId);
-  }, [fetchUsageForUser, userId]);
 
   useEffect(() => {
     const onUsageConsumed = (scope?: string) => {

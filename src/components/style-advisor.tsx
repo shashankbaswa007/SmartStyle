@@ -27,7 +27,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { validateImageForStyleAnalysis, validateImageProperties } from "@/lib/image-validation";
 import { RATE_LIMIT_SCOPES } from "@/lib/usage-limits";
 import { emitUsageConsumed } from "@/lib/usage-events";
-import { RecommendationProgress } from './RecommendationProgress';
+import SmartStyleLoader from '@/components/SmartStyleLoader';
 import { OutfitSkeletonGrid } from './OutfitCardSkeleton';
 
 // Processing step interface
@@ -2457,16 +2457,11 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           {/* Enhanced Progress Indicator */}
           <Card className="w-full shadow-lg animate-slide-up-fade bg-card/60 dark:bg-card/40 backdrop-blur-xl">
             <CardContent className="p-4 sm:p-6 md:p-8">
-              <RecommendationProgress currentStage={progressStage} />
-              <motion.p
-                key={loadingMessage}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25 }}
-                className="text-sm text-muted-foreground text-center mt-4"
-              >
-                {loadingMessage}
-              </motion.p>
+              <SmartStyleLoader
+                mode="operation"
+                stage={progressStage}
+                statusText={loadingMessage || 'Analyzing your style...'}
+              />
               {isAutoRetrying && (
                 <p className="text-xs text-amber-600 text-center mt-2 font-medium">
                   Retrying automatically (1/1)...
