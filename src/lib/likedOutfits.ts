@@ -46,35 +46,48 @@ function normalizeLikedOutfitImageUrl(imageUrl?: string): string {
   }
 }
 
-async function parseLikeApiResponse(response: Response): Promise<LikedOutfitSaveResult> {
-  let payload: any = null;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
-  }
+async function parseLikeApiResponse(response: Response, payload?: any): Promise<LikedOutfitSaveResult> {
+  const resolvedPayload = payload ?? await parseJsonPayload(response);
 
-  if (response.ok && payload?.success) {
+  if (response.ok && resolvedPayload?.success) {
     return {
       success: true,
-      message: payload.message || 'Outfit saved to likes successfully',
-      isDuplicate: payload.isDuplicate === true,
+      message: resolvedPayload.message || 'Outfit saved to likes successfully',
+      isDuplicate: resolvedPayload.isDuplicate === true,
     };
   }
 
   if (response.status === 401) {
     return {
       success: false,
-      message: payload?.error || 'Please sign in to save outfits to your favorites',
+      message: resolvedPayload?.error || 'Please sign in to save outfits to your favorites',
       isDuplicate: false,
     };
   }
 
   return {
     success: false,
-    message: payload?.error || payload?.message || 'Failed to save outfit',
+    message: resolvedPayload?.error || resolvedPayload?.message || 'Failed to save outfit',
     isDuplicate: false,
   };
+}
+
+async function parseJsonPayload(response: Response): Promise<any> {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+function isLikesBackendUnavailable(payload: any): boolean {
+  if (!payload || typeof payload !== 'object') return false;
+  return payload.code === 'LIKES_BACKEND_UNAVAILABLE' || payload.backendAvailable === false;
+}
+
+function shouldFallbackToClientLikes(response: Response, payload: any): boolean {
+  if (response.status === 500 || response.status === 503) return true;
+  return isLikesBackendUnavailable(payload);
 }
 
 /**
@@ -146,11 +159,21 @@ export async function saveLikedOutfitWithSession(
       response = await executeRequest(null);
     }
 
-    if (!response.ok && (response.status === 500 || response.status === 503)) {
+    const payload = await parseJsonPayload(response);
+
+    if (shouldFallbackToClientLikes(response, payload)) {
       return await saveLikedOutfit(userId, outfitData);
     }
 
-    return parseLikeApiResponse(response);
+    if (response.ok && payload?.success) {
+      return {
+        success: true,
+        message: payload.message || 'Outfit saved to likes successfully',
+        isDuplicate: payload.isDuplicate === true,
+      };
+    }
+
+    return parseLikeApiResponse(response, payload);
   } catch {
     return await saveLikedOutfit(userId, outfitData);
   }
@@ -340,6 +363,61 @@ export async function markLikedOutfitAsWorn(
   }
 }
 
+function normalizeLikedOutfitRecord(record: any): LikedOutfitData | null {
+  if (!record || typeof record !== 'object') {
+    return null;
+  }
+
+  const title = typeof record.title === 'string' ? record.title.trim() : '';
+  if (!title) {
+    return null;
+  }
+
+  const items = Array.isArray(record.items)
+    ? record.items.filter((item: unknown): item is string => typeof item === 'string')
+    : [];
+  const colorPalette = Array.isArray(record.colorPalette)
+    ? record.colorPalette.filter((color: unknown): color is string => typeof color === 'string')
+    : [];
+
+  const shoppingLinksRecord =
+    record.shoppingLinks && typeof record.shoppingLinks === 'object'
+      ? record.shoppingLinks
+      : {};
+
+  const itemShoppingLinks = Array.isArray(record.itemShoppingLinks)
+    ? record.itemShoppingLinks
+        .filter((entry: unknown) => entry && typeof entry === 'object')
+        .map((entry: any) => ({
+          item: typeof entry.item === 'string' ? entry.item : '',
+          amazon: typeof entry.amazon === 'string' ? entry.amazon : '',
+          tatacliq: typeof entry.tatacliq === 'string' ? entry.tatacliq : '',
+          myntra: typeof entry.myntra === 'string' ? entry.myntra : '',
+        }))
+        .filter((entry: { item: string }) => entry.item.length > 0)
+    : [];
+
+  return {
+    id: typeof record.id === 'string' ? record.id : undefined,
+    imageUrl: normalizeLikedOutfitImageUrl(typeof record.imageUrl === 'string' ? record.imageUrl : undefined),
+    title,
+    description: typeof record.description === 'string' ? record.description : title,
+    items,
+    colorPalette,
+    styleType: typeof record.styleType === 'string' ? record.styleType : undefined,
+    occasion: typeof record.occasion === 'string' ? record.occasion : undefined,
+    shoppingLinks: {
+      amazon: typeof shoppingLinksRecord.amazon === 'string' ? shoppingLinksRecord.amazon : null,
+      tatacliq: typeof shoppingLinksRecord.tatacliq === 'string' ? shoppingLinksRecord.tatacliq : null,
+      myntra: typeof shoppingLinksRecord.myntra === 'string' ? shoppingLinksRecord.myntra : null,
+    },
+    itemShoppingLinks,
+    likedAt: typeof record.likedAt === 'number' ? record.likedAt : Date.now(),
+    wornAt: typeof record.wornAt === 'number' ? record.wornAt : undefined,
+    recommendationId: typeof record.recommendationId === 'string' ? record.recommendationId : '',
+  };
+}
+
 /**
  * Get all liked outfits for a user
  * @param userId - The user's ID
@@ -351,33 +429,76 @@ export async function getLikedOutfits(userId: string): Promise<LikedOutfitData[]
     if (!userId || userId.trim() === '' || userId === 'anonymous') {
       return [];
     }
+    const currentUser = auth.currentUser;
 
+    const executeApiRequest = async (token: string | null): Promise<Response> => {
+      return fetch('/api/likes', {
+        method: 'GET',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        cache: 'no-store',
+      });
+    };
+
+    try {
+      let token: string | null = null;
+      if (currentUser && currentUser.uid === userId && !currentUser.isAnonymous) {
+        token = await currentUser.getIdToken().catch(() => null);
+      }
+
+      let response = await executeApiRequest(token);
+
+      if (response.status === 401 && currentUser && currentUser.uid === userId && !currentUser.isAnonymous) {
+        const refreshedToken = await currentUser.getIdToken(true).catch(() => null);
+        if (refreshedToken) {
+          response = await executeApiRequest(refreshedToken);
+        }
+      }
+
+      if (response.status === 401 && token) {
+        response = await executeApiRequest(null);
+      }
+
+      const payload = await parseJsonPayload(response);
+      const payloadData = Array.isArray(payload?.data) ? payload.data : [];
+
+      if (response.ok && payload?.success && !isLikesBackendUnavailable(payload) && Array.isArray(payload?.data)) {
+        return payloadData
+          .map((entry: any) => normalizeLikedOutfitRecord(entry))
+          .filter((entry: LikedOutfitData | null): entry is LikedOutfitData => Boolean(entry));
+      }
+
+      if (response.ok && !shouldFallbackToClientLikes(response, payload)) {
+        return [];
+      }
+    } catch {
+      // Continue to Firestore client fallback.
+    }
 
     const likesRef = collection(db, 'users', userId, 'likedOutfits');
-    
+
     // Query with orderBy to sort by most recent first
     const q = query(likesRef, orderBy('likedAt', 'desc'), limit(200));
     const snapshot = await getDocs(q);
-    
-    
+
     const outfits: LikedOutfitData[] = [];
     snapshot.forEach((doc) => {
       try {
-        const data = doc.data() as LikedOutfitData;
-        // Validate essential fields before adding
-        if (data && data.title) {
-          outfits.push({
-            ...data,
-            imageUrl: normalizeLikedOutfitImageUrl(data.imageUrl),
-            id: doc.id, // Include the document ID
-          });
+        const normalized = normalizeLikedOutfitRecord({
+          id: doc.id,
+          ...doc.data(),
+        });
+        if (normalized) {
+          outfits.push(normalized);
         }
       } catch (error) {
         console.warn('[getLikedOutfits] Failed to parse document:', error);
         // Skip malformed documents
       }
     });
-    
+
     return outfits;
   } catch (error) {
     console.error('[getLikedOutfits] Error fetching liked outfits:', error);

@@ -1,6 +1,5 @@
-import type {Config} from 'tailwindcss';
-
-export default {
+/** @type {import('tailwindcss').Config} */
+module.exports = {
   darkMode: ['class'],
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
@@ -89,22 +88,22 @@ export default {
           },
         },
         'fade-in': {
-          'from': { opacity: '0', transform: 'translateY(-10px)' },
-          'to': { opacity: '1', transform: 'translateY(0)' },
+          from: { opacity: '0', transform: 'translateY(-10px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
         },
         'slide-up-fade': {
-          'from': { opacity: '0', transform: 'translateY(20px)' },
-          'to': { opacity: '1', transform: 'translateY(0)' },
+          from: { opacity: '0', transform: 'translateY(20px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
         },
         'fade-in-up': {
           '0%': {
             opacity: '0',
-            transform: 'translateY(20px)'
+            transform: 'translateY(20px)',
           },
           '100%': {
             opacity: '1',
-            transform: 'translateY(0)'
-          }
+            transform: 'translateY(0)',
+          },
         },
         gradient: {
           '0%': { backgroundPosition: '0% 50%' },
@@ -143,4 +142,4 @@ export default {
     },
   },
   plugins: [require('tailwindcss-animate')],
-} satisfies Config;
+};

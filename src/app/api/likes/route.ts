@@ -129,6 +129,47 @@ function normalizeLikeOutfitData(
   };
 }
 
+function buildLikesBackendUnavailableResponse(
+  requestId: string,
+  mode: 'read' | 'write'
+) {
+  if (mode === 'read') {
+    return NextResponse.json(
+      {
+        success: true,
+        data: [],
+        count: 0,
+        backendAvailable: false,
+        code: 'LIKES_BACKEND_UNAVAILABLE',
+        warning: 'Likes backend is temporarily unavailable',
+        requestId,
+      },
+      {
+        status: 200,
+        headers: {
+          'Cache-Control': 'no-store',
+        },
+      }
+    );
+  }
+
+  return NextResponse.json(
+    {
+      success: false,
+      backendAvailable: false,
+      code: 'LIKES_BACKEND_UNAVAILABLE',
+      error: 'Likes service is temporarily unavailable',
+      requestId,
+    },
+    {
+      status: 200,
+      headers: {
+        'Cache-Control': 'no-store',
+      },
+    }
+  );
+}
+
 export async function POST(request: Request) {
   const requestId = request.headers.get('x-request-id') || `likes-${Date.now()}`;
 
@@ -185,14 +226,7 @@ export async function POST(request: Request) {
         requestId,
         error,
       });
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Likes service is temporarily unavailable',
-          code: 'LIKES_BACKEND_UNAVAILABLE',
-        },
-        { status: 503 }
-      );
+      return buildLikesBackendUnavailableResponse(requestId, 'write');
     }
 
     const likesRef = db.collection('users').doc(auth.uid).collection('likedOutfits');
@@ -291,14 +325,7 @@ export async function GET(request: Request) {
         requestId,
         error,
       });
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Likes service is temporarily unavailable',
-          code: 'LIKES_BACKEND_UNAVAILABLE',
-        },
-        { status: 503 }
-      );
+      return buildLikesBackendUnavailableResponse(requestId, 'read');
     }
 
     const likesRef = db.collection('users').doc(auth.uid).collection('likedOutfits');

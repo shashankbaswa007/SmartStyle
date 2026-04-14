@@ -80,7 +80,9 @@ describe('recommend diversification', () => {
     expect(first.matchCategory).toBe('perfect');
     expect(second.matchCategory).toBe('great');
     expect(third.matchCategory).toBe('exploring');
-    expect(typeof first.matchScore).toBe('number');
+    expect(first.matchScore).toBe(70);
+    expect(second.matchScore).toBe(20);
+    expect(third.matchScore).toBe(10);
     expect(typeof first.explanation).toBe('string');
     expect(first.position).toBe(1);
     expect(second.position).toBe(2);

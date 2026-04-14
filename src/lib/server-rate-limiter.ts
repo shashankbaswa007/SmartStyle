@@ -38,7 +38,7 @@ interface RateLimitDoc {
 
 const COLLECTION = 'rateLimits';
 const ALLOW_IN_MEMORY_RATE_LIMIT_FALLBACK =
-  process.env.ALLOW_IN_MEMORY_RATE_LIMIT_FALLBACK === '1' || process.env.NODE_ENV !== 'production';
+  process.env.ALLOW_IN_MEMORY_RATE_LIMIT_FALLBACK === '1' || process.env.NODE_ENV === 'test';
 
 function getCurrentWindow(config: ServerRateLimitConfig) {
   const now = Date.now();

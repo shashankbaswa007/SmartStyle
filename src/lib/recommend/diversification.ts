@@ -13,6 +13,12 @@ function getStrategyLabel(bucket: StrategyBucket): string {
   return '10% Creative Edge';
 }
 
+function getStrategyMatchScore(bucket: StrategyBucket): number {
+  if (bucket === '70') return 70;
+  if (bucket === '20') return 20;
+  return 10;
+}
+
 function getMatchCategory(bucket: StrategyBucket): 'perfect' | 'great' | 'exploring' {
   if (bucket === '70') return 'perfect';
   if (bucket === '20') return 'great';
@@ -116,7 +122,7 @@ export function enforceStrict701020(
 
   const withMetadata = ordered.map((outfit, index) => {
     const bucket = STRATEGY_BUCKETS[index] || '10';
-    const score = scoreOutfitInterestAlignment(outfit, input);
+    const score = getStrategyMatchScore(bucket);
 
     return {
       ...outfit,

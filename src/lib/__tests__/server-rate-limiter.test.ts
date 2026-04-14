@@ -116,7 +116,7 @@ describe('server-rate-limiter production safeguards', () => {
     ).rejects.toThrow('Persistent rate limit status backend unavailable');
   });
 
-  it('uses in-memory fallback outside strict production mode', async () => {
+  it('uses in-memory fallback in test mode', async () => {
     const mod = await loadLimiterModule({
       nodeEnv: 'test',
       fallbackSuccess: true,

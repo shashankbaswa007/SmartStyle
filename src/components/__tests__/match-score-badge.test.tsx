@@ -21,28 +21,28 @@ describe('MatchScoreBadge', () => {
 
   it('renders a perfect match badge', () => {
     render(<MatchScoreBadge matchScore={95} matchCategory="perfect" />);
-    expect(screen.getByText(/Perfect Match/)).toBeInTheDocument();
+    expect(screen.getByText(/Core Match/)).toBeInTheDocument();
     expect(screen.getByText(/95%/)).toBeInTheDocument();
   });
 
   it('renders a great match badge', () => {
     render(<MatchScoreBadge matchScore={78} matchCategory="great" />);
-    expect(screen.getByText(/Great Match/)).toBeInTheDocument();
+    expect(screen.getByText(/Style Stretch/)).toBeInTheDocument();
   });
 
   it('renders an exploring badge', () => {
     render(<MatchScoreBadge matchScore={55} matchCategory="exploring" />);
-    expect(screen.getByText(/Exploring/)).toBeInTheDocument();
+    expect(screen.getByText(/Creative Edge/)).toBeInTheDocument();
   });
 
   it('falls back to exploring for unknown category', () => {
     render(<MatchScoreBadge matchScore={60} matchCategory="unknown" />);
-    expect(screen.getByText(/Exploring/)).toBeInTheDocument();
+    expect(screen.getByText(/Creative Edge/)).toBeInTheDocument();
   });
 
   it('hides score when showScore is false', () => {
     render(<MatchScoreBadge matchScore={90} matchCategory="perfect" showScore={false} />);
-    expect(screen.getByText(/Perfect Match/)).toBeInTheDocument();
+    expect(screen.getByText(/Core Match/)).toBeInTheDocument();
     expect(screen.queryByText(/90%/)).not.toBeInTheDocument();
   });
 

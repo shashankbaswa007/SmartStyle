@@ -1056,6 +1056,10 @@ export function StyleAdvisorResults({
       'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/25',
       'bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/25',
     ];
+    const displayRankLabel = outfitWithLinks.strategyLabel || rankLabels[index] || `Look ${index + 1}`;
+    const displayRankClass = outfitWithLinks.strategyBucket
+      ? getStrategyBadgeClasses(outfitWithLinks.strategyBucket)
+      : (rankColors[index] || rankColors[2]);
 
     const hasEnhanced = enhancedShoppingLinks && enhancedShoppingLinks[index];
     const hasLegacy = !hasEnhanced && outfitWithLinks.items && outfitWithLinks.items.length > 0;
@@ -1074,8 +1078,8 @@ export function StyleAdvisorResults({
 
         <div className="p-4 sm:p-6 space-y-5">
           <div className="flex flex-wrap items-start gap-2.5">
-            <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${rankColors[index] || rankColors[2]}`}>
-              {rankLabels[index] || `Look ${index + 1}`}
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${displayRankClass}`}>
+              {displayRankLabel}
             </span>
             <h4 className="text-lg sm:text-xl font-bold text-foreground flex-1 min-w-0 break-words">
               {outfit.title}

@@ -351,7 +351,7 @@ describe('GET /api/likes', () => {
     expect(payload.code).toBe('UNAUTHORIZED');
   });
 
-  it('returns 503 when Firestore is unavailable', async () => {
+  it('returns graceful degraded payload when Firestore is unavailable', async () => {
     mockGetFirestore.mockImplementation(() => {
       throw new Error('Firestore unavailable');
     });
@@ -365,8 +365,12 @@ describe('GET /api/likes', () => {
       })
     );
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     const payload = await response.json();
+    expect(payload.success).toBe(true);
+    expect(payload.backendAvailable).toBe(false);
+    expect(payload.data).toEqual([]);
+    expect(payload.count).toBe(0);
     expect(payload.code).toBe('LIKES_BACKEND_UNAVAILABLE');
   });
 });

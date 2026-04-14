@@ -26,23 +26,23 @@ export function MatchScoreBadge({
     perfect: {
       icon: Target,
       emoji: "🎯",
-      label: "Perfect Match",
+      label: "Core Match",
       color: "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/30",
-      description: "This matches your style perfectly!"
+      description: "Closest to your core style profile"
     },
     great: {
       icon: Sparkles,
       emoji: "✨",
-      label: "Great Match",
+      label: "Style Stretch",
       color: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
-      description: "A great match with some fresh variation"
+      description: "A nearby variation to widen your style range"
     },
     exploring: {
       icon: Search,
       emoji: "🔍",
-      label: "Exploring",
+      label: "Creative Edge",
       color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/30",
-      description: "Something new to explore!"
+      description: "A bold option outside your usual comfort zone"
     }
   };
 
