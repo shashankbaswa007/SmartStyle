@@ -9,12 +9,16 @@ import { useMotionSettings } from '@/components/MotionProvider';
 
 interface PremiumAuthLoaderProps {
   statusText?: string;
+  premium?: boolean;
 }
 
-export function PremiumAuthLoader({ statusText = 'Composing your style atmosphere' }: PremiumAuthLoaderProps) {
+export function PremiumAuthLoader({
+  statusText = 'Composing your style atmosphere',
+  premium = true,
+}: PremiumAuthLoaderProps) {
   const { prefersReducedMotion } = useMotionSettings();
 
-  if (prefersReducedMotion) {
+  if (prefersReducedMotion || !premium) {
     return (
       <div className="relative min-h-screen overflow-hidden bg-[#050813]">
         <div className="absolute inset-0">
@@ -117,6 +121,23 @@ export function PremiumAuthLoader({ statusText = 'Composing your style atmospher
           transition={{ duration: 0.9, ease: 'easeOut' }}
           className="relative w-full max-w-sm rounded-[1.9rem] border border-white/14 bg-slate-950/60 p-8 shadow-[0_32px_76px_rgba(5,10,26,0.62)] backdrop-blur-2xl"
         >
+          <motion.div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-3 rounded-[1.5rem]"
+            animate={{
+              boxShadow: [
+                '0 0 0 rgba(125,211,252,0.16)',
+                '0 0 38px rgba(125,211,252,0.38)',
+                '0 0 0 rgba(125,211,252,0.16)',
+              ],
+            }}
+            transition={{
+              duration: 2.6,
+              repeat: Infinity,
+              ease: 'easeInOut',
+            }}
+          />
+
           <div className="flex justify-center">
             <motion.div
               className="overflow-hidden"

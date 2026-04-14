@@ -31,6 +31,9 @@ function debugStyleCheckUsage(message: string, context: Record<string, unknown>)
   console.info('[usage-sync][style-check]', message, context);
 }
 
+const SHOULD_SURFACE_REQUEST_REFERENCE =
+  process.env.NODE_ENV !== 'production' || process.env.NEXT_PUBLIC_DEBUG_REQUEST_IDS === '1';
+
 export function useStyleCheckUsage(): UseStyleCheckUsageResult {
   const [usage, setUsage] = useState<UsageWindow>(null);
   const [usageLoading, setUsageLoading] = useState(true);
@@ -73,10 +76,28 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
       const recommendUsage = data.usage[RATE_LIMIT_SCOPES.recommend] || null;
       setUsage(recommendUsage);
 
+      const usageBackendDegraded =
+        data.degraded === true ||
+        data.backendAvailable === false ||
+        data.code === 'USAGE_BACKEND_UNAVAILABLE';
+      const requestReference =
+        SHOULD_SURFACE_REQUEST_REFERENCE && data.requestId
+          ? ` (Ref: ${data.requestId})`
+          : '';
+
+      if (usageBackendDegraded) {
+        setUsageError(`Live usage tracking is temporarily unavailable. Showing estimated limits while services recover.${requestReference}`);
+      } else {
+        setUsageError(null);
+      }
+
       debugStyleCheckUsage('usage_applied_from_backend', {
         activeUser,
         requestId: data.requestId,
         timezoneStrategy: data.timezoneStrategy,
+        degraded: usageBackendDegraded,
+        errorCategory: data.errorCategory,
+        diagnostic: data.diagnostic,
         usage: recommendUsage,
       });
 
@@ -89,12 +110,20 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
       hasTaskCompletedRef.current = true;
       return true;
     } catch (error) {
-      const typed = error as { message?: string };
-      setUsageError(typed?.message || 'Unable to load usage status. Please try again.');
+      const typed = error as { message?: string; requestId?: string; code?: string; errorCategory?: string };
+      const baseMessage = typed?.message || 'Unable to load usage status. Please try again.';
+      const errorMessage =
+        SHOULD_SURFACE_REQUEST_REFERENCE && typed?.requestId
+          ? `${baseMessage} (Ref: ${typed.requestId})`
+          : baseMessage;
+      setUsageError(errorMessage);
 
       debugStyleCheckUsage('usage_fetch_failed', {
         activeUser,
         error: typed?.message || String(error),
+        requestId: typed?.requestId,
+        code: typed?.code,
+        errorCategory: typed?.errorCategory,
       });
 
       hasTaskCompletedRef.current = true;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getRecommendMetrics } from '@/lib/recommend/async-jobs';
 import { getFirestore, FieldValue } from '@/lib/firebase-admin';
+import { validateRequestOrigin } from '@/lib/csrf-protection';
 
 const COLLECTION = 'experiment_metrics_daily';
 const RETENTION_DAYS = 60;
@@ -133,6 +134,10 @@ async function deleteExpiredSnapshots(db: FirebaseFirestore.Firestore): Promise<
 }
 
 export async function POST(request: Request) {
+  if (!validateRequestOrigin(request)) {
+    return NextResponse.json({ success: false, error: 'Invalid request origin' }, { status: 403 });
+  }
+
   const expectedSecret = process.env.RECOMMEND_METRICS_SNAPSHOT_SECRET;
   if (!expectedSecret) {
     return NextResponse.json(

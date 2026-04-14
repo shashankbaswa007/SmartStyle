@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
-import admin from '@/lib/firebase-admin';
 import { AuthError } from '@/lib/server-auth';
 import { isPollinationsAuthenticated, generateOutfitImageWithFallback } from '@/lib/image-generation';
 import { isTogetherAvailable, generateWithTogether } from '@/lib/together-image';
 import { isReplicateAvailable, generateWithReplicate } from '@/lib/replicate-image';
 import { generateImageWithRetry } from '@/lib/smart-image-generation';
+import { validateRequestOrigin } from '@/lib/csrf-protection';
+import { verifyAdminRequest } from '@/lib/admin-auth';
+import { logger } from '@/lib/logger';
 
 type ProviderStatus = {
   configured: boolean;
@@ -24,20 +26,6 @@ type ImageSourcesResponse = {
     orchestrator: ProviderStatus;
   };
 };
-
-async function verifyAdminToken(request: Request): Promise<string> {
-  const token = request.headers.get('Authorization')?.replace('Bearer ', '').trim();
-  if (!token) {
-    throw new AuthError('Missing authorization token', 401);
-  }
-
-  try {
-    const decoded = await admin.auth().verifyIdToken(token);
-    return decoded.uid;
-  } catch {
-    throw new AuthError('Invalid or expired token', 401);
-  }
-}
 
 function messageFromError(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -220,8 +208,18 @@ async function checkOrchestrator(probe: boolean, prompt: string, colors: string[
 }
 
 export async function GET(request: Request) {
+  if (!validateRequestOrigin(request)) {
+    return NextResponse.json({ success: false, error: 'Invalid request origin' }, { status: 403 });
+  }
+
   try {
-    await verifyAdminToken(request);
+    const { uid: userId, source } = await verifyAdminRequest(request);
+    logger.info('Admin endpoint access', {
+      endpoint: '/api/admin/image-sources',
+      method: 'GET',
+      userId,
+      authSource: source,
+    });
 
     const url = new URL(request.url);
     const probeEnabled = url.searchParams.get('probe') === '1';

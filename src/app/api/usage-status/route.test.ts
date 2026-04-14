@@ -94,6 +94,7 @@ describe('GET /api/usage-status', () => {
     expect(response.status).toBe(401);
     const payload = await response.json();
     expect(payload.code).toBe('UNAUTHORIZED');
+    expect(payload.errorCategory).toBe('UNKNOWN_ERROR');
   });
 
   it('uses session cookie fallback when bearer verification fails', async () => {
@@ -184,6 +185,32 @@ describe('GET /api/usage-status', () => {
     const payload = await response.json();
     expect(payload.success).toBe(false);
     expect(payload.code).toBe('USAGE_STATUS_FAILED');
+    expect(payload.errorCategory).toBe('UNKNOWN_ERROR');
     expect(payload.usage).toBeUndefined();
+  });
+
+  it('returns degraded usage payload with backend diagnostic for Firebase Admin initialization failures', async () => {
+    mockGetServerRateLimitStatus.mockReset();
+    mockGetServerRateLimitStatus.mockRejectedValue(new Error('Firebase Admin SDK not initialized'));
+
+    const response = await GET(
+      new Request('http://localhost/api/usage-status', {
+        headers: {
+          authorization: 'Bearer token',
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.success).toBe(true);
+    expect(payload.degraded).toBe(true);
+    expect(payload.backendAvailable).toBe(false);
+    expect(payload.code).toBe('USAGE_BACKEND_UNAVAILABLE');
+    expect(['ENV_MISCONFIGURED', 'BACKEND_UNAVAILABLE']).toContain(payload.errorCategory);
+    expect(payload.diagnostic).toBe('FIREBASE_ADMIN_NOT_INITIALIZED');
+    expect(payload.usage.recommend.limit).toBe(10);
+    expect(payload.usage['wardrobe-outfit'].limit).toBe(10);
+    expect(payload.usage['wardrobe-upload'].limit).toBe(10);
   });
 });

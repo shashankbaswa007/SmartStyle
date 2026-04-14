@@ -58,6 +58,10 @@ function providerLabelToMethod(providerId: string): string {
   return providerId;
 }
 
+function isLocalBypassHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
+}
+
 export function useAccountSecurity(user: User | null): UseAccountSecurityResult {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -71,8 +75,11 @@ export function useAccountSecurity(user: User | null): UseAccountSecurityResult 
   const providerId = user?.providerData?.[0]?.providerId || 'unknown';
   const isPasswordProvider = providerId === 'password';
   const isGoogleProvider = providerId.includes('google');
-  const isE2EBypassUser =
-    process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === 'true' && user?.uid === 'e2e-bypass-user';
+  const isLocalHost = typeof window !== 'undefined' && isLocalBypassHost(window.location.hostname);
+  const e2eBypassEnabled =
+    process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === 'true' &&
+    (process.env.NODE_ENV !== 'production' || isLocalHost);
+  const isE2EBypassUser = e2eBypassEnabled && user?.uid === 'e2e-bypass-user';
 
   const mfaMethods = useMemo(() => {
     if (isE2EBypassUser) {

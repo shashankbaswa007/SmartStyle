@@ -15,6 +15,7 @@ import { featureFlags } from '@/lib/feature-flags';
 import { enforceStrict701020 } from '@/lib/recommend/diversification';
 import { confirmServerRateLimit, releaseServerRateLimit } from '@/lib/server-rate-limiter';
 import { DAILY_WINDOW_MS, RATE_LIMIT_SCOPES, USAGE_LIMITS } from '@/lib/usage-limits';
+import { incrementProductionCounter } from '@/lib/production-telemetry';
 
 const JOB_TTL_SECONDS = 4 * 60 * 60;
 const DEDUPE_TTL_SECONDS = 2 * 60 * 60;
@@ -1100,7 +1101,12 @@ export async function processRecommendJob(jobId: string): Promise<void> {
         await new Promise((resolve) => setTimeout(resolve, backoffMs));
       }
     }
-    if (!lock) return;
+
+    // Avoid silent job starvation when distributed lock infra is flaky.
+    if (!lock) {
+      usingLocalLock = acquireLocalProcessLock(jobId);
+      if (!usingLocalLock) return;
+    }
   } else {
     usingLocalLock = acquireLocalProcessLock(jobId);
     if (!usingLocalLock) return;
@@ -1164,6 +1170,13 @@ export async function processRecommendJob(jobId: string): Promise<void> {
     await incrVariantMetric(uxVariant, 'completed', 1);
     await incrVariantMetric(uxVariant, 'time_to_result_sum_ms', jobTimeMs);
     await incrVariantMetric(uxVariant, 'time_to_result_count', 1);
+    incrementProductionCounter('recommend.jobs.terminal_total', 1, {
+      status: 'completed',
+      uxVariant,
+    });
+    incrementProductionCounter('recommend.jobs.completed_total', 1, {
+      uxVariant,
+    });
   } catch (error: any) {
     const failed = await getJob(jobId);
     if (!failed) return;
@@ -1198,6 +1211,19 @@ export async function processRecommendJob(jobId: string): Promise<void> {
     await incrMetric('fallback_source_' + fallback.source, 1);
     await incrVariantMetric(uxVariant, 'failed', 1);
     await incrVariantMetric(uxVariant, 'fallbacks', 1);
+    incrementProductionCounter('recommend.jobs.terminal_total', 1, {
+      status: 'failed',
+      uxVariant,
+    });
+    incrementProductionCounter('recommend.jobs.failed_total', 1, {
+      uxVariant,
+      errorCode,
+    });
+    incrementProductionCounter('recommend.jobs.fallback_total', 1, {
+      uxVariant,
+      source: fallback.source,
+      errorCode,
+    });
   } finally {
     if (lock) {
       await releaseDistributedLock(lock);
@@ -1253,6 +1279,19 @@ export async function getRecommendJobStatus(jobId: string): Promise<RecommendJob
     const uxVariant = normalizeVariant(job.input.uxVariant);
     await incrVariantMetric(uxVariant, 'failed', 1);
     await incrVariantMetric(uxVariant, 'fallbacks', 1);
+    incrementProductionCounter('recommend.jobs.terminal_total', 1, {
+      status: 'failed',
+      uxVariant,
+    });
+    incrementProductionCounter('recommend.jobs.failed_total', 1, {
+      uxVariant,
+      errorCode: 'ANALYSIS_TIMEOUT',
+    });
+    incrementProductionCounter('recommend.jobs.fallback_total', 1, {
+      uxVariant,
+      source: timeoutFallback.source,
+      errorCode: 'ANALYSIS_TIMEOUT',
+    });
     return timedOut;
   }
 

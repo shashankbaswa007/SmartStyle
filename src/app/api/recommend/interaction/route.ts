@@ -3,11 +3,19 @@ import { recordRecommendInteraction } from '@/lib/recommend/async-jobs';
 import { getClientIdentifier } from '@/lib/rate-limiter';
 import { checkServerRateLimit } from '@/lib/server-rate-limiter';
 import { logger } from '@/lib/logger';
+import { validateRequestOrigin } from '@/lib/csrf-protection';
 
 const ALLOWED_EVENTS = new Set(['results_visible', 'another_recommendation']);
 const ALLOWED_VARIANTS = new Set(['A', 'B']);
 
 export async function POST(req: Request) {
+  if (!validateRequestOrigin(req)) {
+    return NextResponse.json(
+      { success: false, tracked: false, error: 'Invalid request origin', code: 'INVALID_ORIGIN' },
+      { status: 403 }
+    );
+  }
+
   const clientId = getClientIdentifier(req);
   let limit = {
     allowed: true,

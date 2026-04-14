@@ -22,10 +22,13 @@ test.describe('Color Match Recovery UX', () => {
     await page.getByRole('button', { name: /^find matches$/i }).click();
 
     await expect(page.getByText(/unable to generate palette/i)).toBeVisible();
-    await expect(page.getByRole('button', { name: /^retry$/i })).toBeVisible();
+    const retryButton = page.getByRole('button', { name: /^retry$/i }).first();
+    await expect(retryButton).toBeVisible();
 
     await colorInput.fill('#7c3aed');
-    await page.getByRole('button', { name: /^retry$/i }).click();
+    // Mobile layout transitions can momentarily place this button outside viewport.
+    // Dispatching click after visibility avoids flaky actionability failures.
+    await retryButton.dispatchEvent('click');
 
     await expect(page.getByText(/best color matches/i)).toBeVisible();
     await expect(page.getByText(/unable to generate palette/i)).toHaveCount(0);

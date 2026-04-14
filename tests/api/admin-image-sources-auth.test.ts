@@ -8,6 +8,6 @@ describe('admin image-sources api smoke', () => {
 
     const source = readFileSync(routePath, 'utf8');
     expect(source).toContain('export async function GET');
-    expect(source).toContain('verifyAdminToken');
+    expect(source).toContain('verifyAdminRequest');
   });
 });

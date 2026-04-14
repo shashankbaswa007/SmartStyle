@@ -28,6 +28,7 @@ import { validateImageForStyleAnalysis, validateImageProperties } from "@/lib/im
 import { RATE_LIMIT_SCOPES } from "@/lib/usage-limits";
 import { emitUsageConsumed } from "@/lib/usage-events";
 import SmartStyleLoader from '@/components/SmartStyleLoader';
+import { publicRolloutFlags } from '@/lib/public-rollout-flags';
 import { OutfitSkeletonGrid } from './OutfitCardSkeleton';
 
 // Processing step interface
@@ -2459,6 +2460,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
             <CardContent className="p-4 sm:p-6 md:p-8">
               <SmartStyleLoader
                 mode="operation"
+                premium={publicRolloutFlags.premiumStyleCheckLoader}
                 stage={progressStage}
                 statusText={loadingMessage || 'Analyzing your style...'}
               />

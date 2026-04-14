@@ -32,6 +32,77 @@ test.describe('API Hardening', () => {
     expect(String(body?.error || '').toLowerCase()).toContain('unauthorized');
   });
 
+  test('recommend endpoint rejects cross-origin requests', async ({ request }) => {
+    const response = await request.post('/api/recommend', {
+      headers: {
+        Origin: 'https://attacker.example',
+      },
+      data: {
+        photoDataUri: 'data:image/jpeg;base64,/9j/4AAQSkZJRg==',
+        occasion: 'office',
+        genre: 'minimalist',
+        gender: 'male',
+      },
+    });
+
+    expect(response.status()).toBe(403);
+    const body = await response.json();
+    expect(String(body?.error || '').toLowerCase()).toContain('origin');
+  });
+
+  test('recommend interaction endpoint rejects cross-origin requests', async ({ request }) => {
+    const response = await request.post('/api/recommend/interaction', {
+      headers: {
+        Origin: 'https://attacker.example',
+      },
+      data: {
+        event: 'results_visible',
+        variant: 'A',
+      },
+    });
+
+    expect(response.status()).toBe(403);
+    const body = await response.json();
+    expect(String(body?.error || '').toLowerCase()).toContain('origin');
+  });
+
+  test('admin rate-limits endpoint rejects cross-origin delete requests', async ({ request }) => {
+    const response = await request.fetch('/api/admin/rate-limits', {
+      method: 'DELETE',
+      headers: {
+        Origin: 'https://attacker.example',
+      },
+    });
+
+    expect(response.status()).toBe(403);
+    const body = await response.json();
+    expect(String(body?.error || '').toLowerCase()).toContain('origin');
+  });
+
+  test('metrics snapshot endpoint rejects cross-origin post requests', async ({ request }) => {
+    const response = await request.post('/api/recommend/metrics/snapshot', {
+      headers: {
+        Origin: 'https://attacker.example',
+      },
+    });
+
+    expect(response.status()).toBe(403);
+    const body = await response.json();
+    expect(String(body?.error || '').toLowerCase()).toContain('origin');
+  });
+
+  test('admin image-sources endpoint rejects cross-origin requests', async ({ request }) => {
+    const response = await request.get('/api/admin/image-sources?probe=0', {
+      headers: {
+        Origin: 'https://attacker.example',
+      },
+    });
+
+    expect(response.status()).toBe(403);
+    const body = await response.json();
+    expect(String(body?.error || '').toLowerCase()).toContain('origin');
+  });
+
   test('session endpoint rejects invalid body and delete clears safely', async ({ request }) => {
     const badCreate = await request.post('/api/auth/session', {
       data: {
@@ -106,5 +177,20 @@ test.describe('API Hardening', () => {
     const body = await response.json();
     expect(body.error).toMatch(/unauthorized/i);
     expect(body.links).toBeTruthy();
+  });
+
+  test('tavily endpoint rejects cross-origin requests', async ({ request }) => {
+    const response = await request.post('/api/tavily/search', {
+      headers: {
+        Origin: 'https://attacker.example',
+      },
+      data: {
+        query: 'blue cotton shirt',
+      },
+    });
+
+    expect(response.status()).toBe(403);
+    const body = await response.json();
+    expect(String(body?.error || '').toLowerCase()).toContain('origin');
   });
 });

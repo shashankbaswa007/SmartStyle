@@ -594,6 +594,10 @@ TAVILY_API_KEY=tvly_your_tavily_key
 
 # App Config
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Rollout toggles (1=enabled, 0=disabled)
+NEXT_PUBLIC_STYLE_CHECK_PREMIUM_LOADER=1
+NEXT_PUBLIC_AUTH_PREMIUM_LOADER=1
 ```
 
 5. **Deploy Firestore rules:**
@@ -744,6 +748,7 @@ const score =
 - Input validation on all routes
 - Error messages don't leak sensitive info
 - CORS configured for app domain only
+- Admin endpoints require Firebase admin claims or explicit server allowlist entries
 
 ### Environment Variables
 
@@ -751,6 +756,16 @@ const score =
 - Use secret management in production
 - Rotate API keys regularly
 - Monitor usage quotas
+
+### Rollout Toggles (Vercel)
+
+- `NEXT_PUBLIC_STYLE_CHECK_PREMIUM_LOADER=1` controls style-check premium loading visuals.
+- `NEXT_PUBLIC_AUTH_PREMIUM_LOADER=1` controls auth premium loading visuals.
+- Set either flag to `0` and redeploy for immediate visual rollback.
+- `E2E_AUTH_BYPASS` and `NEXT_PUBLIC_E2E_AUTH_BYPASS` are restricted to non-production or localhost test runs.
+- Keep `ALLOW_DEV_AUTH_FALLBACK=0` in production to disable unverified token fallback paths.
+- Keep `ADMIN_USER_IDS` empty in production unless using it as a temporary break-glass allowlist.
+- Service worker branding strategy fallback: set `BRANDING_NETWORK_FIRST` to `false` in `public/sw.js` and redeploy.
 
 ---
 

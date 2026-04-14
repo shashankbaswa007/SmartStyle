@@ -109,6 +109,45 @@ describe('usage-status-service', () => {
     });
   });
 
+  it('accepts degraded usage payloads and exposes backend metadata', async () => {
+    const fetchMock = jest.fn(async () =>
+      createMockResponse({
+        status: 200,
+        ok: true,
+        body: {
+          success: true,
+          degraded: true,
+          backendAvailable: false,
+          code: 'USAGE_BACKEND_UNAVAILABLE',
+          diagnostic: 'RATE_LIMIT_BACKEND_UNAVAILABLE',
+          usage: {
+            recommend: { remaining: 10, limit: 10, resetAt: '2026-04-10T00:00:00.000Z' },
+          },
+          errorCategory: 'BACKEND_UNAVAILABLE',
+        },
+      })
+    );
+
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await fetchUsageStatus({
+      user: null,
+      scopes: ['recommend'],
+      lastForcedRefreshFailureAtRef: { current: 0 },
+    });
+
+    expect(result.usage.recommend).toEqual({
+      remaining: 10,
+      limit: 10,
+      resetAt: '2026-04-10T00:00:00.000Z',
+    });
+    expect(result.degraded).toBe(true);
+    expect(result.backendAvailable).toBe(false);
+    expect(result.code).toBe('USAGE_BACKEND_UNAVAILABLE');
+    expect(result.diagnostic).toBe('RATE_LIMIT_BACKEND_UNAVAILABLE');
+    expect(result.errorCategory).toBe('BACKEND_UNAVAILABLE');
+  });
+
   it('returns typed timeout failure when usage API request aborts', async () => {
     const fetchMock = jest.fn(async (_input?: RequestInfo | URL, init?: RequestInit) => {
       return await new Promise<Response>((_resolve, reject) => {

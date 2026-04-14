@@ -19,6 +19,10 @@ import { PremiumAuthLoader } from '@/components/auth/PremiumAuthLoader';
 const LOGIN_GRACE_KEY = 'smartstyle_login_grace_ts';
 const E2E_AUTH_BYPASS_COOKIE = 'smartstyle-e2e-auth=enabled';
 
+function isLocalBypassHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
+}
+
 function hasRecentLoginGraceWindow(maxAgeMs = 15000): boolean {
   if (typeof window === 'undefined') return false;
   const raw = window.sessionStorage.getItem(LOGIN_GRACE_KEY);
@@ -39,7 +43,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const [resolvingSession, setResolvingSession] = useState(false);
   const checkedServerSessionRef = useRef(false);
   const userRef = useRef(user);
-  const e2eBypassEnabled = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === 'true';
+  const isLocalHost = typeof window !== 'undefined' && isLocalBypassHost(window.location.hostname);
+  const e2eBypassEnabled =
+    process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === 'true' &&
+    (process.env.NODE_ENV !== 'production' || isLocalHost);
   const hasE2EBypassCookie =
     typeof document !== 'undefined' && document.cookie.includes(E2E_AUTH_BYPASS_COOKIE);
   const shouldBypassAuth = e2eBypassEnabled && hasE2EBypassCookie;

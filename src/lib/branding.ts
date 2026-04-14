@@ -41,3 +41,9 @@ export const BRAND = {
 export const INTRO_STORAGE_KEY = 'smartstyle_intro_seen';
 export const INTRO_REPLAY_QUERY = 'replayIntro';
 export const APP_LOADER_SESSION_KEY = 'smartstyle:app-loader:shown';
+export const BRAND_ASSET_VERSION = '2026-04-14.1';
+
+export function withBrandAssetVersion(path: string): string {
+  const separator = path.includes('?') ? '&' : '?';
+  return `${path}${separator}v=${encodeURIComponent(BRAND_ASSET_VERSION)}`;
+}

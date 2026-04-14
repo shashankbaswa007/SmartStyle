@@ -7,33 +7,34 @@
   "background_color": "#0a0a0a",
   "theme_color": "#4F46E5",
   "orientation": "portrait-primary",
+  "assetVersion": "2026-04-14.1",
   "icons": [
     {
-      "src": "/icons/brand-icon.svg",
+      "src": "/icons/brand-icon.svg?v=2026-04-14.1",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-192x192.png",
+      "src": "/icons/icon-192x192.png?v=2026-04-14.1",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-maskable-192x192.png",
+      "src": "/icons/icon-maskable-192x192.png?v=2026-04-14.1",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icons/icon-512x512.png",
+      "src": "/icons/icon-512x512.png?v=2026-04-14.1",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icons/icon-maskable-512x512.png",
+      "src": "/icons/icon-maskable-512x512.png?v=2026-04-14.1",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -64,7 +65,7 @@
       "url": "/style-check",
       "icons": [
         {
-          "src": "/icons/icon-192x192.png",
+          "src": "/icons/icon-192x192.png?v=2026-04-14.1",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -77,7 +78,7 @@
       "url": "/color-match",
       "icons": [
         {
-          "src": "/icons/icon-192x192.png",
+          "src": "/icons/icon-192x192.png?v=2026-04-14.1",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -90,7 +91,7 @@
       "url": "/likes",
       "icons": [
         {
-          "src": "/icons/icon-192x192.png",
+          "src": "/icons/icon-192x192.png?v=2026-04-14.1",
           "sizes": "192x192",
           "type": "image/png"
         }

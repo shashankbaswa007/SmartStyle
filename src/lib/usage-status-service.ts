@@ -10,6 +10,11 @@ export type UsageStatusResponse = {
   usage: Record<string, UsageWindow | undefined>;
   requestId?: string;
   timezoneStrategy?: string;
+  degraded?: boolean;
+  backendAvailable?: boolean;
+  code?: string;
+  errorCategory?: string;
+  diagnostic?: string;
 };
 
 const LEGACY_SCOPE_ALIASES: Record<string, string[]> = {
@@ -21,6 +26,9 @@ interface HttpLikeError {
   status: number;
   message: string;
   retryAfter: string | null;
+  requestId?: string;
+  code?: string;
+  errorCategory?: string;
 }
 
 function debugUsageStatus(message: string, context: Record<string, unknown>): void {
@@ -172,39 +180,76 @@ export async function fetchUsageStatus(params: {
   }
 
   if (!response.ok) {
+    let payloadObject: Record<string, unknown> = {};
+    try {
+      const payload = await response.json();
+      payloadObject = payload && typeof payload === 'object'
+        ? (payload as Record<string, unknown>)
+        : {};
+    } catch {
+      payloadObject = {};
+    }
+
+    const requestId =
+      typeof payloadObject.requestId === 'string'
+        ? payloadObject.requestId
+        : undefined;
+    const code = typeof payloadObject.code === 'string' ? payloadObject.code : undefined;
+    const errorCategory =
+      typeof payloadObject.errorCategory === 'string'
+        ? payloadObject.errorCategory
+        : undefined;
+
     debugUsageStatus('backend_usage_fetch_failed', {
       status: response.status,
+      requestId,
+      code,
+      errorCategory,
       scopes: params.scopes,
       hasUser: Boolean(params.user),
     });
 
     if (response.status === 503) {
-      let payload: unknown = null;
-      try {
-        payload = await response.json();
-      } catch {
-        payload = null;
-      }
-
-      const payloadObject = payload && typeof payload === 'object'
-        ? (payload as Record<string, unknown>)
-        : {};
-      const code = typeof payloadObject.code === 'string' ? payloadObject.code : undefined;
+      const diagnostic =
+        typeof payloadObject.diagnostic === 'string'
+          ? payloadObject.diagnostic
+          : undefined;
 
       if (code === 'USAGE_BACKEND_UNAVAILABLE') {
+        const messageByDiagnostic: Record<string, string> = {
+          FIREBASE_ADMIN_NOT_INITIALIZED:
+            'Daily usage backend is unavailable in production. Configure FIREBASE_SERVICE_ACCOUNT_KEY in Vercel and redeploy.',
+          RATE_LIMIT_BACKEND_UNAVAILABLE:
+            'Daily usage backend is temporarily unavailable. Firestore/Redis usage tracking is not reachable right now.',
+        };
+
         throw {
           status: response.status,
           message:
-            'Daily usage backend is unavailable in production. Configure FIREBASE_SERVICE_ACCOUNT_KEY (or Redis fallback) in Vercel and redeploy.',
+            (diagnostic ? messageByDiagnostic[diagnostic] : null) ||
+            'Daily usage backend is temporarily unavailable in production. Verify Firebase Admin and rate-limit backends, then redeploy.',
           retryAfter: response.headers.get('retry-after'),
+          requestId,
+          code,
+          errorCategory,
         } as HttpLikeError;
       }
     }
 
+    const backendMessage =
+      typeof payloadObject.error === 'string'
+        ? payloadObject.error
+        : typeof payloadObject.message === 'string'
+          ? payloadObject.message
+          : 'Unable to load daily limits right now. Please retry.';
+
     throw {
       status: response.status,
-      message: 'Unable to load daily limits right now. Please retry.',
+      message: backendMessage,
       retryAfter: response.headers.get('retry-after'),
+      requestId,
+      code,
+      errorCategory,
     } as HttpLikeError;
   }
 
@@ -245,10 +290,24 @@ export async function fetchUsageStatus(params: {
   const requestId = typeof payloadObject.requestId === 'string' ? payloadObject.requestId : undefined;
   const timezoneStrategy =
     typeof payloadObject.timezoneStrategy === 'string' ? payloadObject.timezoneStrategy : undefined;
+  const backendAvailable =
+    typeof payloadObject.backendAvailable === 'boolean'
+      ? payloadObject.backendAvailable
+      : undefined;
+  const degraded = payloadObject.degraded === true || backendAvailable === false;
+  const code = typeof payloadObject.code === 'string' ? payloadObject.code : undefined;
+  const errorCategory =
+    typeof payloadObject.errorCategory === 'string'
+      ? payloadObject.errorCategory
+      : undefined;
+  const diagnostic = typeof payloadObject.diagnostic === 'string' ? payloadObject.diagnostic : undefined;
 
   debugUsageStatus('backend_usage_fetch_succeeded', {
     requestId,
     timezoneStrategy,
+    degraded,
+    backendAvailable,
+    errorCategory,
     scopes: params.scopes,
     usage: parsed,
   });
@@ -257,5 +316,10 @@ export async function fetchUsageStatus(params: {
     usage: parsed,
     requestId,
     timezoneStrategy,
+    degraded,
+    backendAvailable,
+    code,
+    errorCategory,
+    diagnostic,
   };
 }

@@ -1,5 +1,19 @@
-const STATIC_CACHE = 'smartstyle-static-v11';
+const STATIC_CACHE = 'smartstyle-static-v12';
 const OFFLINE_FALLBACK_URL = '/offline.html';
+const BRAND_ASSET_VERSION = '2026-04-14.1';
+const BRANDING_NETWORK_FIRST = true;
+
+const VERSIONED_BRANDING_ASSETS = [
+  `/manifest.json?v=${BRAND_ASSET_VERSION}`,
+  `/icons/brand-icon.svg?v=${BRAND_ASSET_VERSION}`,
+  `/icons/icon-192x192.png?v=${BRAND_ASSET_VERSION}`,
+  `/icons/icon-maskable-192x192.png?v=${BRAND_ASSET_VERSION}`,
+  `/icons/icon-512x512.png?v=${BRAND_ASSET_VERSION}`,
+  `/icons/icon-maskable-512x512.png?v=${BRAND_ASSET_VERSION}`,
+  `/favicon-16x16.png?v=${BRAND_ASSET_VERSION}`,
+  `/favicon-32x32.png?v=${BRAND_ASSET_VERSION}`,
+  `/favicon-48x48.png?v=${BRAND_ASSET_VERSION}`,
+];
 
 const IS_DEV = self.location.hostname === 'localhost' || self.location.hostname === '127.0.0.1';
 
@@ -15,6 +29,7 @@ const STATIC_ASSETS = [
   '/favicon-16x16.png',
   '/favicon-32x32.png',
   '/favicon-48x48.png',
+  ...VERSIONED_BRANDING_ASSETS,
 ];
 
 function debugLog(...args) {
@@ -44,6 +59,16 @@ function isNavigationRequest(request) {
 
 function isApiRequest(url) {
   return url.pathname.startsWith('/api/');
+}
+
+function isBrandingAsset(url) {
+  return (
+    url.pathname === '/manifest.json' ||
+    url.pathname === '/favicon-16x16.png' ||
+    url.pathname === '/favicon-32x32.png' ||
+    url.pathname === '/favicon-48x48.png' ||
+    url.pathname.startsWith('/icons/')
+  );
 }
 
 function isStaticAssetRequest(url, request) {
@@ -170,6 +195,25 @@ async function handleApiRequest(request) {
 }
 
 async function handleStaticAssetRequest(request) {
+  const url = new URL(request.url);
+
+  if (isBrandingAsset(url) && BRANDING_NETWORK_FIRST) {
+    try {
+      const networkResponse = await fetch(request);
+      if (networkResponse && networkResponse.ok) {
+        const cache = await caches.open(STATIC_CACHE);
+        cache.put(request, networkResponse.clone()).catch(() => {});
+      }
+      return networkResponse;
+    } catch (error) {
+      debugError('Branding asset fetch failed, falling back to cache', error);
+      const cachedBrandingAsset = await caches.match(request);
+      if (cachedBrandingAsset) {
+        return cachedBrandingAsset;
+      }
+    }
+  }
+
   const cached = await caches.match(request);
   if (cached) return cached;
 

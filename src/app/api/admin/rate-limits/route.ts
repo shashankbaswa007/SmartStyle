@@ -1,32 +1,28 @@
 import { NextResponse } from 'next/server';
-import { verifyBearerToken, AuthError } from '@/lib/server-auth';
+import { AuthError } from '@/lib/server-auth';
 import admin from '@/lib/firebase-admin';
+import { validateRequestOrigin } from '@/lib/csrf-protection';
+import { verifyAdminRequest } from '@/lib/admin-auth';
+import { logger } from '@/lib/logger';
 
 /**
  * Admin endpoint to inspect and reset rate limit records
  * Used for debugging issues where quotas show incorrectly
  */
 
-async function verifyAdminToken(request: Request): Promise<string> {
-  const token = request.headers.get('Authorization')?.replace('Bearer ', '');
-  if (!token) {
-    throw new AuthError('Missing authorization token', 401);
-  }
-
-  const auth = admin.auth();
-  try {
-    const decodedToken = await auth.verifyIdToken(token);
-    // In production, you'd check for admin claims here
-    // For now, we just verify it's a valid token
-    return decodedToken.uid;
-  } catch (error) {
-    throw new AuthError('Invalid or expired token', 401);
-  }
-}
-
 export async function GET(request: Request) {
+  if (!validateRequestOrigin(request)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+  }
+
   try {
-    const userId = await verifyAdminToken(request);
+    const { uid: userId, source } = await verifyAdminRequest(request);
+    logger.info('Admin endpoint access', {
+      endpoint: '/api/admin/rate-limits',
+      method: 'GET',
+      userId,
+      authSource: source,
+    });
     const scopes = ['recommend', 'wardrobe-outfit', 'wardrobe-upload'];
     
     const db = admin.firestore();
@@ -67,8 +63,18 @@ export async function GET(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  if (!validateRequestOrigin(request)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+  }
+
   try {
-    const userId = await verifyAdminToken(request);
+    const { uid: userId, source } = await verifyAdminRequest(request);
+    logger.info('Admin endpoint access', {
+      endpoint: '/api/admin/rate-limits',
+      method: 'DELETE',
+      userId,
+      authSource: source,
+    });
     const scopes = ['recommend', 'wardrobe-outfit', 'wardrobe-upload'];
     
     const db = admin.firestore();

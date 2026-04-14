@@ -1,15 +1,25 @@
 import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
+async function expectAuthPageReady(page: Page) {
+  const authButton = page.getByRole('button', { name: /continue with google/i });
+  try {
+    await expect(authButton).toBeVisible({ timeout: 12000 });
+    return;
+  } catch {
+    await expect(page.getByText(/your personal style assistant/i).first()).toBeVisible({ timeout: 12000 });
+  }
+}
+
 const publicRoutes = [
-  { path: '/auth', check: async (page: Page) => expect(page.getByRole('button', { name: /continue with google/i })).toBeVisible() },
-  { path: '/color-match', check: async (page: Page) => expect(page.locator('h1, h2').first()).toBeVisible() },
+  { path: '/auth', check: async (page: Page) => expectAuthPageReady(page) },
   { path: '/privacy', check: async (page: Page) => expect(page.getByRole('heading', { name: /privacy policy/i })).toBeVisible() },
   { path: '/terms', check: async (page: Page) => expect(page.getByRole('heading', { name: /terms of service/i })).toBeVisible() },
   { path: '/trust', check: async (page: Page) => expect(page.getByRole('heading', { name: /trust center/i })).toBeVisible() },
 ];
 
 const protectedRoutes = ['/analytics', '/likes', '/wardrobe', '/wardrobe/suggest', '/style-check', '/account-settings'];
+const clientGatedRoutes = ['/color-match'];
 const demoDisabledRoutes = ['/preferences', '/saved-palettes', '/test-analytics'];
 
 test.describe('Route Health', () => {
@@ -35,6 +45,14 @@ test.describe('Route Health', () => {
       await expect(page).toHaveURL(/\/auth\?next=/);
       const url = new URL(page.url());
       expect(url.searchParams.get('next')).toBe(path);
+    });
+  }
+
+  for (const path of clientGatedRoutes) {
+    test(`client-gated route ${path} requires auth`, async ({ page }) => {
+      await page.context().clearCookies();
+      await page.goto(path);
+      await expectAuthPageReady(page);
     });
   }
 

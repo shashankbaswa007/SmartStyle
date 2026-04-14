@@ -8,6 +8,7 @@ import { executeWithTimeoutAndRetry } from '@/lib/external-request';
 import { featureFlags } from '@/lib/feature-flags';
 import * as Sentry from '@sentry/nextjs';
 import { logger } from '@/lib/logger';
+import { validateRequestOrigin } from '@/lib/csrf-protection';
 
 // Input validation schema
 const tavilyRequestSchema = z.object({
@@ -22,6 +23,10 @@ export async function POST(req: Request) {
     links: { amazon: null, tatacliq: null, myntra: null },
     warning: 'Shopping links temporarily unavailable',
   };
+
+  if (!validateRequestOrigin(req)) {
+    return NextResponse.json({ error: 'Invalid request origin', ...fallbackPayload }, { status: 403 });
+  }
 
   let userId = 'anonymous';
 

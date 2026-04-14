@@ -136,7 +136,7 @@ const nextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            value: 'public, max-age=0, must-revalidate',
           },
         ],
       },
@@ -145,7 +145,34 @@ const nextConfig = {
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            value: 'public, max-age=0, must-revalidate',
+          },
+        ],
+      },
+      {
+        source: '/favicon-16x16.png',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+        ],
+      },
+      {
+        source: '/favicon-32x32.png',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
+          },
+        ],
+      },
+      {
+        source: '/favicon-48x48.png',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=0, must-revalidate',
           },
         ],
       },

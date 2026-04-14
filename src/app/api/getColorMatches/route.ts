@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import chroma from 'chroma-js';
 import { checkRateLimit, getClientIdentifier } from '@/lib/rate-limiter';
+import { validateRequestOrigin } from '@/lib/csrf-protection';
 
 interface ColorMatch {
   label: string;
@@ -291,6 +292,10 @@ const hasGoodContrast = (color1: chroma.Color, color2: chroma.Color): boolean =>
 
 export async function POST(req: NextRequest) {
   try {
+    if (!validateRequestOrigin(req)) {
+      return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
+    }
+
     // Rate limit: 60 requests per minute per IP
     const clientId = getClientIdentifier(req);
     const rateLimit = checkRateLimit(clientId, { windowMs: 60_000, maxRequests: 60 });

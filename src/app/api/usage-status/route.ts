@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server';
+import crypto from 'crypto';
 import { verifyBearerToken, verifyFirebaseIdToken, AuthError } from '@/lib/server-auth';
 import admin from '@/lib/firebase-admin';
 import { getServerRateLimitStatus } from '@/lib/server-rate-limiter';
 import { logger } from '@/lib/logger';
+import { incrementProductionCounter } from '@/lib/production-telemetry';
 import {
   DAILY_WINDOW_MS,
   getTimezoneOffsetMinutesFromRequest,
@@ -20,8 +22,22 @@ const NO_STORE_HEADERS = {
   Expires: '0',
 };
 
+const USAGE_STATUS_ENDPOINT = '/api/usage-status';
+const USAGE_STATUS_SLOW_REQUEST_MS = 1200;
+
+type ObservabilityErrorCategory = 'ENV_MISCONFIGURED' | 'BACKEND_UNAVAILABLE' | 'TIMEOUT' | 'UNKNOWN_ERROR';
+
 const SESSION_COOKIE_NAME = 'smartstyle-session';
 let googleJwksRemote: unknown = null;
+
+function resolveRequestId(request: Request): string {
+  const inboundRequestId = request.headers.get('x-request-id');
+  if (inboundRequestId && inboundRequestId.trim().length > 0) {
+    return inboundRequestId.trim();
+  }
+
+  return `usage-status-${crypto.randomUUID()}`;
+}
 
 function getSessionTokenFromCookie(request: Request): string | null {
   const cookieHeader = request.headers.get('cookie') || '';
@@ -124,12 +140,178 @@ function sanitizeUsageStatus(status: { limit: number; used: number; remaining: n
   };
 }
 
+function buildUsagePayload(
+  recommendUsage: ReturnType<typeof sanitizeUsageStatus>,
+  wardrobeOutfitUsage: ReturnType<typeof sanitizeUsageStatus>,
+  wardrobeUploadUsage: ReturnType<typeof sanitizeUsageStatus>
+) {
+  return {
+    recommend: recommendUsage,
+    [RATE_LIMIT_SCOPES.wardrobeOutfit]: wardrobeOutfitUsage,
+    [RATE_LIMIT_SCOPES.wardrobeUpload]: wardrobeUploadUsage,
+    // Temporary legacy aliases for backward compatibility during rollout.
+    wardrobeOutfit: wardrobeOutfitUsage,
+    wardrobeUpload: wardrobeUploadUsage,
+  };
+}
+
+function buildDegradedUsagePayload() {
+  const fallbackResetAt = new Date(Date.now() + DAILY_WINDOW_MS);
+
+  const recommendUsage = sanitizeUsageStatus({
+    limit: USAGE_LIMITS.recommend,
+    used: 0,
+    remaining: USAGE_LIMITS.recommend,
+    resetAt: fallbackResetAt,
+  });
+  const wardrobeOutfitUsage = sanitizeUsageStatus({
+    limit: USAGE_LIMITS.wardrobeOutfit,
+    used: 0,
+    remaining: USAGE_LIMITS.wardrobeOutfit,
+    resetAt: fallbackResetAt,
+  });
+  const wardrobeUploadUsage = sanitizeUsageStatus({
+    limit: USAGE_LIMITS.wardrobeUpload,
+    used: 0,
+    remaining: USAGE_LIMITS.wardrobeUpload,
+    resetAt: fallbackResetAt,
+  });
+
+  return buildUsagePayload(recommendUsage, wardrobeOutfitUsage, wardrobeUploadUsage);
+}
+
+function getUsageBackendMissingEnv(): string[] {
+  const missing: string[] = [];
+
+  if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
+    missing.push('NEXT_PUBLIC_FIREBASE_PROJECT_ID');
+  }
+
+  if (!process.env.FIREBASE_SERVICE_ACCOUNT_KEY && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    missing.push('FIREBASE_SERVICE_ACCOUNT_KEY or GOOGLE_APPLICATION_CREDENTIALS');
+  }
+
+  return missing;
+}
+
+function classifyUsageBackendDiagnostic(errorMessage: string):
+  | 'FIREBASE_ADMIN_NOT_INITIALIZED'
+  | 'RATE_LIMIT_BACKEND_UNAVAILABLE'
+  | 'USAGE_BACKEND_UNAVAILABLE' {
+  if (errorMessage.includes('Firebase Admin SDK not initialized')) {
+    return 'FIREBASE_ADMIN_NOT_INITIALIZED';
+  }
+
+  if (errorMessage.includes('Persistent rate limit status backend unavailable')) {
+    return 'RATE_LIMIT_BACKEND_UNAVAILABLE';
+  }
+
+  return 'USAGE_BACKEND_UNAVAILABLE';
+}
+
+function classifyUsageErrorCategory(errorMessage: string): ObservabilityErrorCategory {
+  const normalized = errorMessage.toLowerCase();
+
+  if (normalized.includes('timeout') || normalized.includes('timed out') || normalized.includes('abort')) {
+    return 'TIMEOUT';
+  }
+
+  if (
+    normalized.includes('temporarily unavailable') ||
+    normalized.includes('backend unavailable') ||
+    normalized.includes('service unavailable')
+  ) {
+    return 'BACKEND_UNAVAILABLE';
+  }
+
+  return 'UNKNOWN_ERROR';
+}
+
+function toLogSafeError(error: unknown): { name?: string; message: string } {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+    };
+  }
+
+  return {
+    message: String(error),
+  };
+}
+
 export async function GET(request: Request) {
-  const requestId = request.headers.get('x-request-id') || `usage-status-${Date.now()}`;
+  const requestId = resolveRequestId(request);
+  const requestStartedAt = Date.now();
+  const requestLogger =
+    typeof logger.withContext === 'function'
+      ? logger.withContext({
+          endpoint: USAGE_STATUS_ENDPOINT,
+          requestId,
+        })
+      : logger;
+
+  const logLifecycle = (
+    status: 'start' | 'success' | 'degraded' | 'error',
+    details: Record<string, unknown> = {}
+  ) => {
+    const durationMs = Date.now() - requestStartedAt;
+    const isSlow = durationMs >= USAGE_STATUS_SLOW_REQUEST_MS;
+    const event = {
+      requestId,
+      endpoint: USAGE_STATUS_ENDPOINT,
+      status,
+      durationMs,
+      isSlow,
+      observedAt: new Date().toISOString(),
+      errorCode: null,
+      errorCategory: null,
+      ...(status === 'degraded' ? { degraded: true, backendAvailable: false } : {}),
+      ...details,
+    };
+
+    if (status === 'error') {
+      requestLogger.error('usage_status.request_lifecycle', event);
+    } else if (status === 'degraded') {
+      requestLogger.warn('usage_status.request_lifecycle', event);
+    } else {
+      requestLogger.info('usage_status.request_lifecycle', event);
+    }
+
+    if (status !== 'start') {
+      if (isSlow) {
+        requestLogger.warn('usage_status.slow_request', {
+          requestId,
+          endpoint: USAGE_STATUS_ENDPOINT,
+          status,
+          durationMs,
+          errorCode: event.errorCode,
+          errorCategory: event.errorCategory,
+        });
+      }
+
+      incrementProductionCounter('usage_status.response_time_ms', durationMs, {
+        endpoint: USAGE_STATUS_ENDPOINT,
+        status,
+      });
+
+      if (isSlow) {
+        incrementProductionCounter('usage_status.slow_total', 1, {
+          endpoint: USAGE_STATUS_ENDPOINT,
+          status,
+        });
+      }
+    }
+  };
+
+  logLifecycle('start');
+
+  incrementProductionCounter('usage_status.requests_total', 1, { route: 'api/usage-status' });
+  let timezoneOffsetMinutes = 0;
 
   try {
     const userId = await resolveAuthenticatedUserId(request);
-    const timezoneOffsetMinutes = getTimezoneOffsetMinutesFromRequest(request);
+    timezoneOffsetMinutes = getTimezoneOffsetMinutesFromRequest(request);
 
     const [recommend, wardrobeOutfit, wardrobeUpload] = await Promise.all([
       getServerRateLimitStatus(userId, {
@@ -156,16 +338,16 @@ export async function GET(request: Request) {
     const wardrobeOutfitUsage = sanitizeUsageStatus(wardrobeOutfit);
     const wardrobeUploadUsage = sanitizeUsageStatus(wardrobeUpload);
 
-    logger.info('Usage status fetched', {
-      requestId,
-      userId,
+    logLifecycle('success', {
+      errorCode: null,
+      backendAvailable: true,
+      degraded: false,
       timezoneOffsetMinutes,
       timezoneStrategy: USAGE_TIMEZONE_STRATEGY,
-      usage: {
-        recommend: recommendUsage,
-        [RATE_LIMIT_SCOPES.wardrobeOutfit]: wardrobeOutfitUsage,
-        [RATE_LIMIT_SCOPES.wardrobeUpload]: wardrobeUploadUsage,
-      },
+    });
+
+    incrementProductionCounter('usage_status.success_total', 1, {
+      route: 'api/usage-status',
     });
 
     return NextResponse.json(
@@ -173,23 +355,25 @@ export async function GET(request: Request) {
         success: true,
         requestId,
         timezoneStrategy: USAGE_TIMEZONE_STRATEGY,
-        usage: {
-          recommend: recommendUsage,
-          [RATE_LIMIT_SCOPES.wardrobeOutfit]: wardrobeOutfitUsage,
-          [RATE_LIMIT_SCOPES.wardrobeUpload]: wardrobeUploadUsage,
-          // Temporary legacy aliases for backward compatibility during rollout.
-          wardrobeOutfit: wardrobeOutfitUsage,
-          wardrobeUpload: wardrobeUploadUsage,
-        },
+        backendAvailable: true,
+        usage: buildUsagePayload(recommendUsage, wardrobeOutfitUsage, wardrobeUploadUsage),
       },
       { headers: NO_STORE_HEADERS }
     );
   } catch (error) {
     if (error instanceof AuthError) {
-      logger.warn('Usage status auth failed', {
-        requestId,
+      const errorCode = error.status === 403 ? 'FORBIDDEN' : 'UNAUTHORIZED';
+      const errorCategory: ObservabilityErrorCategory = 'UNKNOWN_ERROR';
+
+      logLifecycle('error', {
+        errorCode,
+        errorCategory,
+        httpStatus: error.status,
+      });
+
+      incrementProductionCounter('usage_status.auth_error_total', 1, {
+        route: 'api/usage-status',
         status: error.status,
-        message: error.message,
       });
 
       return NextResponse.json(
@@ -197,7 +381,8 @@ export async function GET(request: Request) {
           success: false,
           requestId,
           error: error.message,
-          code: error.status === 403 ? 'FORBIDDEN' : 'UNAUTHORIZED',
+          code: errorCode,
+          errorCategory,
         },
         { status: error.status, headers: NO_STORE_HEADERS }
       );
@@ -209,25 +394,60 @@ export async function GET(request: Request) {
       errorMessage.includes('Firebase Admin SDK not initialized');
 
     if (persistentBackendUnavailable) {
-      logger.error('Usage status backend unavailable', {
-        requestId,
-        error,
+      const diagnostic = classifyUsageBackendDiagnostic(errorMessage);
+      const missingCritical = getUsageBackendMissingEnv();
+      const errorCategory: ObservabilityErrorCategory =
+        missingCritical.length > 0 ? 'ENV_MISCONFIGURED' : 'BACKEND_UNAVAILABLE';
+
+      logLifecycle('degraded', {
+        errorCode: 'USAGE_BACKEND_UNAVAILABLE',
+        errorCategory,
+        backendAvailable: false,
+        degraded: true,
+        diagnostic,
+        missingCritical,
+      });
+
+      incrementProductionCounter('usage_status.degraded_total', 1, {
+        route: 'api/usage-status',
+        diagnostic,
       });
 
       return NextResponse.json(
         {
-          success: false,
+          success: true,
           requestId,
-          error: 'Usage backend is temporarily unavailable',
+          timezoneStrategy: USAGE_TIMEZONE_STRATEGY,
+          backendAvailable: false,
+          degraded: true,
+          error: 'Usage backend is temporarily unavailable. Serving estimated limits.',
           code: 'USAGE_BACKEND_UNAVAILABLE',
+          errorCategory,
+          diagnostic,
+          ...(missingCritical.length > 0 ? { missingCritical } : {}),
+          usage: buildDegradedUsagePayload(),
         },
-        { status: 503, headers: NO_STORE_HEADERS }
+        { status: 200, headers: NO_STORE_HEADERS }
       );
     }
 
-    logger.error('Usage status fetch failed', {
-      requestId,
-      error,
+    const errorCategory = classifyUsageErrorCategory(errorMessage);
+
+    logLifecycle('error', {
+      errorCode: 'USAGE_STATUS_FAILED',
+      errorCategory,
+      backendAvailable: false,
+      degraded: false,
+    });
+
+    requestLogger.error('Usage status fetch failed', {
+      errorCode: 'USAGE_STATUS_FAILED',
+      errorCategory,
+      error: toLogSafeError(error),
+    });
+
+    incrementProductionCounter('usage_status.failed_total', 1, {
+      route: 'api/usage-status',
     });
 
     return NextResponse.json(
@@ -236,6 +456,7 @@ export async function GET(request: Request) {
         requestId,
         error: 'Failed to fetch usage status',
         code: 'USAGE_STATUS_FAILED',
+        errorCategory,
       },
       { status: 500, headers: NO_STORE_HEADERS }
     );

@@ -17,6 +17,7 @@ import { MOTION_DURATION, MOTION_EASING } from '@/lib/premium-motion';
 import { useMotionSettings } from '@/components/MotionProvider';
 import AnimatedLogo from '@/components/AnimatedLogo';
 import { PremiumAuthLoader } from '@/components/auth/PremiumAuthLoader';
+import { publicRolloutFlags } from '@/lib/public-rollout-flags';
 
 const LOGIN_GRACE_KEY = 'smartstyle_login_grace_ts';
 
@@ -37,7 +38,12 @@ function GoogleGlyph() {
 }
 
 function AuthLoadingSplash() {
-  return <PremiumAuthLoader statusText="Composing your style atmosphere" />;
+  return (
+    <PremiumAuthLoader
+      premium={publicRolloutFlags.premiumAuthLoader}
+      statusText="Composing your style atmosphere"
+    />
+  );
 }
 
 export default function AuthPage() {

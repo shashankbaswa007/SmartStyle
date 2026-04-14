@@ -19,6 +19,10 @@ function hasE2EAuthBypassCookie(): boolean {
   return document.cookie.includes(E2E_AUTH_BYPASS_COOKIE);
 }
 
+function isLocalBypassHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
+}
+
 interface AuthContextType {
   user: User | null;
   loading: boolean;
@@ -38,7 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const previousUserRef = useRef<User | null>(null);
 
   useEffect(() => {
-    const e2eBypassEnabled = process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === 'true';
+    const isLocalHost = typeof window !== 'undefined' && isLocalBypassHost(window.location.hostname);
+    const e2eBypassEnabled =
+      process.env.NEXT_PUBLIC_E2E_AUTH_BYPASS === 'true' &&
+      (process.env.NODE_ENV !== 'production' || isLocalHost);
     if (e2eBypassEnabled && hasE2EAuthBypassCookie()) {
       const now = new Date().toISOString();
       const e2eUser = {

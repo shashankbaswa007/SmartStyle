@@ -1,4 +1,7 @@
 export async function register() {
+  const { validateProductionDeploymentEnvOnce } = await import('./src/lib/deployment-validation');
+  validateProductionDeploymentEnvOnce();
+
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     await import('./sentry.server.config');
   }

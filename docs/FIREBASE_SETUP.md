@@ -162,6 +162,41 @@ npm run dev
 
 ---
 
+## 🚀 Vercel Production Preflight (Required)
+
+Before each production deploy, confirm these environment variables in Vercel:
+
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `FIREBASE_SERVICE_ACCOUNT_KEY` (or `GOOGLE_APPLICATION_CREDENTIALS`)
+- At least one AI provider key:
+  - `GROQ_API_KEY` or
+  - `GOOGLE_GENAI_API_KEY`
+
+Recommended for better rate-limit durability and lower fallback usage:
+
+- `UPSTASH_REDIS_REST_URL`
+- `UPSTASH_REDIS_REST_TOKEN`
+
+If `/api/usage-status` returns `503` with `code=USAGE_BACKEND_UNAVAILABLE`, inspect `diagnostic`:
+
+- `FIREBASE_ADMIN_NOT_INITIALIZED`: Firebase Admin credentials missing in Vercel
+- `RATE_LIMIT_BACKEND_UNAVAILABLE`: Persistent usage backend (Firestore/Redis) unavailable
+
+Rollout toggles for this production hardening release:
+
+- `NEXT_PUBLIC_STYLE_CHECK_PREMIUM_LOADER=1`
+- `NEXT_PUBLIC_AUTH_PREMIUM_LOADER=1`
+- `E2E_AUTH_BYPASS` + `NEXT_PUBLIC_E2E_AUTH_BYPASS` are only honored outside production or on localhost-based test runs.
+- `ALLOW_DEV_AUTH_FALLBACK=0` in production (keep unverified token fallback disabled).
+- `/api/admin/*` endpoints now require Firebase admin claims (`admin=true`) or explicit `ADMIN_USER_IDS` allowlist entry.
+
+Fast rollback controls:
+
+- Set either premium loader env var to `0` and redeploy to disable premium motion visuals.
+- In `public/sw.js`, set `BRANDING_NETWORK_FIRST` to `false` to revert branding assets to cache-first behavior if refresh/perf regressions appear.
+
+---
+
 ## 🔧 Troubleshooting
 
 ### Issue: "Could not load default credentials"

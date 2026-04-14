@@ -13,6 +13,7 @@ interface SmartStyleLoaderProps {
   statusText?: string;
   mode?: LoaderMode;
   stage?: number;
+  premium?: boolean;
   className?: string;
 }
 
@@ -42,10 +43,13 @@ export default function SmartStyleLoader({
   statusText = 'Preparing your style experience...',
   mode = 'operation',
   stage = 0,
+  premium = false,
   className,
 }: SmartStyleLoaderProps) {
   const { prefersReducedMotion } = useMotionSettings();
   const isFullscreen = mode === 'fullscreen';
+  const premiumVisuals = premium || isFullscreen;
+  const premiumMotionEnabled = premiumVisuals && !prefersReducedMotion;
   const logoSize = isFullscreen ? 84 : 62;
 
   return (
@@ -65,6 +69,20 @@ export default function SmartStyleLoader({
             'radial-gradient(circle at 20% 18%, rgba(196, 181, 253, 0.18), transparent 35%), radial-gradient(circle at 82% 14%, rgba(167, 139, 250, 0.18), transparent 40%), radial-gradient(circle at 50% 85%, rgba(139, 92, 246, 0.12), transparent 46%)',
         }}
       />
+
+      {premiumMotionEnabled && (
+        <motion.div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: [0.04, 0.24, 0.08] }}
+          transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
+          style={{
+            background:
+              'radial-gradient(ellipse 640px 320px at 50% 28%, rgba(221, 214, 254, 0.22), transparent 72%)',
+          }}
+        />
+      )}
 
       {!prefersReducedMotion && (
         <motion.div
@@ -104,13 +122,36 @@ export default function SmartStyleLoader({
                 animate={{ rotate: 360 }}
                 transition={{ duration: 9, repeat: Infinity, ease: 'linear' }}
               />
+              {premiumMotionEnabled && (
+                <motion.div
+                  aria-hidden="true"
+                  className="absolute h-[6.7rem] w-[6.7rem] rounded-full"
+                  animate={{
+                    boxShadow: [
+                      '0 0 0 rgba(196, 181, 253, 0.22)',
+                      '0 0 30px rgba(196, 181, 253, 0.55)',
+                      '0 0 0 rgba(196, 181, 253, 0.22)',
+                    ],
+                    scale: [0.96, 1.04, 0.96],
+                  }}
+                  transition={{ duration: 2.2, repeat: Infinity, ease: 'easeInOut' }}
+                />
+              )}
             </>
           )}
 
           <motion.div
-            initial={{ opacity: 0, scale: 0.92, y: 8 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            transition={{ duration: 0.42, ease: 'easeOut' }}
+            initial={
+              premiumMotionEnabled
+                ? { opacity: 0, scale: 0.9, y: 8, filter: 'blur(12px)' }
+                : { opacity: 0, scale: 0.92, y: 8 }
+            }
+            animate={
+              premiumMotionEnabled
+                ? { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)' }
+                : { opacity: 1, scale: 1, y: 0 }
+            }
+            transition={{ duration: premiumMotionEnabled ? 0.58 : 0.42, ease: 'easeOut' }}
           >
             <AnimatedLogo size={logoSize} />
           </motion.div>

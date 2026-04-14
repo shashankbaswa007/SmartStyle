@@ -9,7 +9,7 @@ import { ServiceWorkerRegister } from '@/components/ServiceWorkerRegister';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { LoadingScreen } from '@/components/LoadingScreen';
 import { MotionProvider } from '@/components/MotionProvider';
-import { BRAND } from '@/lib/branding';
+import { BRAND, withBrandAssetVersion } from '@/lib/branding';
 import Script from 'next/script';
 
 const inter = Inter({
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   description: 'Instant style feedback, color intelligence, and wardrobe-driven outfit recommendations with a premium first-run experience.',
   keywords: ['fashion', 'style', 'AI', 'color analysis', 'outfit recommendations', 'wardrobe', 'personal stylist'],
   authors: [{ name: 'SmartStyle Team' }],
-  manifest: '/manifest.json',
+  manifest: withBrandAssetVersion('/manifest.json'),
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
@@ -36,15 +36,15 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/favicon-16x16.png', type: 'image/png', sizes: '16x16' },
-      { url: '/favicon-32x32.png', type: 'image/png', sizes: '32x32' },
-      { url: '/favicon-48x48.png', type: 'image/png', sizes: '48x48' },
-      { url: '/icons/brand-icon.svg', type: 'image/svg+xml', sizes: 'any' },
-      { url: '/icons/icon-192x192.png', type: 'image/png', sizes: '192x192' },
-      { url: '/icons/icon-512x512.png', type: 'image/png', sizes: '512x512' },
+      { url: withBrandAssetVersion('/favicon-16x16.png'), type: 'image/png', sizes: '16x16' },
+      { url: withBrandAssetVersion('/favicon-32x32.png'), type: 'image/png', sizes: '32x32' },
+      { url: withBrandAssetVersion('/favicon-48x48.png'), type: 'image/png', sizes: '48x48' },
+      { url: withBrandAssetVersion('/icons/brand-icon.svg'), type: 'image/svg+xml', sizes: 'any' },
+      { url: withBrandAssetVersion('/icons/icon-192x192.png'), type: 'image/png', sizes: '192x192' },
+      { url: withBrandAssetVersion('/icons/icon-512x512.png'), type: 'image/png', sizes: '512x512' },
     ],
     apple: [
-      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+      { url: withBrandAssetVersion('/icons/icon-192x192.png'), sizes: '192x192', type: 'image/png' },
     ],
   },
   openGraph: {
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     siteName: 'SmartStyle',
     images: [
       {
-        url: '/icons/icon-512x512.png',
+        url: withBrandAssetVersion('/icons/icon-512x512.png'),
         width: 512,
         height: 512,
         alt: 'SmartStyle Logo',
@@ -67,7 +67,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: `${BRAND.name} | AI Style Studio`,
     description: 'Instant style feedback and wardrobe-aware recommendations',
-    images: ['/icons/icon-512x512.png'],
+    images: [withBrandAssetVersion('/icons/icon-512x512.png')],
   },
 };
 

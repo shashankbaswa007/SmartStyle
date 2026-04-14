@@ -27,6 +27,10 @@ const DEMO_DISABLED_ROUTES = new Set([
 ]);
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com'));
 
+function isLocalBypassHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost');
+}
+
 function parseJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const segments = token.split('.');
@@ -70,10 +74,9 @@ async function verifyFirebaseSessionCookie(sessionCookie: string): Promise<{ sub
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const allowE2EBypassInProduction = process.env.ALLOW_E2E_AUTH_BYPASS_IN_PROD === '1';
   const e2eBypassEnabled =
     process.env.E2E_AUTH_BYPASS === '1' &&
-    (process.env.NODE_ENV !== 'production' || allowE2EBypassInProduction);
+    (process.env.NODE_ENV !== 'production' || isLocalBypassHost(request.nextUrl.hostname));
   const hasE2EBypassCookie = request.cookies.get(E2E_AUTH_BYPASS_COOKIE)?.value === 'enabled';
 
   const isDemoDisabledRoute = Array.from(DEMO_DISABLED_ROUTES).some(
