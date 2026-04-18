@@ -51,7 +51,7 @@ export default function AuthPage() {
   const { prefersReducedMotion, duration } = useMotionSettings();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const nextPath = searchParams.get('next') || '/';
+  const nextPath = searchParams?.get('next') || '/';
   const [googleLoading, setGoogleLoading] = useState(false);
   const [finalizingSession, setFinalizingSession] = useState(false);
   const sceneRef = useRef<HTMLDivElement>(null);

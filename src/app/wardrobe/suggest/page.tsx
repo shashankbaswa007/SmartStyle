@@ -164,7 +164,7 @@ function WardrobeSuggestPageContent() {
 
   // Read context from URL params or sessionStorage
   const [activeContext, setActiveContext] = useState<ContextMode>(() => {
-    const urlContext = searchParams.get('context') as ContextMode | null;
+    const urlContext = searchParams?.get('context') as ContextMode | null;
     if (urlContext && CONTEXT_MODES.includes(urlContext)) return urlContext;
     if (typeof window !== 'undefined') {
       const stored = sessionStorage.getItem('wardrobeContext') as ContextMode | null;

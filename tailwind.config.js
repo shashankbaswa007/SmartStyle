@@ -11,6 +11,7 @@ module.exports = {
       fontFamily: {
         body: ['var(--font-inter)', 'sans-serif'],
         headline: ['var(--font-playfair-display)', 'serif'],
+        'entry-premium': ['var(--font-sora)', 'var(--font-inter)', 'sans-serif'],
         code: ['monospace'],
       },
       colors: {

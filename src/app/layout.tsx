@@ -1,7 +1,7 @@
 import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
-import { Inter, Playfair_Display } from 'next/font/google';
+import { Inter, Playfair_Display, Sora } from 'next/font/google';
 import { AuthProvider } from '@/components/auth/AuthProvider';
 import { Header } from '@/components/Header';
 import { InstallPWA } from '@/components/InstallPWA';
@@ -20,6 +20,13 @@ const inter = Inter({
 const playfairDisplay = Playfair_Display({
   subsets: ['latin'],
   variable: '--font-playfair-display',
+});
+
+const sora = Sora({
+  subsets: ['latin'],
+  variable: '--font-sora',
+  weight: ['500', '600'],
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
@@ -94,7 +101,7 @@ export default function RootLayout({
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className={`${inter.variable} ${playfairDisplay.variable} font-body antialiased bg-background`}>
+      <body className={`${inter.variable} ${playfairDisplay.variable} ${sora.variable} font-body antialiased bg-background`}>
         <ErrorBoundary>
           <MotionProvider>
             <AuthProvider>

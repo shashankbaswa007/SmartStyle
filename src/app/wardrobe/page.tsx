@@ -128,7 +128,7 @@ function WardrobePageContent() {
 
   // Hydrate context mode from URL/sessionStorage after mount
   useEffect(() => {
-    const urlContext = searchParams.get('context') as ContextMode | null;
+    const urlContext = searchParams?.get('context') as ContextMode | null;
     if (urlContext && CONTEXT_MODES.includes(urlContext)) {
       setContextMode(urlContext);
       return;
@@ -145,7 +145,7 @@ function WardrobePageContent() {
     if (typeof window === 'undefined') return;
     sessionStorage.setItem('wardrobeContext', contextMode);
     // Update URL without full navigation
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParams?.toString() || '');
     if (contextMode !== 'all') {
       params.set('context', contextMode);
     } else {

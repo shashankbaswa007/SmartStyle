@@ -1,11 +1,11 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   useEffect(() => {
-    Sentry.captureException(error);
+    // Avoid hard dependency on Sentry runtime in local dev where vendor-chunks can be unstable.
+    console.error('GlobalError captured:', error);
   }, [error]);
 
   return (
