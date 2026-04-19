@@ -136,26 +136,57 @@ function WardrobeSuggestPageContent() {
       });
 
       const windowUsage = data.usage[RATE_LIMIT_SCOPES.wardrobeOutfit] || null;
-      setOutfitUsage(windowUsage);
-      setIsOutfitLimitReached(Boolean(windowUsage && windowUsage.remaining <= 0));
+      const usageBackendDegraded =
+        data.degraded === true ||
+        data.backendAvailable === false ||
+        data.code === 'USAGE_BACKEND_UNAVAILABLE';
+
+      if (windowUsage) {
+        setOutfitUsage(windowUsage);
+        setIsOutfitLimitReached(windowUsage.remaining <= 0);
+      } else if (!usageBackendDegraded) {
+        setOutfitUsage(null);
+        setIsOutfitLimitReached(false);
+      }
 
       debugWardrobeSuggestUsage('usage_applied_from_backend', {
         activeUser: activeUser.uid,
         requestId: data.requestId,
         timezoneStrategy: data.timezoneStrategy,
+        degraded: usageBackendDegraded,
+        errorCategory: data.errorCategory,
+        diagnostic: data.diagnostic,
         usage: windowUsage,
       });
 
       if (!windowUsage) {
-        setUsageError('Daily limits are temporarily unavailable. Please retry.');
+        if (usageBackendDegraded) {
+          setUsageError(null);
+        } else {
+          setUsageError('Daily limits are temporarily unavailable. Please retry.');
+        }
+      } else {
+        setUsageError(null);
       }
     } catch (usageFetchError) {
-      const typed = usageFetchError as { message?: string };
-      setUsageError(typed?.message || 'Unable to load daily limit status. Please try again.');
+      const typed = usageFetchError as { message?: string; code?: string; errorCategory?: string };
+      const normalizedErrorCategory = typed?.errorCategory?.toUpperCase();
+      const isBackendUnavailable =
+        typed?.code === 'USAGE_BACKEND_UNAVAILABLE' ||
+        normalizedErrorCategory === 'BACKEND_UNAVAILABLE' ||
+        normalizedErrorCategory === 'TIMEOUT';
+
+      if (isBackendUnavailable) {
+        setUsageError(null);
+      } else {
+        setUsageError(typed?.message || 'Unable to load daily limit status. Please try again.');
+      }
 
       debugWardrobeSuggestUsage('usage_fetch_failed', {
         activeUser: activeUser.uid,
         error: typed?.message || String(usageFetchError),
+        code: typed?.code,
+        errorCategory: typed?.errorCategory,
       });
     } finally {
       setUsageLoading(false);
@@ -348,32 +379,45 @@ function WardrobeSuggestPageContent() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
+        const rateLimitMessage = `${
+          typeof errorData?.message === 'string' ? errorData.message : ''
+        } ${typeof errorData?.error === 'string' ? errorData.error : ''}`.toLowerCase();
+        const rateLimitBackendUnavailable =
+          rateLimitMessage.includes('temporarily unavailable') ||
+          rateLimitMessage.includes('backend unavailable') ||
+          rateLimitMessage.includes('service unavailable');
 
         if (response.status === 429) {
-          const resetAt = typeof errorData?.resetAt === 'string' ? errorData.resetAt : undefined;
-          const remaining =
-            typeof errorData?.remaining === 'number'
-              ? Math.max(0, Math.floor(errorData.remaining))
-              : 0;
-          const limitFromError =
-            typeof errorData?.limit === 'number'
-              ? Math.max(0, Math.floor(errorData.limit))
-              : undefined;
+          if (!rateLimitBackendUnavailable) {
+            const resetAt = typeof errorData?.resetAt === 'string' ? errorData.resetAt : undefined;
+            const remaining =
+              typeof errorData?.remaining === 'number'
+                ? Math.max(0, Math.floor(errorData.remaining))
+                : 0;
+            const limitFromError =
+              typeof errorData?.limit === 'number'
+                ? Math.max(0, Math.floor(errorData.limit))
+                : undefined;
 
-          setOutfitUsage((previous) => {
-            const derivedLimit = limitFromError ?? previous?.limit;
-            if (typeof derivedLimit !== 'number') {
-              return previous ?? null;
-            }
+            setOutfitUsage((previous) => {
+              const derivedLimit = limitFromError ?? previous?.limit;
+              if (typeof derivedLimit !== 'number') {
+                return previous ?? null;
+              }
 
-            return {
-              remaining: Math.min(remaining, derivedLimit),
-              limit: derivedLimit,
-              resetAt: resetAt || previous?.resetAt,
-            };
-          });
-          setIsOutfitLimitReached(true);
-          emitUsageConsumed({ scope: RATE_LIMIT_SCOPES.wardrobeOutfit });
+              return {
+                remaining: Math.min(remaining, derivedLimit),
+                limit: derivedLimit,
+                resetAt: resetAt || previous?.resetAt,
+              };
+            });
+            setIsOutfitLimitReached(true);
+            emitUsageConsumed({ scope: RATE_LIMIT_SCOPES.wardrobeOutfit });
+          } else {
+            setIsOutfitLimitReached(false);
+            setUsageError(null);
+          }
+
           void fetchOutfitUsage(authUserRef.current);
         }
 

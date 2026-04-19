@@ -109,6 +109,55 @@ describe('usage-status-service', () => {
     });
   });
 
+  it('falls back to cookie-auth when forced refresh request fails after an initial 401', async () => {
+    let callCount = 0;
+    const fetchMock = jest.fn(async () => {
+      callCount += 1;
+
+      if (callCount === 1) {
+        return createMockResponse({
+          status: 401,
+          ok: false,
+          body: { error: 'Unauthorized' },
+        });
+      }
+
+      if (callCount === 2) {
+        throw new Error('refresh path failed');
+      }
+
+      return createMockResponse({
+        status: 200,
+        ok: true,
+        body: {
+          success: true,
+          usage: {
+            recommend: { remaining: 6, limit: 10, resetAt: '2026-04-10T00:00:00.000Z' },
+          },
+        },
+      });
+    });
+
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const mockUser = {
+      getIdToken: jest.fn(async () => 'mock-id-token'),
+    } as unknown as Parameters<typeof fetchUsageStatus>[0]['user'];
+
+    const result = await fetchUsageStatus({
+      user: mockUser,
+      scopes: ['recommend'],
+      lastForcedRefreshFailureAtRef: { current: 0 },
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(result.usage.recommend).toEqual({
+      remaining: 6,
+      limit: 10,
+      resetAt: '2026-04-10T00:00:00.000Z',
+    });
+  });
+
   it('accepts degraded usage payloads and exposes backend metadata', async () => {
     const fetchMock = jest.fn(async () =>
       createMockResponse({
@@ -146,6 +195,42 @@ describe('usage-status-service', () => {
     expect(result.code).toBe('USAGE_BACKEND_UNAVAILABLE');
     expect(result.diagnostic).toBe('RATE_LIMIT_BACKEND_UNAVAILABLE');
     expect(result.errorCategory).toBe('BACKEND_UNAVAILABLE');
+  });
+
+  it('accepts degraded payloads even when one requested scope is missing', async () => {
+    const fetchMock = jest.fn(async () =>
+      createMockResponse({
+        status: 200,
+        ok: true,
+        body: {
+          success: true,
+          degraded: true,
+          backendAvailable: false,
+          code: 'USAGE_BACKEND_UNAVAILABLE',
+          usage: {
+            recommend: { remaining: 10, limit: 10, resetAt: '2026-04-10T00:00:00.000Z' },
+          },
+          errorCategory: 'BACKEND_UNAVAILABLE',
+        },
+      })
+    );
+
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const result = await fetchUsageStatus({
+      user: null,
+      scopes: ['recommend', 'wardrobe-outfit'],
+      lastForcedRefreshFailureAtRef: { current: 0 },
+    });
+
+    expect(result.degraded).toBe(true);
+    expect(result.backendAvailable).toBe(false);
+    expect(result.usage.recommend).toEqual({
+      remaining: 10,
+      limit: 10,
+      resetAt: '2026-04-10T00:00:00.000Z',
+    });
+    expect(result.usage['wardrobe-outfit']).toBeUndefined();
   });
 
   it('returns typed timeout failure when usage API request aborts', async () => {

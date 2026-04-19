@@ -174,16 +174,25 @@ export function useWardrobeData(): UseWardrobeDataResult {
       });
       const outfitWindow = data.usage[RATE_LIMIT_SCOPES.wardrobeOutfit];
       const uploadWindow = data.usage[RATE_LIMIT_SCOPES.wardrobeUpload];
+      const usageBackendDegraded =
+        data.degraded === true ||
+        data.backendAvailable === false ||
+        data.code === 'USAGE_BACKEND_UNAVAILABLE';
 
-      setUsageLimits({
-        wardrobeOutfit: outfitWindow,
-        wardrobeUpload: uploadWindow,
-      });
+      setUsageLimits((previous) => ({
+        wardrobeOutfit:
+          outfitWindow || (usageBackendDegraded ? previous.wardrobeOutfit : undefined),
+        wardrobeUpload:
+          uploadWindow || (usageBackendDegraded ? previous.wardrobeUpload : undefined),
+      }));
 
       debugWardrobeUsage('usage_applied_from_backend', {
         activeUser,
         requestId: data.requestId,
         timezoneStrategy: data.timezoneStrategy,
+        degraded: usageBackendDegraded,
+        errorCategory: data.errorCategory,
+        diagnostic: data.diagnostic,
         usage: {
           wardrobeOutfit: outfitWindow,
           wardrobeUpload: uploadWindow,
@@ -191,15 +200,33 @@ export function useWardrobeData(): UseWardrobeDataResult {
       });
 
       if (!outfitWindow || !uploadWindow) {
-        setUsageError('Daily limits are temporarily unavailable. Please retry.');
+        if (usageBackendDegraded) {
+          setUsageError(null);
+        } else {
+          setUsageError('Daily limits are temporarily unavailable. Please retry.');
+        }
+      } else {
+        setUsageError(null);
       }
     } catch (error) {
-      const typed = error as { message?: string };
-      setUsageError(typed?.message || 'Unable to load usage status. Please try again.');
+      const typed = error as { message?: string; code?: string; errorCategory?: string };
+      const normalizedErrorCategory = typed?.errorCategory?.toUpperCase();
+      const isBackendUnavailable =
+        typed?.code === 'USAGE_BACKEND_UNAVAILABLE' ||
+        normalizedErrorCategory === 'BACKEND_UNAVAILABLE' ||
+        normalizedErrorCategory === 'TIMEOUT';
+
+      if (isBackendUnavailable) {
+        setUsageError(null);
+      } else {
+        setUsageError(typed?.message || 'Unable to load usage status. Please try again.');
+      }
 
       debugWardrobeUsage('usage_fetch_failed', {
         activeUser,
         error: typed?.message || String(error),
+        code: typed?.code,
+        errorCategory: typed?.errorCategory,
       });
     } finally {
       setUsageLoading(false);

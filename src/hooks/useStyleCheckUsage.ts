@@ -74,22 +74,20 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
         lastForcedRefreshFailureAtRef,
       });
       const recommendUsage = data.usage[RATE_LIMIT_SCOPES.recommend] || null;
-      setUsage(recommendUsage);
 
       const usageBackendDegraded =
         data.degraded === true ||
         data.backendAvailable === false ||
         data.code === 'USAGE_BACKEND_UNAVAILABLE';
-      const requestReference =
-        SHOULD_SURFACE_REQUEST_REFERENCE && data.requestId
-          ? ` (Ref: ${data.requestId})`
-          : '';
+      const hasRecommendUsage = Boolean(recommendUsage);
 
-      if (usageBackendDegraded) {
-        setUsageError(`Live usage tracking is temporarily unavailable. Showing estimated limits while services recover.${requestReference}`);
-      } else {
-        setUsageError(null);
+      if (hasRecommendUsage) {
+        setUsage(recommendUsage);
+      } else if (!usageBackendDegraded) {
+        setUsage(null);
       }
+
+      setUsageError(null);
 
       debugStyleCheckUsage('usage_applied_from_backend', {
         activeUser,
@@ -101,16 +99,52 @@ export function useStyleCheckUsage(): UseStyleCheckUsageResult {
         usage: recommendUsage,
       });
 
-      if (!recommendUsage) {
+      if (!hasRecommendUsage && !usageBackendDegraded) {
         setUsageError('Daily limits are temporarily unavailable. Please retry.');
         hasTaskCompletedRef.current = true;
         return false;
       }
 
+      if (!hasRecommendUsage && usageBackendDegraded) {
+        debugStyleCheckUsage('usage_missing_but_degraded_preserving_last_known', {
+          activeUser,
+          requestId: data.requestId,
+          code: data.code,
+          errorCategory: data.errorCategory,
+        });
+      }
+
       hasTaskCompletedRef.current = true;
       return true;
     } catch (error) {
-      const typed = error as { message?: string; requestId?: string; code?: string; errorCategory?: string };
+      const typed = error as {
+        status?: number;
+        message?: string;
+        requestId?: string;
+        code?: string;
+        errorCategory?: string;
+      };
+      const normalizedErrorCategory = typed?.errorCategory?.toUpperCase();
+      const isBackendUnavailable =
+        typed?.code === 'USAGE_BACKEND_UNAVAILABLE' ||
+        normalizedErrorCategory === 'BACKEND_UNAVAILABLE' ||
+        normalizedErrorCategory === 'TIMEOUT';
+
+      if (isBackendUnavailable) {
+        setUsageError(null);
+        debugStyleCheckUsage('usage_fetch_failed_soft_degraded', {
+          activeUser,
+          status: typed?.status,
+          error: typed?.message || String(error),
+          requestId: typed?.requestId,
+          code: typed?.code,
+          errorCategory: typed?.errorCategory,
+        });
+
+        hasTaskCompletedRef.current = true;
+        return true;
+      }
+
       const baseMessage = typed?.message || 'Unable to load usage status. Please try again.';
       const errorMessage =
         SHOULD_SURFACE_REQUEST_REFERENCE && typed?.requestId

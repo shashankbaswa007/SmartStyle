@@ -60,8 +60,8 @@ function buildErrorResponse(
 function getRecommendMissingCriticalEnv(): string[] {
   const missing: string[] = [];
 
-  if (!process.env.GROQ_API_KEY && !process.env.GOOGLE_GENAI_API_KEY) {
-    missing.push('GROQ_API_KEY or GOOGLE_GENAI_API_KEY');
+  if (!process.env.GROQ_API_KEY && !process.env.GOOGLE_GENAI_API_KEY && !process.env.GOOGLE_GENAI_API_KEY_BACKUP) {
+    missing.push('GROQ_API_KEY or GOOGLE_GENAI_API_KEY or GOOGLE_GENAI_API_KEY_BACKUP');
   }
 
   return missing;
@@ -115,6 +115,16 @@ function mapUnhandledRecommendError(error: unknown): {
   };
 }
 
+function isBackendUnavailableMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+
+  return (
+    normalized.includes('temporarily unavailable') ||
+    normalized.includes('backend unavailable') ||
+    normalized.includes('service unavailable')
+  );
+}
+
 function toLogSafeError(error: unknown): { name?: string; message: string } {
   if (error instanceof Error) {
     return {
@@ -139,6 +149,7 @@ export async function POST(req: Request) {
           requestId,
         })
       : logger;
+  let usageRateLimitDegraded = false;
   let queuedJobId: string | null = null;
 
   const logLifecycle = (
@@ -205,10 +216,6 @@ export async function POST(req: Request) {
     if (process.env.NODE_ENV === 'production') {
       const missingCritical = getRecommendMissingCriticalEnv();
       if (missingCritical.length > 0) {
-        requestLogger.error('Recommend route missing critical production env configuration', {
-          missingCritical,
-        });
-
         logLifecycle('error', {
           errorCode: 'RECOMMEND_BACKEND_MISCONFIGURED',
           errorCategory: 'ENV_MISCONFIGURED',
@@ -467,55 +474,67 @@ export async function POST(req: Request) {
       );
 
       if (!limitResult.rateLimit.allowed) {
-        const retryAfterSeconds = Math.max(
-          1,
-          Math.ceil((limitResult.rateLimit.resetAt.getTime() - Date.now()) / 1000)
-        );
+        const rateLimitMessage = String(limitResult.rateLimit.message || '');
+        const isRateLimitBackendUnavailable = isBackendUnavailableMessage(rateLimitMessage);
 
-        requestLogger.warn('Recommend request rejected by usage rate limits', {
-          jobId: queued.jobId,
-          resetAt: limitResult.rateLimit.resetAt.toISOString(),
-        });
+        if (isRateLimitBackendUnavailable) {
+          usageRateLimitDegraded = true;
+          requestLogger.warn('Recommend usage backend unavailable; continuing in degraded mode', {
+            jobId: queued.jobId,
+          });
+        } else {
+          const retryAfterSeconds = Math.max(
+            1,
+            Math.ceil((limitResult.rateLimit.resetAt.getTime() - Date.now()) / 1000)
+          );
 
-        logLifecycle('error', {
-          errorCode: 'RATE_LIMIT_EXCEEDED',
-          errorCategory: 'UNKNOWN_ERROR',
-          httpStatus: 429,
-        });
+          requestLogger.warn('Recommend request rejected by usage rate limits', {
+            jobId: queued.jobId,
+            resetAt: limitResult.rateLimit.resetAt.toISOString(),
+          });
 
-        await markRecommendJobRateLimited(
-          queued.jobId,
-          limitResult.rateLimit.message || 'Rate limit exceeded'
-        );
-
-        return NextResponse.json(
-          {
-            success: false,
-            requestId,
-            code: 'RATE_LIMIT_EXCEEDED',
+          logLifecycle('error', {
+            errorCode: 'RATE_LIMIT_EXCEEDED',
             errorCategory: 'UNKNOWN_ERROR',
-            status: 'rate_limited',
-            error: limitResult.rateLimit.message || 'Rate limit exceeded',
-            remaining: 0,
-            resetAt: limitResult.rateLimit.resetAt,
-          },
-          {
-            status: 429,
-            headers: {
-              'X-Request-Id': requestId,
-              'X-RateLimit-Remaining': '0',
-              'X-RateLimit-Reset': limitResult.rateLimit.resetAt.toISOString(),
-              'Retry-After': String(retryAfterSeconds),
+            httpStatus: 429,
+          });
+
+          await markRecommendJobRateLimited(
+            queued.jobId,
+            limitResult.rateLimit.message || 'Rate limit exceeded'
+          );
+
+          return NextResponse.json(
+            {
+              success: false,
+              requestId,
+              code: 'RATE_LIMIT_EXCEEDED',
+              errorCategory: 'UNKNOWN_ERROR',
+              status: 'rate_limited',
+              error: limitResult.rateLimit.message || 'Rate limit exceeded',
+              remaining: 0,
+              resetAt: limitResult.rateLimit.resetAt,
             },
-          }
-        );
+            {
+              status: 429,
+              headers: {
+                'X-Request-Id': requestId,
+                'X-RateLimit-Remaining': '0',
+                'X-RateLimit-Reset': limitResult.rateLimit.resetAt.toISOString(),
+                'Retry-After': String(retryAfterSeconds),
+              },
+            }
+          );
+        }
       }
 
-      await setRecommendJobUsageReservation(queued.jobId, {
-        subject: usageSubject,
-        reservationId: usageReservationId,
-        timezoneOffsetMinutes,
-      });
+      if (!usageRateLimitDegraded) {
+        await setRecommendJobUsageReservation(queued.jobId, {
+          subject: usageSubject,
+          reservationId: usageReservationId,
+          timezoneOffsetMinutes,
+        });
+      }
     } catch (error) {
       const rateLimitErrorMessage = error instanceof Error ? error.message : String(error);
       const rateLimitCategory: ObservabilityErrorCategory =
@@ -528,25 +547,7 @@ export async function POST(req: Request) {
         errorCategory: rateLimitCategory,
         error: toLogSafeError(error),
       });
-
-      await markRecommendJobRateLimited(
-        queued.jobId,
-        'Unable to verify current usage. Please retry shortly.'
-      );
-
-      logLifecycle('error', {
-        errorCode: 'RATE_LIMIT_UNAVAILABLE',
-        errorCategory: rateLimitCategory,
-        httpStatus: 429,
-      });
-
-      return buildErrorResponse(
-        429,
-        'RATE_LIMIT_UNAVAILABLE',
-        'Unable to verify current usage. Please retry shortly.',
-        requestId,
-        rateLimitCategory
-      );
+      usageRateLimitDegraded = true;
     }
 
     await startRecommendJob(queued.jobId);
@@ -575,10 +576,12 @@ export async function POST(req: Request) {
         status: terminalJob.status,
       });
 
-      const degradedResponse = terminalJob.status === 'failed';
+      const degradedResponse = terminalJob.status === 'failed' || usageRateLimitDegraded;
       const errorCategory: ObservabilityErrorCategory = degradedResponse ? 'BACKEND_UNAVAILABLE' : 'UNKNOWN_ERROR';
       logLifecycle(degradedResponse ? 'degraded' : 'success', {
-        errorCode: degradedResponse ? String(result?.code || terminalJob.error || 'RECOMMEND_JOB_FAILED') : null,
+        errorCode: degradedResponse
+          ? String(result?.code || terminalJob.error || (usageRateLimitDegraded ? 'RATE_LIMIT_UNAVAILABLE' : 'RECOMMEND_JOB_FAILED'))
+          : null,
         errorCategory: degradedResponse ? errorCategory : null,
         httpStatus: 200,
         terminalStatus: terminalJob.status,
@@ -603,6 +606,7 @@ export async function POST(req: Request) {
           errorCategory: degradedResponse ? errorCategory : undefined,
           degraded: degradedResponse,
           backendAvailable: !degradedResponse,
+          usageRateLimitDegraded,
           completedAt: terminalJob.completedAt,
         },
         { status: 200, headers: { 'X-Request-Id': requestId } }
@@ -614,8 +618,9 @@ export async function POST(req: Request) {
       deduped: queued.deduped,
     });
 
-    logLifecycle('success', {
-      errorCode: null,
+    logLifecycle(usageRateLimitDegraded ? 'degraded' : 'success', {
+      errorCode: usageRateLimitDegraded ? 'RATE_LIMIT_UNAVAILABLE' : null,
+      errorCategory: usageRateLimitDegraded ? 'BACKEND_UNAVAILABLE' : null,
       httpStatus: 202,
       terminalStatus: 'queued',
       deduped: queued.deduped,
@@ -628,6 +633,7 @@ export async function POST(req: Request) {
         status: 'queued',
         jobId: queued.jobId,
         deduped: queued.deduped,
+        usageRateLimitDegraded,
         message: queued.deduped
           ? 'Similar request already in progress or cached; attached to existing job.'
           : 'Recommendation job queued successfully.',

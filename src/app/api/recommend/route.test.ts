@@ -76,6 +76,7 @@ import { POST } from './route';
 const originalNodeEnv = process.env.NODE_ENV;
 const originalGroqApiKey = process.env.GROQ_API_KEY;
 const originalGoogleGenAiApiKey = process.env.GOOGLE_GENAI_API_KEY;
+const originalGoogleGenAiApiKeyBackup = process.env.GOOGLE_GENAI_API_KEY_BACKUP;
 
 describe('POST /api/recommend', () => {
   beforeEach(() => {
@@ -107,12 +108,19 @@ describe('POST /api/recommend', () => {
     } else {
       process.env.GOOGLE_GENAI_API_KEY = originalGoogleGenAiApiKey;
     }
+
+    if (typeof originalGoogleGenAiApiKeyBackup === 'undefined') {
+      delete process.env.GOOGLE_GENAI_API_KEY_BACKUP;
+    } else {
+      process.env.GOOGLE_GENAI_API_KEY_BACKUP = originalGoogleGenAiApiKeyBackup;
+    }
   });
 
   it('returns 503 in production when recommendation provider env vars are missing', async () => {
     process.env.NODE_ENV = 'production';
     delete process.env.GROQ_API_KEY;
     delete process.env.GOOGLE_GENAI_API_KEY;
+    delete process.env.GOOGLE_GENAI_API_KEY_BACKUP;
 
     const response = await POST(
       new Request('http://localhost/api/recommend', {
@@ -137,7 +145,7 @@ describe('POST /api/recommend', () => {
     const payload = await response.json();
     expect(payload.code).toBe('RECOMMEND_BACKEND_MISCONFIGURED');
     expect(payload.errorCategory).toBe('ENV_MISCONFIGURED');
-    expect(payload.missingCritical).toContain('GROQ_API_KEY or GOOGLE_GENAI_API_KEY');
+    expect(payload.missingCritical).toContain('GROQ_API_KEY or GOOGLE_GENAI_API_KEY or GOOGLE_GENAI_API_KEY_BACKUP');
   });
 
   it('rejects cross-origin request before processing payload', async () => {

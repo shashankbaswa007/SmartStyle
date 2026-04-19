@@ -14,6 +14,16 @@ import { validateRequestOrigin } from '@/lib/csrf-protection';
 import { buildUsageIdempotencyKey } from '@/lib/usage-idempotency';
 const MAX_REQUESTS_PER_DAY = USAGE_LIMITS.wardrobeOutfit;
 
+function isBackendUnavailableMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+
+  return (
+    normalized.includes('temporarily unavailable') ||
+    normalized.includes('backend unavailable') ||
+    normalized.includes('service unavailable')
+  );
+}
+
 export async function POST(request: NextRequest) {
   let reservation: { subject: string; reservationId: string; timezoneOffsetMinutes: number } | null = null;
 
@@ -79,10 +89,12 @@ export async function POST(request: NextRequest) {
       maxRequests: MAX_REQUESTS_PER_DAY,
       timezoneOffsetMinutes,
     }, reservationId, { reservationTtlMs: 15 * 60_000 });
+    const rateLimitMessage = typeof rateLimit.message === 'string' ? rateLimit.message : '';
+    const rateLimitBackendUnavailable = !rateLimit.allowed && isBackendUnavailableMessage(rateLimitMessage);
 
     reservation = { subject: userId, reservationId, timezoneOffsetMinutes };
 
-    if (!rateLimit.allowed) {
+    if (!rateLimit.allowed && !rateLimitBackendUnavailable) {
       return NextResponse.json(
         { 
           error: 'Rate limit exceeded',
@@ -96,6 +108,13 @@ export async function POST(request: NextRequest) {
           },
         }
       );
+    }
+
+    if (rateLimitBackendUnavailable) {
+      console.warn('[wardrobe-outfit] Rate limit backend unavailable; continuing in degraded mode', {
+        userId,
+        reservationId,
+      });
     }
 
     // Fetch weather data if date is provided
@@ -220,12 +239,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const confirmed = await confirmServerRateLimit(userId, {
-      scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
-      windowMs: DAILY_WINDOW_MS,
-      maxRequests: MAX_REQUESTS_PER_DAY,
-      timezoneOffsetMinutes,
-    }, reservationId);
+    const confirmed = rateLimitBackendUnavailable
+      ? {
+          remaining: MAX_REQUESTS_PER_DAY,
+          limit: MAX_REQUESTS_PER_DAY,
+          resetAt: new Date(Date.now() + DAILY_WINDOW_MS),
+        }
+      : await confirmServerRateLimit(userId, {
+          scope: RATE_LIMIT_SCOPES.wardrobeOutfit,
+          windowMs: DAILY_WINDOW_MS,
+          maxRequests: MAX_REQUESTS_PER_DAY,
+          timezoneOffsetMinutes,
+        }, reservationId);
 
     // Return successful response with weather data
     return NextResponse.json(
@@ -233,6 +258,8 @@ export async function POST(request: NextRequest) {
         ...result,
         weather: weatherData,
         cached: false, // Freshly generated
+        degraded: rateLimitBackendUnavailable,
+        backendAvailable: !rateLimitBackendUnavailable,
         usage: {
           remaining: confirmed.remaining,
           limit: confirmed.limit,
@@ -241,10 +268,12 @@ export async function POST(request: NextRequest) {
       },
       {
         status: 200,
-        headers: {
-          'X-RateLimit-Remaining': String(confirmed.remaining),
-          'X-RateLimit-Reset': confirmed.resetAt.toISOString(),
-        },
+        headers: rateLimitBackendUnavailable
+          ? undefined
+          : {
+              'X-RateLimit-Remaining': String(confirmed.remaining),
+              'X-RateLimit-Reset': confirmed.resetAt.toISOString(),
+            },
       }
     );
 

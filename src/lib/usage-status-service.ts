@@ -166,11 +166,25 @@ export async function fetchUsageStatus(params: {
         response = await doFetch(true);
       } catch {
         params.lastForcedRefreshFailureAtRef.current = Date.now();
-        throw {
-          status: 401,
-          message: 'Session refresh failed. Please sign in again.',
-          retryAfter: null,
-        } as HttpLikeError;
+
+        // If token refresh path is flaky, try cookie-auth before surfacing a hard auth failure.
+        try {
+          response = await doFetch(false, { forceCookieAuth: true });
+        } catch {
+          throw {
+            status: 401,
+            message: 'Session refresh failed. Please sign in again.',
+            retryAfter: null,
+          } as HttpLikeError;
+        }
+
+        if (response.status === 401) {
+          throw {
+            status: 401,
+            message: 'Session refresh failed. Please sign in again.',
+            retryAfter: null,
+          } as HttpLikeError;
+        }
       }
 
       if (response.status === 401) {
@@ -278,15 +292,6 @@ export async function fetchUsageStatus(params: {
     parsed[scope] = getScopedUsageWindow(usage, scope);
   }
 
-  const missingScopes = params.scopes.filter((scope) => !parsed[scope]);
-  if (missingScopes.length > 0) {
-    throw {
-      status: 502,
-      message: `Usage status response was incomplete for scope(s): ${missingScopes.join(', ')}`,
-      retryAfter: null,
-    } as HttpLikeError;
-  }
-
   const requestId = typeof payloadObject.requestId === 'string' ? payloadObject.requestId : undefined;
   const timezoneStrategy =
     typeof payloadObject.timezoneStrategy === 'string' ? payloadObject.timezoneStrategy : undefined;
@@ -301,6 +306,26 @@ export async function fetchUsageStatus(params: {
       ? payloadObject.errorCategory
       : undefined;
   const diagnostic = typeof payloadObject.diagnostic === 'string' ? payloadObject.diagnostic : undefined;
+
+  const missingScopes = params.scopes.filter((scope) => !parsed[scope]);
+  if (missingScopes.length > 0 && !degraded) {
+    throw {
+      status: 502,
+      message: `Usage status response was incomplete for scope(s): ${missingScopes.join(', ')}`,
+      retryAfter: null,
+    } as HttpLikeError;
+  }
+
+  if (missingScopes.length > 0 && degraded) {
+    debugUsageStatus('backend_usage_fetch_partial_degraded_payload', {
+      requestId,
+      missingScopes,
+      scopes: params.scopes,
+      code,
+      errorCategory,
+      diagnostic,
+    });
+  }
 
   debugUsageStatus('backend_usage_fetch_succeeded', {
     requestId,

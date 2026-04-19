@@ -389,76 +389,48 @@ export async function GET(request: Request) {
     }
 
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const persistentBackendUnavailable =
-      errorMessage.includes('Persistent rate limit status backend unavailable') ||
-      errorMessage.includes('Firebase Admin SDK not initialized');
+    const diagnostic = classifyUsageBackendDiagnostic(errorMessage);
+    const missingCritical = getUsageBackendMissingEnv();
+    const classifiedErrorCategory = classifyUsageErrorCategory(errorMessage);
+    const errorCategory: ObservabilityErrorCategory =
+      missingCritical.length > 0 ? 'ENV_MISCONFIGURED' : classifiedErrorCategory;
 
-    if (persistentBackendUnavailable) {
-      const diagnostic = classifyUsageBackendDiagnostic(errorMessage);
-      const missingCritical = getUsageBackendMissingEnv();
-      const errorCategory: ObservabilityErrorCategory =
-        missingCritical.length > 0 ? 'ENV_MISCONFIGURED' : 'BACKEND_UNAVAILABLE';
-
-      logLifecycle('degraded', {
-        errorCode: 'USAGE_BACKEND_UNAVAILABLE',
-        errorCategory,
-        backendAvailable: false,
-        degraded: true,
-        diagnostic,
-        missingCritical,
-      });
-
-      incrementProductionCounter('usage_status.degraded_total', 1, {
-        route: 'api/usage-status',
-        diagnostic,
-      });
-
-      return NextResponse.json(
-        {
-          success: true,
-          requestId,
-          timezoneStrategy: USAGE_TIMEZONE_STRATEGY,
-          backendAvailable: false,
-          degraded: true,
-          error: 'Usage backend is temporarily unavailable. Serving estimated limits.',
-          code: 'USAGE_BACKEND_UNAVAILABLE',
-          errorCategory,
-          diagnostic,
-          ...(missingCritical.length > 0 ? { missingCritical } : {}),
-          usage: buildDegradedUsagePayload(),
-        },
-        { status: 200, headers: NO_STORE_HEADERS }
-      );
-    }
-
-    const errorCategory = classifyUsageErrorCategory(errorMessage);
-
-    logLifecycle('error', {
-      errorCode: 'USAGE_STATUS_FAILED',
+    logLifecycle('degraded', {
+      errorCode: 'USAGE_BACKEND_UNAVAILABLE',
       errorCategory,
       backendAvailable: false,
-      degraded: false,
+      degraded: true,
+      diagnostic,
+      missingCritical,
     });
 
-    requestLogger.error('Usage status fetch failed', {
-      errorCode: 'USAGE_STATUS_FAILED',
+    requestLogger.warn('Usage status backend degraded', {
+      errorCode: 'USAGE_BACKEND_UNAVAILABLE',
       errorCategory,
+      diagnostic,
       error: toLogSafeError(error),
     });
 
-    incrementProductionCounter('usage_status.failed_total', 1, {
+    incrementProductionCounter('usage_status.degraded_total', 1, {
       route: 'api/usage-status',
+      diagnostic,
     });
 
     return NextResponse.json(
       {
-        success: false,
+        success: true,
         requestId,
-        error: 'Failed to fetch usage status',
-        code: 'USAGE_STATUS_FAILED',
+        timezoneStrategy: USAGE_TIMEZONE_STRATEGY,
+        backendAvailable: false,
+        degraded: true,
+        error: 'Usage backend is temporarily unavailable. Serving estimated limits.',
+        code: 'USAGE_BACKEND_UNAVAILABLE',
         errorCategory,
+        diagnostic,
+        ...(missingCritical.length > 0 ? { missingCritical } : {}),
+        usage: buildDegradedUsagePayload(),
       },
-      { status: 500, headers: NO_STORE_HEADERS }
+      { status: 200, headers: NO_STORE_HEADERS }
     );
   }
 }

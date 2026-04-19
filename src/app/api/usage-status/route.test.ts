@@ -169,7 +169,7 @@ describe('GET /api/usage-status', () => {
     );
   });
 
-  it('returns a strict failure payload on internal server errors without synthetic usage values', async () => {
+  it('returns degraded usage payload on internal server errors', async () => {
     mockGetServerRateLimitStatus.mockReset();
     mockGetServerRateLimitStatus.mockRejectedValue(new Error('database unavailable'));
 
@@ -181,12 +181,16 @@ describe('GET /api/usage-status', () => {
       })
     );
 
-    expect(response.status).toBe(500);
+    expect(response.status).toBe(200);
     const payload = await response.json();
-    expect(payload.success).toBe(false);
-    expect(payload.code).toBe('USAGE_STATUS_FAILED');
-    expect(payload.errorCategory).toBe('UNKNOWN_ERROR');
-    expect(payload.usage).toBeUndefined();
+    expect(payload.success).toBe(true);
+    expect(payload.degraded).toBe(true);
+    expect(payload.backendAvailable).toBe(false);
+    expect(payload.code).toBe('USAGE_BACKEND_UNAVAILABLE');
+    expect(['ENV_MISCONFIGURED', 'BACKEND_UNAVAILABLE', 'UNKNOWN_ERROR']).toContain(payload.errorCategory);
+    expect(payload.usage.recommend.limit).toBe(10);
+    expect(payload.usage['wardrobe-outfit'].limit).toBe(10);
+    expect(payload.usage['wardrobe-upload'].limit).toBe(10);
   });
 
   it('returns degraded usage payload with backend diagnostic for Firebase Admin initialization failures', async () => {
@@ -207,7 +211,7 @@ describe('GET /api/usage-status', () => {
     expect(payload.degraded).toBe(true);
     expect(payload.backendAvailable).toBe(false);
     expect(payload.code).toBe('USAGE_BACKEND_UNAVAILABLE');
-    expect(['ENV_MISCONFIGURED', 'BACKEND_UNAVAILABLE']).toContain(payload.errorCategory);
+    expect(['ENV_MISCONFIGURED', 'BACKEND_UNAVAILABLE', 'UNKNOWN_ERROR']).toContain(payload.errorCategory);
     expect(payload.diagnostic).toBe('FIREBASE_ADMIN_NOT_INITIALIZED');
     expect(payload.usage.recommend.limit).toBe(10);
     expect(payload.usage['wardrobe-outfit'].limit).toBe(10);
