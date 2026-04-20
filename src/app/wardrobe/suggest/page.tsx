@@ -80,7 +80,7 @@ function debugWardrobeSuggestUsage(message: string, context: Record<string, unkn
 
 export default function WardrobeSuggestPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-violet-600" /></div>}>
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-emerald-600" /></div>}>
       <WardrobeSuggestPageContent />
     </Suspense>
   );
@@ -532,9 +532,9 @@ function WardrobeSuggestPageContent() {
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: index * 0.07, duration: 0.3 }}
       >
-        <div className="flex items-stretch gap-3 p-2.5 rounded-xl border border-violet-100 bg-white hover:border-violet-300 hover:shadow-md transition-all duration-300 group">
+        <div className="flex items-stretch gap-3 p-2.5 rounded-xl border border-emerald-100 bg-white hover:border-emerald-300 hover:shadow-md transition-all duration-300 group">
           {/* Image */}
-          <div className="relative flex-shrink-0 w-[72px] h-[72px] sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-gradient-to-br from-violet-50 to-purple-50 ring-1 ring-violet-200/60">
+          <div className="relative flex-shrink-0 w-[72px] h-[72px] sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-gradient-to-br from-emerald-50 to-teal-50 ring-1 ring-emerald-200/60">
             {imageSrc ? (
               <Image
                 src={imageSrc}
@@ -546,7 +546,7 @@ function WardrobeSuggestPageContent() {
                 quality={75}
               />
             ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center text-violet-400">
+              <div className="w-full h-full flex flex-col items-center justify-center text-emerald-400">
                 <ImageIcon className="h-5 w-5 mb-0.5" />
                 <span className="text-[9px] font-medium">No image</span>
               </div>
@@ -559,7 +559,7 @@ function WardrobeSuggestPageContent() {
               {item.description}
             </p>
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="outline" className="h-5 px-1.5 text-[10px] gap-1 text-violet-700 border-violet-200 bg-violet-50/60">
+              <Badge variant="outline" className="h-5 px-1.5 text-[10px] gap-1 text-emerald-700 border-emerald-200 bg-emerald-50/60">
                 {getItemTypeIcon(item.type)}
                 <span className="capitalize">{item.type}</span>
               </Badge>
@@ -595,7 +595,7 @@ function WardrobeSuggestPageContent() {
           {isMounted && (
             <Particles
               className="absolute inset-0"
-              particleColors={['#7c3aed', '#c4b5fd']}
+              particleColors={['#0d6a60', '#1a8b7e']}
               particleCount={200}
               particleSpread={10}
               speed={0.3}
@@ -617,8 +617,8 @@ function WardrobeSuggestPageContent() {
                   stroke={true}
                   width={true}
                   weight={false}
-                  textColor="#c4b5fd"
-                  strokeColor="#6d28d9"
+                  textColor="#ccfbf1"
+                  strokeColor="#115e59"
                   minFontSize={32}
                 />
               )}
@@ -626,12 +626,12 @@ function WardrobeSuggestPageContent() {
           </header>
 
           {/* Input Section */}
-          <Card className="max-w-2xl mx-auto mb-12 border-violet-200">
+          <Card className="max-w-2xl mx-auto mb-12 border-emerald-200">
             <CardHeader>
               <div className="flex items-center justify-between">
-                <CardTitle className="text-violet-900">Plan Your Outfit</CardTitle>
+                <CardTitle className="text-emerald-900">Plan Your Outfit</CardTitle>
                 {activeContext !== 'all' && (
-                  <Badge className="bg-violet-100 text-violet-700 capitalize">
+                  <Badge className="bg-emerald-100 text-emerald-700 capitalize">
                     {activeContext} mode
                   </Badge>
                 )}
@@ -640,30 +640,30 @@ function WardrobeSuggestPageContent() {
             <CardContent className="space-y-6">
               {/* Occasion Input */}
               <div className="space-y-2">
-                <Label htmlFor="occasion" className="text-violet-700">What&apos;s the occasion?</Label>
+                <Label htmlFor="occasion" className="text-emerald-700">What&apos;s the occasion?</Label>
                 <Input
                   id="occasion"
                   value={occasion}
                   onChange={(e) => setOccasion(e.target.value)}
                   placeholder="e.g., Business presentation, Wedding reception, Casual brunch..."
-                  className="border-violet-300 focus:border-violet-500"
+                  className="border-emerald-300 focus:border-emerald-500"
                 />
-                <p className="text-sm text-violet-600">Describe any occasion - be as specific as you like!</p>
+                <p className="text-sm text-emerald-600">Describe any occasion - be as specific as you like!</p>
               </div>
 
               {/* Date Picker */}
               <div className="space-y-2">
-                <Label className="text-violet-700">When do you need this outfit?</Label>
+                <Label className="text-emerald-700">When do you need this outfit?</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
                       variant="outline"
                       className={cn(
-                        'w-full justify-start text-left font-normal border-violet-300 hover:border-violet-500',
+                        'w-full justify-start text-left font-normal border-emerald-300 hover:border-emerald-500',
                         !selectedDate && 'text-muted-foreground'
                       )}
                     >
-                      <Calendar className="mr-2 h-4 w-4 text-violet-600" />
+                      <Calendar className="mr-2 h-4 w-4 text-emerald-600" />
                       {selectedDate ? format(selectedDate, 'PPP') : <span>Pick a date</span>}
                     </Button>
                   </PopoverTrigger>
@@ -674,15 +674,15 @@ function WardrobeSuggestPageContent() {
                         value={selectedDate ? format(selectedDate, 'yyyy-MM-dd') : ''}
                         onChange={(e) => setSelectedDate(e.target.value ? new Date(e.target.value) : undefined)}
                         min={format(new Date(), 'yyyy-MM-dd')}
-                        className="w-full border border-violet-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-violet-500"
+                        className="w-full border border-emerald-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                       />
                     </div>
                   </PopoverContent>
                 </Popover>
-                <p className="text-sm text-violet-600">We&apos;ll check the weather forecast for that day!</p>
+                <p className="text-sm text-emerald-600">We&apos;ll check the weather forecast for that day!</p>
               </div>
 
-              <div className="rounded-lg p-1 bg-gradient-to-r from-violet-500/15 to-purple-500/15 border border-violet-200/40">
+              <div className="rounded-lg p-1 bg-gradient-to-r from-emerald-500/15 to-teal-500/15 border border-emerald-200/40">
                 <UsageLimitMeter
                   variant="wardrobe"
                   title="Daily Outfit Suggestions"
@@ -705,7 +705,7 @@ function WardrobeSuggestPageContent() {
               <Button
                 onClick={handleGetSuggestions}
                 disabled={loading || isOutfitLimitReached || !occasion.trim() || !selectedDate}
-                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white gap-2"
+                className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white gap-2"
                 size="lg"
               >
                 {loading ? (
@@ -726,12 +726,12 @@ function WardrobeSuggestPageContent() {
                 )}
               </Button>
 
-              <Button asChild variant="outline" className="w-full border-violet-300 text-violet-700 hover:bg-violet-50 gap-2">
+              <Button asChild variant="outline" className="w-full border-emerald-300 text-emerald-700 hover:bg-emerald-50 gap-2">
                 <Link href={backToWardrobeHref}>
                   <ArrowLeft className="h-4 w-4" />
                   Back to Wardrobe
                   {activeContext !== 'all' && (
-                    <Badge variant="secondary" className="ml-1 bg-violet-100 text-violet-700 text-xs capitalize">
+                    <Badge variant="secondary" className="ml-1 bg-emerald-100 text-emerald-700 text-xs capitalize">
                       {activeContext}
                     </Badge>
                   )}
@@ -764,21 +764,21 @@ function WardrobeSuggestPageContent() {
           {loading && (
             <div className="max-w-4xl mx-auto space-y-6">
               {[1, 2].map((i) => (
-                <Card key={i} className="border-violet-200 animate-pulse overflow-hidden">
-                  <CardHeader className="bg-gradient-to-r from-violet-50/60 to-purple-50/60 pb-4">
+                <Card key={i} className="border-emerald-200 animate-pulse overflow-hidden">
+                  <CardHeader className="bg-gradient-to-r from-emerald-50/60 to-teal-50/60 pb-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-violet-200/60" />
+                      <div className="w-10 h-10 rounded-xl bg-emerald-200/60" />
                       <div className="flex-1 space-y-2">
-                        <div className="h-5 bg-violet-200/50 rounded-md w-48" />
-                        <div className="h-3 bg-violet-100/50 rounded w-32" />
+                        <div className="h-5 bg-emerald-200/50 rounded-md w-48" />
+                        <div className="h-3 bg-emerald-100/50 rounded w-32" />
                       </div>
-                      <div className="h-6 w-20 bg-violet-200/50 rounded-full" />
+                      <div className="h-6 w-20 bg-emerald-200/50 rounded-full" />
                     </div>
                   </CardHeader>
                   <CardContent className="pt-5 space-y-3">
                     {[1, 2, 3].map((j) => (
                       <div key={j} className="flex gap-3 p-2.5 rounded-xl border border-gray-100">
-                        <div className="w-20 h-20 bg-violet-50 rounded-lg flex-shrink-0" />
+                        <div className="w-20 h-20 bg-emerald-50 rounded-lg flex-shrink-0" />
                         <div className="flex-1 space-y-2 py-1">
                           <div className="h-4 bg-gray-100 rounded w-3/4" />
                           <div className="h-3 bg-gray-50 rounded w-1/3" />
@@ -801,34 +801,34 @@ function WardrobeSuggestPageContent() {
             >
               {/* Weather Card */}
               {result.weather && (
-                <Card className="mb-8 border-violet-200 bg-gradient-to-br from-violet-50 to-indigo-50">
+                <Card className="mb-8 border-emerald-200 bg-gradient-to-br from-emerald-50 to-teal-50">
                   <CardContent className="pt-6">
                     <div className="flex items-center gap-4">
                       {result.weather.condition.toLowerCase().includes('rain') ? (
-                        <CloudRain className="h-12 w-12 text-violet-600" />
+                        <CloudRain className="h-12 w-12 text-emerald-600" />
                       ) : result.weather.condition.toLowerCase().includes('cloud') ? (
-                        <Cloud className="h-12 w-12 text-violet-600" />
+                        <Cloud className="h-12 w-12 text-emerald-600" />
                       ) : (
-                        <Sun className="h-12 w-12 text-violet-400" />
+                        <Sun className="h-12 w-12 text-emerald-400" />
                       )}
                       <div className="flex-1">
-                        <h3 className="text-lg font-bold text-violet-900 flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-emerald-900 flex items-center gap-2">
                           <Cloud className="h-5 w-5" />
                           Weather Forecast
                         </h3>
-                        <p className="text-violet-700 font-medium">
+                        <p className="text-emerald-700 font-medium">
                           {selectedDate && format(selectedDate, 'EEEE, MMMM d, yyyy')}
                         </p>
                         <div className="flex items-center gap-3 mt-2">
-                          <span className="text-2xl font-bold text-violet-900">
+                          <span className="text-2xl font-bold text-emerald-900">
                             {result.weather.temp}&deg;C
                           </span>
-                          <span className="text-violet-800 capitalize">
+                          <span className="text-emerald-800 capitalize">
                             {result.weather.description}
                           </span>
                         </div>
                         {result.weather.location && (
-                          <p className="text-sm text-violet-600 mt-1">{result.weather.location}</p>
+                          <p className="text-sm text-emerald-600 mt-1">{result.weather.location}</p>
                         )}
                       </div>
                     </div>
@@ -838,13 +838,13 @@ function WardrobeSuggestPageContent() {
 
               {/* Stats Row */}
               <div className="flex flex-wrap gap-4 justify-center mb-8">
-                <div className="bg-violet-50 border border-violet-200 rounded-lg px-4 py-2">
-                  <span className="text-violet-900 font-semibold">{result.outfits.length}</span>
-                  <span className="text-violet-700 ml-1">Outfits Generated</span>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-2">
+                  <span className="text-emerald-900 font-semibold">{result.outfits.length}</span>
+                  <span className="text-emerald-700 ml-1">Outfits Generated</span>
                 </div>
-                <div className="bg-purple-50 border border-purple-200 rounded-lg px-4 py-2">
-                  <span className="text-purple-900 font-semibold">{result.wardrobeStats.totalItems}</span>
-                  <span className="text-purple-700 ml-1">Items in Wardrobe</span>
+                <div className="bg-teal-50 border border-teal-200 rounded-lg px-4 py-2">
+                  <span className="text-teal-900 font-semibold">{result.wardrobeStats.totalItems}</span>
+                  <span className="text-teal-700 ml-1">Items in Wardrobe</span>
                 </div>
               </div>
 
@@ -865,31 +865,31 @@ function WardrobeSuggestPageContent() {
                       >
                         <Card className={`overflow-hidden border-2 transition-all duration-300 ${
                           isExpanded
-                            ? 'border-violet-400 shadow-xl shadow-violet-100/40'
-                            : 'border-violet-200 hover:border-violet-300 hover:shadow-lg'
+                            ? 'border-emerald-400 shadow-xl shadow-emerald-100/40'
+                            : 'border-emerald-200 hover:border-emerald-300 hover:shadow-lg'
                         }`}>
                           {/* ── Card Header (clickable) ── */}
                           <button
                             onClick={() => setExpandedOutfit(isExpanded ? null : outfitIdx)}
-                            className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 rounded-t-xl"
+                            className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 rounded-t-xl"
                           >
-                            <CardHeader className="bg-gradient-to-r from-violet-50/80 to-purple-50/80 pb-4">
+                            <CardHeader className="bg-gradient-to-r from-emerald-50/80 to-teal-50/80 pb-4">
                               <div className="flex items-center gap-3">
                                 {/* Outfit icon */}
-                                <div className="p-2.5 bg-gradient-to-br from-violet-500 to-purple-600 rounded-xl shadow-md flex-shrink-0">
+                                <div className="p-2.5 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl shadow-md flex-shrink-0">
                                   <Star className="h-5 w-5 text-white" />
                                 </div>
 
                                 {/* Title & badge */}
                                 <div className="flex-1 min-w-0">
-                                  <CardTitle className="text-base sm:text-lg text-violet-900 truncate">
+                                  <CardTitle className="text-base sm:text-lg text-emerald-900 truncate">
                                     {outfit.name}
                                   </CardTitle>
                                   <div className="flex items-center gap-2 mt-0.5">
-                                    <Badge className="bg-violet-600/90 text-white text-[10px] px-1.5 py-0 h-5">
+                                    <Badge className="bg-emerald-600/90 text-white text-[10px] px-1.5 py-0 h-5">
                                       {outfit.confidence}% match
                                     </Badge>
-                                    <span className="text-xs text-violet-600 capitalize">{outfit.occasion}</span>
+                                    <span className="text-xs text-emerald-600 capitalize">{outfit.occasion}</span>
                                   </div>
                                 </div>
 
@@ -909,7 +909,7 @@ function WardrobeSuggestPageContent() {
                                       ) : null;
                                     })}
                                     {matchedItems.length > 4 && (
-                                      <div className="w-9 h-9 rounded-full bg-violet-100 border-2 border-white shadow-sm flex items-center justify-center text-[10px] font-bold text-violet-700 flex-shrink-0">
+                                      <div className="w-9 h-9 rounded-full bg-emerald-100 border-2 border-white shadow-sm flex items-center justify-center text-[10px] font-bold text-emerald-700 flex-shrink-0">
                                         +{matchedItems.length - 4}
                                       </div>
                                     )}
@@ -919,9 +919,9 @@ function WardrobeSuggestPageContent() {
                                 {/* Chevron */}
                                 <div className="flex-shrink-0 p-1">
                                   {isExpanded ? (
-                                    <ChevronUp className="h-5 w-5 text-violet-500" />
+                                    <ChevronUp className="h-5 w-5 text-emerald-500" />
                                   ) : (
-                                    <ChevronDown className="h-5 w-5 text-violet-400" />
+                                    <ChevronDown className="h-5 w-5 text-emerald-400" />
                                   )}
                                 </div>
                               </div>
@@ -942,9 +942,9 @@ function WardrobeSuggestPageContent() {
                                   {/* Items list */}
                                   <div>
                                     <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5 mb-3">
-                                      <Shirt className="h-4 w-4 text-violet-600" />
+                                      <Shirt className="h-4 w-4 text-emerald-600" />
                                       Items to Wear
-                                      <Badge variant="outline" className="ml-auto text-[10px] h-5 border-violet-200 text-violet-600">
+                                      <Badge variant="outline" className="ml-auto text-[10px] h-5 border-emerald-200 text-emerald-600">
                                         {outfit.items.length} piece{outfit.items.length !== 1 ? 's' : ''}
                                       </Badge>
                                     </h4>
@@ -956,12 +956,12 @@ function WardrobeSuggestPageContent() {
                                   </div>
 
                                   {/* Reasoning */}
-                                  <div className="p-4 bg-gradient-to-r from-purple-50 to-violet-50 border border-purple-200 rounded-xl">
-                                    <h4 className="text-sm font-semibold text-purple-900 mb-2 flex items-center gap-1.5">
-                                      <Lightbulb className="h-4 w-4 text-purple-600" />
+                                  <div className="p-4 bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 rounded-xl">
+                                    <h4 className="text-sm font-semibold text-teal-900 mb-2 flex items-center gap-1.5">
+                                      <Lightbulb className="h-4 w-4 text-teal-600" />
                                       Why This Works
                                     </h4>
-                                    <p className="text-sm text-purple-800 leading-relaxed">{outfit.reasoning}</p>
+                                    <p className="text-sm text-teal-800 leading-relaxed">{outfit.reasoning}</p>
                                   </div>
                                 </CardContent>
                               </motion.div>
@@ -976,22 +976,22 @@ function WardrobeSuggestPageContent() {
 
               {/* Missing Pieces */}
               {result.missingPieces && result.missingPieces.length > 0 && (
-                <Card className="max-w-2xl mx-auto border-violet-200 bg-violet-50 mb-8">
+                <Card className="max-w-2xl mx-auto border-emerald-200 bg-emerald-50 mb-8">
                   <CardHeader>
-                    <CardTitle className="text-violet-900 flex items-center gap-2">
+                    <CardTitle className="text-emerald-900 flex items-center gap-2">
                       <ShoppingBag className="h-5 w-5" />
                       Wardrobe Suggestions
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-violet-800 mb-4">
+                    <p className="text-emerald-800 mb-4">
                       Consider adding these pieces to enhance your wardrobe for {occasion} occasions:
                     </p>
                     <ul className="space-y-2">
                       {result.missingPieces.map((piece, idx) => (
                         <li key={idx} className="flex items-start gap-2">
-                          <ChevronRight className="h-4 w-4 text-violet-400 mt-0.5 flex-shrink-0" />
-                          <span className="text-violet-900 text-sm">{piece}</span>
+                          <ChevronRight className="h-4 w-4 text-emerald-400 mt-0.5 flex-shrink-0" />
+                          <span className="text-emerald-900 text-sm">{piece}</span>
                         </li>
                       ))}
                     </ul>
@@ -1003,17 +1003,17 @@ function WardrobeSuggestPageContent() {
 
           {/* No Results State */}
           {result && result.outfits.length === 0 && (
-            <Card className="max-w-2xl mx-auto border-violet-200">
+            <Card className="max-w-2xl mx-auto border-emerald-200">
               <CardContent className="py-12 text-center">
-                <Shirt className="h-16 w-16 mx-auto mb-4 text-violet-400" />
-                <h3 className="text-xl font-bold text-violet-900 mb-2">
+                <Shirt className="h-16 w-16 mx-auto mb-4 text-emerald-400" />
+                <h3 className="text-xl font-bold text-emerald-900 mb-2">
                   Not Enough Items
                 </h3>
-                <p className="text-violet-700 mb-6">
+                <p className="text-emerald-700 mb-6">
                   We couldn&apos;t create outfit combinations with your current wardrobe items.
                   Try adding more items to get personalized suggestions!
                 </p>
-                <Button asChild className="bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white">
+                <Button asChild className="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white">
                   <Link href={backToWardrobeHref}>
                     Add More Items
                   </Link>

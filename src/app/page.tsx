@@ -26,7 +26,7 @@ const InspirationCarouselTilt = dynamic(
 export default function Home() {
   return (
     <HomePageWrapper>
-      <div className="flex min-h-screen flex-col bg-[#050813] text-white">
+      <div className="flex min-h-screen flex-col bg-[#050d0a] text-white">
         <section className="flex-grow">
           <section className="relative isolate flex h-[80vh] min-h-[420px] items-center justify-center overflow-hidden text-center sm:min-h-[540px] md:min-h-[640px]">
             <HeroBackgroundImage />
@@ -52,15 +52,15 @@ export default function Home() {
           </section>
 
           <section className="content-auto relative overflow-hidden py-16 sm:py-20 md:py-24 border-t border-white/8">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(124,58,237,0.18),transparent_42%),radial-gradient(circle_at_78%_88%,rgba(192,132,252,0.14),transparent_40%),linear-gradient(to_bottom,rgba(10,10,20,0.98),rgba(8,7,18,0.97))]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(16,185,129,0.16),transparent_42%),radial-gradient(circle_at_78%_88%,rgba(20,184,166,0.12),transparent_40%),linear-gradient(to_bottom,rgba(8,14,12,0.98),rgba(6,10,8,0.97))]" />
             <div className="relative container mx-auto px-4 text-center sm:px-6 lg:px-8">
-              <Card className="mx-auto w-full max-w-5xl border border-white/12 bg-white/[0.04] p-6 sm:p-8 md:p-10 backdrop-blur-2xl shadow-[0_18px_64px_rgba(76,29,149,0.24)] transition-all duration-300 hover:border-white/20">
+              <Card className="mx-auto w-full max-w-5xl border border-white/12 bg-white/[0.04] p-6 sm:p-8 md:p-10 backdrop-blur-2xl shadow-[0_18px_64px_rgba(8,70,60,0.24)] transition-all duration-300 hover:border-white/20">
                 <h2 className="mb-5 text-3xl font-headline font-semibold tracking-[-0.02em] text-white md:text-4xl">
                   <TrueFocus
                     sentence="What is SmartStyle?"
                     manualMode={false}
                     blurAmount={5}
-                    borderColor="violet"
+                    borderColor="#0d6a60"
                     animationDuration={0.5}
                     pauseBetweenAnimations={0.5}
                   />
@@ -81,10 +81,10 @@ export default function Home() {
           </section>
 
           <section className="content-auto relative overflow-hidden py-16 sm:py-20 md:py-24 border-y border-white/8">
-            <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(56,24,110,0.22),rgba(10,12,28,0.98)_45%,rgba(76,29,149,0.28))]" />
+            <div className="absolute inset-0 bg-[linear-gradient(140deg,rgba(14,59,52,0.24),rgba(8,14,12,0.98)_45%,rgba(10,44,39,0.26))]" />
             <div className="relative container mx-auto px-4 sm:px-6 lg:px-8">
               <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-2 md:gap-14">
-                <div className="relative h-64 w-full overflow-hidden rounded-2xl border border-white/12 shadow-[0_22px_70px_rgba(30,10,70,0.5)] sm:h-80 md:h-[420px]">
+                <div className="relative h-64 w-full overflow-hidden rounded-2xl border border-white/12 shadow-[0_22px_70px_rgba(6,36,30,0.46)] sm:h-80 md:h-[420px]">
                   <Image
                     src="https://images.pexels.com/photos/8306370/pexels-photo-8306370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2"
                     alt="Fashion model silhouette"
@@ -96,13 +96,13 @@ export default function Home() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/25" />
                 </div>
 
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 md:p-8 backdrop-blur-xl shadow-[0_14px_40px_rgba(18,10,40,0.28)]">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-6 md:p-8 backdrop-blur-xl shadow-[0_14px_40px_rgba(6,28,24,0.3)]">
                   <h2 className="mb-8 font-headline text-3xl md:text-4xl font-semibold tracking-[-0.02em] text-white">
                     From Upload to Upgrade
                   </h2>
                   <ul className="space-y-7 text-lg">
                     <li className="flex items-start gap-4">
-                      <div className="rounded-xl border border-purple-400/30 bg-gradient-to-br from-purple-500/24 to-transparent p-3 text-purple-200 shadow-[0_10px_28px_rgba(147,51,234,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(147,51,234,0.4)]">
+                      <div className="rounded-xl border border-teal-400/30 bg-gradient-to-br from-teal-500/24 to-transparent p-3 text-teal-200 shadow-[0_10px_28px_rgba(13,106,96,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(13,106,96,0.4)]">
                         <Camera />
                       </div>
                       <div>
@@ -123,7 +123,7 @@ export default function Home() {
                       </div>
                     </li>
                     <li className="flex items-start gap-4">
-                      <div className="rounded-xl border border-purple-400/30 bg-gradient-to-br from-purple-500/24 to-transparent p-3 text-purple-200 shadow-[0_10px_28px_rgba(147,51,234,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(147,51,234,0.4)]">
+                      <div className="rounded-xl border border-teal-400/30 bg-gradient-to-br from-teal-500/24 to-transparent p-3 text-teal-200 shadow-[0_10px_28px_rgba(13,106,96,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(13,106,96,0.4)]">
                         <Bot />
                       </div>
                       <div>
@@ -144,7 +144,7 @@ export default function Home() {
                       </div>
                     </li>
                     <li className="flex items-start gap-4">
-                      <div className="rounded-xl border border-purple-400/30 bg-gradient-to-br from-purple-500/24 to-transparent p-3 text-purple-200 shadow-[0_10px_28px_rgba(147,51,234,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(147,51,234,0.4)]">
+                      <div className="rounded-xl border border-teal-400/30 bg-gradient-to-br from-teal-500/24 to-transparent p-3 text-teal-200 shadow-[0_10px_28px_rgba(13,106,96,0.28)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_14px_32px_rgba(13,106,96,0.4)]">
                         <Palette />
                       </div>
                       <div>
@@ -185,7 +185,7 @@ export default function Home() {
             <div className="absolute inset-0 bg-gradient-to-b from-black/72 via-black/62 to-black/80" />
             <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8">
               <GradientText
-                colors={['#e9d5ff', '#a855f7', '#c4b5fd']}
+                colors={['#d1fae5', '#0d6a60', '#99f6e4']}
                 animationSpeed={4}
                 showBorder={false}
                 className="text-3xl sm:text-4xl md:text-5xl font-headline font-semibold tracking-[-0.02em]"

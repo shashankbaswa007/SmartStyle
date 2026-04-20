@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
 import { AuthError } from '@/lib/server-auth';
-import { isPollinationsAuthenticated, generateOutfitImageWithFallback } from '@/lib/image-generation';
-import { isTogetherAvailable, generateWithTogether } from '@/lib/together-image';
-import { isReplicateAvailable, generateWithReplicate } from '@/lib/replicate-image';
-import { generateImageWithRetry } from '@/lib/smart-image-generation';
 import { validateRequestOrigin } from '@/lib/csrf-protection';
 import { verifyAdminRequest } from '@/lib/admin-auth';
 import { logger } from '@/lib/logger';
+
+export const dynamic = 'force-dynamic';
 
 type ProviderStatus = {
   configured: boolean;
@@ -55,6 +53,7 @@ async function withTimeout<T>(work: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 async function checkPollinations(probe: boolean, prompt: string, colors: string[]): Promise<ProviderStatus> {
+  const { isPollinationsAuthenticated, generateOutfitImageWithFallback } = await import('@/lib/image-generation');
   const configured = isPollinationsAuthenticated();
   if (!configured) {
     return {
@@ -94,6 +93,7 @@ async function checkPollinations(probe: boolean, prompt: string, colors: string[
 }
 
 async function checkTogether(probe: boolean, prompt: string, colors: string[]): Promise<ProviderStatus> {
+  const { isTogetherAvailable, generateWithTogether } = await import('@/lib/together-image');
   const configured = isTogetherAvailable();
   if (!configured) {
     return {
@@ -133,6 +133,7 @@ async function checkTogether(probe: boolean, prompt: string, colors: string[]): 
 }
 
 async function checkReplicate(probe: boolean, prompt: string, colors: string[]): Promise<ProviderStatus> {
+  const { isReplicateAvailable, generateWithReplicate } = await import('@/lib/replicate-image');
   const configured = isReplicateAvailable();
   if (!configured) {
     return {
@@ -172,6 +173,7 @@ async function checkReplicate(probe: boolean, prompt: string, colors: string[]):
 }
 
 async function checkOrchestrator(probe: boolean, prompt: string, colors: string[]): Promise<ProviderStatus> {
+  const { generateImageWithRetry } = await import('@/lib/smart-image-generation');
   if (!probe) {
     return {
       configured: true,

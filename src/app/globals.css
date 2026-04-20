@@ -4,57 +4,83 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --background: 156 28% 98%;
+    --foreground: 160 22% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 160 22% 12%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 4.8% 95.9%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 262.1 83.3% 57.8%; /* Muted Plum */
+    --popover-foreground: 160 22% 12%;
+    --primary: 166 56% 32%;
+    --primary-foreground: 0 0% 98%;
+    --secondary: 156 14% 92%;
+    --secondary-foreground: 160 18% 24%;
+    --muted: 156 12% 94%;
+    --muted-foreground: 160 9% 42%;
+    --accent: 166 56% 32%;
     --accent-foreground: 0 0% 98%;
-    --destructive: 0 84.2% 60.2%;
+    --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 10% 3.9%;
+    --border: 160 14% 84%;
+    --input: 160 14% 84%;
+    --ring: 166 56% 34%;
+    --surface: 0 0% 100%;
+    --text-primary: 160 22% 12%;
+    --text-secondary: 160 9% 42%;
+    --accent-primary: 166 56% 32%;
+    --accent-secondary: 266 22% 56%;
     --radius: 0.8rem;
-    --chart-1: 263 90% 66%;
-    --chart-2: 293 84% 61%;
-    --chart-3: 239 84% 67%;
-    --chart-4: 272 92% 75%;
-    --chart-5: 292 96% 71%;
+    --chart-1: 166 56% 36%;
+    --chart-2: 173 44% 42%;
+    --chart-3: 205 32% 38%;
+    --chart-4: 266 22% 56%;
+    --chart-5: 38 45% 46%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 160 22% 16%;
+    --sidebar-primary: 166 56% 32%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 156 18% 93%;
+    --sidebar-accent-foreground: 160 20% 22%;
+    --sidebar-border: 160 14% 84%;
+    --sidebar-ring: 166 56% 34%;
   }
   .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 252 51% 95%; /* Soft Lavender */
-    --primary-foreground: 252 51% 15%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 262 88% 68%; /* Muted Plum */
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --background: 156 24% 6%;
+    --foreground: 156 20% 95%;
+    --card: 156 18% 9%;
+    --card-foreground: 156 20% 95%;
+    --popover: 156 18% 8%;
+    --popover-foreground: 156 20% 95%;
+    --primary: 166 56% 40%;
+    --primary-foreground: 156 30% 8%;
+    --secondary: 156 10% 14%;
+    --secondary-foreground: 156 14% 88%;
+    --muted: 156 11% 14%;
+    --muted-foreground: 156 8% 67%;
+    --accent: 166 56% 40%;
+    --accent-foreground: 156 30% 8%;
+    --destructive: 0 63% 43%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 262.1 83.3% 57.8%;
-    --chart-1: 263 90% 66%;
-    --chart-2: 293 84% 61%;
-    --chart-3: 239 84% 67%;
-    --chart-4: 272 92% 75%;
-    --chart-5: 292 96% 71%;
+    --border: 156 12% 20%;
+    --input: 156 12% 20%;
+    --ring: 166 58% 46%;
+    --surface: 156 18% 9%;
+    --text-primary: 156 20% 95%;
+    --text-secondary: 156 8% 67%;
+    --accent-primary: 166 56% 40%;
+    --accent-secondary: 266 18% 62%;
+    --chart-1: 166 55% 46%;
+    --chart-2: 180 36% 49%;
+    --chart-3: 205 32% 55%;
+    --chart-4: 266 24% 66%;
+    --chart-5: 42 58% 56%;
+    --sidebar-background: 156 19% 8%;
+    --sidebar-foreground: 156 18% 90%;
+    --sidebar-primary: 166 56% 40%;
+    --sidebar-primary-foreground: 156 30% 8%;
+    --sidebar-accent: 156 12% 15%;
+    --sidebar-accent-foreground: 156 18% 90%;
+    --sidebar-border: 156 11% 20%;
+    --sidebar-ring: 166 58% 46%;
   }
 }
 
@@ -70,7 +96,7 @@
   }
   
   body {
-    @apply bg-transparent text-foreground;
+    @apply bg-background text-foreground;
     /* Enable font smoothing for crisp text */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

@@ -352,7 +352,7 @@ export default function AuthPage() {
   }
 
   return (
-    <div ref={sceneRef} className="relative min-h-[100svh] md:min-h-screen flex flex-col md:flex-row overflow-x-hidden bg-[#050813]">
+    <div ref={sceneRef} className="relative min-h-[100svh] md:min-h-screen flex flex-col md:flex-row overflow-x-hidden bg-[#050D0A]">
       {/* LEFT PANEL (55% on desktop, full on mobile) */}
       <motion.section
         initial={{ opacity: 0 }}
@@ -431,7 +431,7 @@ export default function AuthPage() {
             className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4"
           >
             {/* Badge 1: Color Intelligence */}
-            <div className="rounded-xl border-l-4 border-purple-600 bg-gradient-to-r from-purple-600/8 via-transparent to-transparent px-3.5 py-3 backdrop-blur-sm">
+            <div className="rounded-xl border-l-4 border-teal-600 bg-gradient-to-r from-teal-600/8 via-transparent to-transparent px-3.5 py-3 backdrop-blur-sm">
               <div className="flex items-start gap-3">
                 <Palette className="h-5 w-5 text-slate-200 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
@@ -442,7 +442,7 @@ export default function AuthPage() {
             </div>
 
             {/* Badge 2: Wardrobe Precision */}
-            <div className="rounded-xl border-l-4 border-purple-600 bg-gradient-to-r from-purple-600/8 via-transparent to-transparent px-3.5 py-3 backdrop-blur-sm">
+            <div className="rounded-xl border-l-4 border-teal-600 bg-gradient-to-r from-teal-600/8 via-transparent to-transparent px-3.5 py-3 backdrop-blur-sm">
               <div className="flex items-start gap-3">
                 <Shirt className="h-5 w-5 text-slate-200 flex-shrink-0 mt-0.5" aria-hidden="true" />
                 <div>
@@ -459,7 +459,7 @@ export default function AuthPage() {
       <div
         className="hidden md:block absolute left-[55%] top-0 h-full w-px z-20 pointer-events-none"
         style={{
-          background: 'linear-gradient(to bottom, transparent, #7c3aed, transparent)',
+          background: 'linear-gradient(to bottom, transparent, #0d6a60, transparent)',
         }}
       />
 
@@ -471,7 +471,7 @@ export default function AuthPage() {
           ...cardTransition,
           delay: prefersReducedMotion ? 0 : 0.4,
         }}
-        className="relative w-full md:w-[45%] flex items-center justify-center px-4 sm:px-6 py-6 sm:py-8 md:py-0 order-2 md:order-2 bg-[#0a0a0f]"
+        className="relative w-full md:w-[45%] flex items-center justify-center px-4 sm:px-6 py-6 sm:py-8 md:py-0 order-2 md:order-2 bg-[#050D0A]"
       >
         {/* Auth Card */}
         <div className="w-full max-w-md sm:max-w-sm">
@@ -518,7 +518,7 @@ export default function AuthPage() {
                 }}
                 onClick={handleGoogleSignIn}
                 disabled={googleLoading}
-                className="group relative w-full h-[48px] sm:h-[52px] rounded-full bg-gradient-to-r from-purple-700 via-purple-600 to-purple-700 text-white font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-[0_8px_32px_rgba(147,51,234,0.5)] hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden"
+                className="group relative w-full h-[48px] sm:h-[52px] rounded-full bg-gradient-to-r from-teal-700 via-teal-600 to-teal-700 text-white font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-[0_8px_32px_rgba(13,106,96,0.42)] hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden"
               >
                 {/* Shimmer effect on hover */}
                 <motion.div
@@ -567,15 +567,15 @@ export default function AuthPage() {
                 className="mt-5 sm:mt-6 text-center text-[11px] leading-relaxed text-slate-400 break-words"
               >
                 By signing in you agree to our{' '}
-                <Link href="/terms" className="text-purple-400 underline underline-offset-1 hover:text-purple-300 transition-colors">
+                <Link href="/terms" className="text-teal-400 underline underline-offset-1 hover:text-teal-300 transition-colors">
                   Terms of Service
                 </Link>{' '}
                 and{' '}
-                <Link href="/privacy" className="text-purple-400 underline underline-offset-1 hover:text-purple-300 transition-colors">
+                <Link href="/privacy" className="text-teal-400 underline underline-offset-1 hover:text-teal-300 transition-colors">
                   Privacy Policy
                 </Link>
                 . Learn more in the{' '}
-                <Link href="/trust" className="text-purple-400 underline underline-offset-1 hover:text-purple-300 transition-colors">
+                <Link href="/trust" className="text-teal-400 underline underline-offset-1 hover:text-teal-300 transition-colors">
                   Trust Center
                 </Link>
                 .

@@ -168,7 +168,7 @@ function getFallbackFriendlyMessage(
 
 function buildDemoFallbackImageDataUris(): string[] {
   const cards = [
-    { title: 'Style Preview 1', bgA: '#1e3a8a', bgB: '#312e81', chip: '#f8f5f0' },
+    { title: 'Style Preview 1', bgA: '#0f4d44', bgB: '#115e59', chip: '#f8f5f0' },
     { title: 'Style Preview 2', bgA: '#1f2937', bgB: '#334155', chip: '#d6c7b0' },
     { title: 'Style Preview 3', bgA: '#64748b', bgB: '#475569', chip: '#f8f5f0' },
   ];
@@ -193,8 +193,8 @@ function buildDemoFallbackImageDataUris(): string[] {
 }
 
 function buildOutfitFallbackImageDataUri(title?: string, palette?: string[]): string {
-  const primary = typeof palette?.[0] === 'string' ? palette[0] : '#1e3a8a';
-  const secondary = typeof palette?.[1] === 'string' ? palette[1] : '#312e81';
+  const primary = typeof palette?.[0] === 'string' ? palette[0] : '#0f4d44';
+  const secondary = typeof palette?.[1] === 'string' ? palette[1] : '#115e59';
   const safeTitle = (title || 'Style Preview')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -2478,7 +2478,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
                         <span className={cn(
                           'uppercase tracking-wide text-[10px] font-semibold',
                           step.status === 'complete' && 'text-emerald-600',
-                          step.status === 'processing' && 'text-violet-600',
+                          step.status === 'processing' && 'text-emerald-600',
                           step.status === 'error' && 'text-red-600',
                           step.status === 'pending' && 'text-muted-foreground/70'
                         )}>

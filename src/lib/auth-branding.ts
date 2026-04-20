@@ -61,9 +61,9 @@ export const AUTH_ANIMATION_CONFIG = {
 };
 
 export const AUTH_COLORS = {
-  primaryCyan: 'rgba(16,185,129,0.26)',
-  secondaryIndigo: 'rgba(20,184,166,0.2)',
-  accentTeal: 'rgba(167,139,250,0.06)',
-  darkBg: '#05080A',
+  primaryCyan: 'rgba(13,106,96,0.28)',
+  secondaryIndigo: 'rgba(26,139,126,0.22)',
+  accentTeal: 'rgba(111,100,136,0.07)',
+  darkBg: '#050D0A',
   cardBg: 'bg-black/65',
 };

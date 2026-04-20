@@ -61,7 +61,7 @@ type OutfitWithLinks = AnalyzeImageAndProvideRecommendationsOutput['outfitRecomm
 function getStrategyBadgeClasses(bucket?: '70' | '20' | '10'): string {
   if (bucket === '70') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30';
   if (bucket === '20') return 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30';
-  return 'bg-violet-500/10 text-violet-700 dark:text-violet-400 border-violet-500/30';
+  return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30';
 }
 
 
@@ -253,7 +253,7 @@ const EnhancedShoppingSection = ({
                   {/* Myntra Links */}
                   {item.links.myntra.length > 0 && (
                     <div>
-                      <div className="text-xs font-semibold text-pink-600 mb-1 flex items-center gap-1">
+                      <div className="text-xs font-semibold text-teal-600 mb-1 flex items-center gap-1">
                         <ShoppingBag className="w-3 h-3" />
                         Myntra
                       </div>
@@ -263,21 +263,21 @@ const EnhancedShoppingSection = ({
                           href={link.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="block p-2 rounded-md bg-pink-50 dark:bg-pink-950/20 hover:bg-pink-100 dark:hover:bg-pink-950/40 border border-pink-200/50 transition-colors group"
+                          className="block p-2 rounded-md bg-teal-50 dark:bg-teal-950/20 hover:bg-teal-100 dark:hover:bg-teal-950/40 border border-teal-200/50 transition-colors group"
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-medium text-foreground line-clamp-2 group-hover:text-pink-600">
+                              <p className="text-xs font-medium text-foreground line-clamp-2 group-hover:text-teal-600">
                                 {link.title}
                               </p>
                               <div className="flex items-center gap-2 mt-1">
                                 {link.price && (
-                                  <span className="text-xs font-bold text-pink-600">
+                                  <span className="text-xs font-bold text-teal-600">
                                     {link.price}
                                   </span>
                                 )}
                                 <div className="flex items-center gap-1">
-                                  <Star className="w-3 h-3 fill-pink-400 text-pink-400" />
+                                  <Star className="w-3 h-3 fill-teal-400 text-teal-400" />
                                   <span className="text-xs text-muted-foreground">
                                     {(link.relevanceScore * 5).toFixed(1)}
                                   </span>
@@ -1048,7 +1048,7 @@ export function StyleAdvisorResults({
       ? `linear-gradient(135deg, ${colorHexes.join(', ')})`
       : colorHexes.length === 1
       ? colorHexes[0]
-      : 'linear-gradient(135deg, #6366f1, #a78bfa, #c4b5fd)';
+      : 'linear-gradient(135deg, #0f4d44, #115e59, #2dd4bf)';
 
     const rankLabels = ['Top Pick', 'Look 2', 'Look 3'];
     const rankColors = [
@@ -1223,7 +1223,7 @@ export function StyleAdvisorResults({
                               <ShoppingCart className="w-3 h-3" /><span className="hidden sm:inline">CLiQ</span>
                             </a>
                             <a href={itemLinks.myntra} target="_blank" rel="noopener noreferrer" onClick={() => handleShoppingClick('myntra', item)}
-                              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-pink-500/10 text-pink-600 hover:bg-pink-500/20 transition-all border border-pink-200/40">
+                              className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-[11px] font-semibold bg-teal-500/10 text-teal-600 hover:bg-teal-500/20 transition-all border border-teal-200/40">
                               <ShoppingBag className="w-3 h-3" /><span className="hidden sm:inline">Myntra</span>
                             </a>
                           </div>
@@ -1273,10 +1273,10 @@ export function StyleAdvisorResults({
                     disabled={wornOutfits.has(index) || isMarkingWorn === index}
                     className={`px-5 py-3 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center gap-2 ${
                       wornOutfits.has(index)
-                        ? 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-2 border-purple-500/40 cursor-default'
+                        ? 'bg-teal-500/15 text-teal-600 dark:text-teal-400 border-2 border-teal-500/40 cursor-default'
                         : isMarkingWorn === index
-                        ? 'bg-purple-500/50 text-white cursor-wait'
-                        : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm hover:shadow-md'
+                        ? 'bg-teal-500/50 text-white cursor-wait'
+                        : 'bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-sm hover:shadow-md'
                     }`}
                   >
                     {isMarkingWorn === index ? (

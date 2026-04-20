@@ -186,12 +186,12 @@ export function PaletteExportMenu({ palette, onClose }: PaletteExportMenuProps) 
                     <button
                       onClick={() => handleDownloadImage('horizontal')}
                       disabled={isGenerating}
-                      className="group relative aspect-video bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-accent transition-all overflow-hidden disabled:opacity-50"
+                      className="group relative aspect-video bg-gradient-to-br from-teal-50 to-blue-50 dark:from-teal-950/20 dark:to-blue-950/20 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-accent transition-all overflow-hidden disabled:opacity-50"
                     >
                       <div className="absolute inset-0 flex items-center justify-center">
                         <div className="flex gap-1">
                           {[1, 2, 3, 4, 5].map((i) => (
-                            <div key={i} className="w-2 h-8 bg-gradient-to-b from-purple-400 to-blue-400 rounded" />
+                            <div key={i} className="w-2 h-8 bg-gradient-to-b from-teal-400 to-blue-400 rounded" />
                           ))}
                         </div>
                       </div>
@@ -222,11 +222,11 @@ export function PaletteExportMenu({ palette, onClose }: PaletteExportMenuProps) 
                     <button
                       onClick={() => handleDownloadImage('swatch')}
                       disabled={isGenerating}
-                      className="group relative aspect-video bg-gradient-to-br from-pink-50 to-orange-50 dark:from-pink-950/20 dark:to-orange-950/20 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-accent transition-all overflow-hidden disabled:opacity-50"
+                      className="group relative aspect-video bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/20 dark:to-emerald-950/20 rounded-lg border-2 border-gray-200 dark:border-gray-700 hover:border-accent transition-all overflow-hidden disabled:opacity-50"
                     >
                       <div className="absolute inset-0 flex items-center justify-center gap-1">
                         {[1, 2, 3].map((i) => (
-                          <div key={i} className="w-5 h-5 bg-gradient-to-br from-pink-400 to-orange-400 rounded-full" />
+                          <div key={i} className="w-5 h-5 bg-gradient-to-br from-emerald-400 to-teal-400 rounded-full" />
                         ))}
                       </div>
                       <div className="absolute bottom-2 left-2 right-2 bg-white/90 dark:bg-gray-900/90 rounded px-2 py-1">

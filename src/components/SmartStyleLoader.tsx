@@ -30,7 +30,7 @@ function StageIndicators({ stage = 0 }: { stage?: number }) {
             key={dotStage}
             className={cn(
               'h-1.5 rounded-full transition-all duration-300',
-              active ? 'w-6 bg-violet-300' : 'w-2 bg-violet-400/35'
+              active ? 'w-6 bg-emerald-300' : 'w-2 bg-emerald-400/35'
             )}
           />
         );
@@ -57,8 +57,8 @@ export default function SmartStyleLoader({
       className={cn(
         'relative isolate overflow-hidden',
         isFullscreen
-          ? 'flex h-full w-full items-center justify-center bg-[#070512] px-6'
-          : 'rounded-2xl border border-violet-300/20 bg-gradient-to-br from-[#170a28] via-[#130a23] to-[#0b0917] p-6 sm:p-8',
+          ? 'flex h-full w-full items-center justify-center bg-[#060d0b] px-6'
+          : 'rounded-2xl border border-emerald-300/20 bg-gradient-to-br from-[#10201c] via-[#0b1512] to-[#08100d] p-6 sm:p-8',
         className
       )}
     >
@@ -66,7 +66,7 @@ export default function SmartStyleLoader({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(circle at 20% 18%, rgba(196, 181, 253, 0.18), transparent 35%), radial-gradient(circle at 82% 14%, rgba(167, 139, 250, 0.18), transparent 40%), radial-gradient(circle at 50% 85%, rgba(139, 92, 246, 0.12), transparent 46%)',
+            'radial-gradient(circle at 20% 18%, rgba(16, 185, 129, 0.18), transparent 36%), radial-gradient(circle at 82% 14%, rgba(13, 148, 136, 0.16), transparent 42%), radial-gradient(circle at 50% 85%, rgba(111, 100, 136, 0.08), transparent 48%)',
         }}
       />
 
@@ -79,7 +79,7 @@ export default function SmartStyleLoader({
           transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
           style={{
             background:
-              'radial-gradient(ellipse 640px 320px at 50% 28%, rgba(221, 214, 254, 0.22), transparent 72%)',
+              'radial-gradient(ellipse 640px 320px at 50% 28%, rgba(209, 250, 229, 0.2), transparent 72%)',
           }}
         />
       )}
@@ -92,7 +92,7 @@ export default function SmartStyleLoader({
           transition={{ duration: 5.2, repeat: Infinity, ease: 'linear' }}
           style={{
             background:
-              'linear-gradient(110deg, transparent 10%, rgba(244, 232, 255, 0.2) 44%, rgba(192, 132, 252, 0.17) 56%, transparent 88%)',
+              'linear-gradient(110deg, transparent 10%, rgba(204, 251, 241, 0.18) 44%, rgba(45, 212, 191, 0.16) 56%, transparent 88%)',
             filter: 'blur(16px)',
             opacity: isFullscreen ? 0.72 : 0.54,
           }}
@@ -105,7 +105,7 @@ export default function SmartStyleLoader({
             <>
               <motion.div
                 aria-hidden="true"
-                className="absolute h-[6.4rem] w-[6.4rem] rounded-full border border-violet-300/35"
+                className="absolute h-[6.4rem] w-[6.4rem] rounded-full border border-emerald-300/35"
                 animate={{ scale: [0.92, 1.08, 0.92], opacity: [0.35, 0.75, 0.35] }}
                 transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
               />
@@ -114,11 +114,11 @@ export default function SmartStyleLoader({
                 className="absolute h-[8rem] w-[8rem] rounded-full"
                 animate={{ scale: [0.94, 1.1, 0.94], opacity: [0.15, 0.34, 0.15] }}
                 transition={{ duration: 3.1, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ boxShadow: '0 0 42px rgba(167, 139, 250, 0.56)' }}
+                style={{ boxShadow: '0 0 42px rgba(16, 185, 129, 0.42)' }}
               />
               <motion.div
                 aria-hidden="true"
-                className="absolute h-[7.2rem] w-[7.2rem] rounded-full border border-violet-200/20"
+                className="absolute h-[7.2rem] w-[7.2rem] rounded-full border border-emerald-200/20"
                 animate={{ rotate: 360 }}
                 transition={{ duration: 9, repeat: Infinity, ease: 'linear' }}
               />
@@ -128,9 +128,9 @@ export default function SmartStyleLoader({
                   className="absolute h-[6.7rem] w-[6.7rem] rounded-full"
                   animate={{
                     boxShadow: [
-                      '0 0 0 rgba(196, 181, 253, 0.22)',
-                      '0 0 30px rgba(196, 181, 253, 0.55)',
-                      '0 0 0 rgba(196, 181, 253, 0.22)',
+                      '0 0 0 rgba(111, 100, 136, 0.12)',
+                      '0 0 30px rgba(16, 185, 129, 0.38)',
+                      '0 0 0 rgba(111, 100, 136, 0.12)',
                     ],
                     scale: [0.96, 1.04, 0.96],
                   }}
@@ -174,7 +174,7 @@ export default function SmartStyleLoader({
             <motion.span
               key={`${letter}-${index}`}
               className={cn(
-                'font-headline font-semibold tracking-[0.14em] text-violet-100',
+                'font-headline font-semibold tracking-[0.14em] text-emerald-100',
                 isFullscreen ? 'text-[1.06rem]' : 'text-[0.92rem] sm:text-[1rem]'
               )}
               variants={{
@@ -196,7 +196,7 @@ export default function SmartStyleLoader({
             exit={{ opacity: 0, y: -5 }}
             transition={{ duration: 0.2, ease: 'easeOut' }}
             className={cn(
-              'mt-3 max-w-sm text-center text-sm text-violet-100/85',
+              'mt-3 max-w-sm text-center text-sm text-emerald-100/85',
               isFullscreen ? 'text-base sm:text-lg' : 'text-sm'
             )}
           >

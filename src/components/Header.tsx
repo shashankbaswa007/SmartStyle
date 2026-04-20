@@ -23,9 +23,9 @@ const StarBorder = dynamic(() => import('@/components/StarBorder'), { ssr: false
 export function Header() {
   const { user } = useAuth();
   const navMotionClass =
-    'transform-gpu transition-[transform,box-shadow,background-color] duration-300 ease-out hover:scale-[1.04] hover:shadow-[0_8px_24px_rgba(139,92,246,0.25)] active:scale-[0.97]';
+    'transform-gpu transition-[transform,box-shadow,background-color] duration-300 ease-out hover:scale-[1.04] hover:shadow-[0_8px_24px_rgba(13,106,96,0.24)] active:scale-[0.97]';
   const mobileMotionClass =
-    'transform-gpu transition-[transform,box-shadow,background-color] duration-200 ease-out hover:scale-[1.05] hover:shadow-[0_8px_20px_rgba(139,92,246,0.22)] active:scale-[0.97]';
+    'transform-gpu transition-[transform,box-shadow,background-color] duration-200 ease-out hover:scale-[1.05] hover:shadow-[0_8px_20px_rgba(13,106,96,0.2)] active:scale-[0.97]';
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-md border-b border-border/40">
@@ -48,7 +48,7 @@ export function Header() {
                   as={Link}
                   href="/style-check"
                   className={`group cursor-pointer rounded-full px-4 py-1.5 hover:bg-white/3 ${navMotionClass}`}
-                  color="#8b5cf6"
+                  color="#0d6a60"
                   speed="8s"
                   thickness={1}
                 >
@@ -61,7 +61,7 @@ export function Header() {
                       strokeWidth="2.5"
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      className="h-4 w-4 text-purple-400/80 transition-[transform,color] duration-500 ease-out will-change-transform group-hover:rotate-180 group-hover:scale-105 group-hover:text-purple-300/95"
+                      className="h-4 w-4 text-teal-400/80 transition-[transform,color] duration-500 ease-out will-change-transform group-hover:rotate-180 group-hover:scale-105 group-hover:text-teal-300/95"
                     >
                       <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
                     </svg>
@@ -76,13 +76,13 @@ export function Header() {
                   as={Link}
                   href="/color-match"
                   className={`group cursor-pointer rounded-full px-4 py-1.5 hover:bg-white/3 ${navMotionClass}`}
-                  color="#8b5cf6"
+                  color="#0d6a60"
                   speed="8s"
                   thickness={1}
                 >
                   <div className="flex flex-row items-center justify-center gap-2">
                     <Palette 
-                      className="h-4 w-4 text-violet-400/80 transition-[transform,color] duration-500 ease-out will-change-transform group-hover:-translate-y-0.5 group-hover:rotate-6 group-hover:scale-105 group-hover:text-violet-300/95" 
+                      className="h-4 w-4 text-emerald-400/80 transition-[transform,color] duration-500 ease-out will-change-transform group-hover:-translate-y-0.5 group-hover:rotate-6 group-hover:scale-105 group-hover:text-emerald-300/95" 
                     />
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
                       Color Match
@@ -94,13 +94,13 @@ export function Header() {
                   as={Link}
                   href="/likes"
                   className={`group cursor-pointer rounded-full px-4 py-1.5 hover:bg-white/3 ${navMotionClass}`}
-                  color="#8b5cf6"
+                  color="#0d6a60"
                   speed="8s"
                   thickness={1}
                 >
                   <div className="flex flex-row items-center justify-center gap-2">
                     <Heart 
-                      className="h-4 w-4 text-violet-400/80 fill-transparent transition-[transform,fill,color] duration-500 ease-out will-change-transform group-hover:-translate-y-0.5 group-hover:scale-110 group-hover:fill-violet-400/70 group-hover:text-violet-300/95" 
+                      className="h-4 w-4 text-emerald-400/80 fill-transparent transition-[transform,fill,color] duration-500 ease-out will-change-transform group-hover:-translate-y-0.5 group-hover:scale-110 group-hover:fill-emerald-400/70 group-hover:text-emerald-300/95" 
                     />
                     
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
@@ -114,13 +114,13 @@ export function Header() {
                   as={Link}
                   href="/wardrobe"
                   className={`group cursor-pointer rounded-full px-4 py-1.5 hover:bg-white/3 ${navMotionClass}`}
-                  color="#8b5cf6"
+                  color="#0d6a60"
                   speed="8s"
                   thickness={1}
                 >
                   <div className="flex flex-row items-center justify-center gap-2">
                     <Shirt 
-                      className="h-4 w-4 text-purple-400/80 fill-none transition-[transform,fill,color] duration-500 ease-out will-change-transform group-hover:-translate-y-0.5 group-hover:-rotate-3 group-hover:scale-105 group-hover:text-purple-300/95 group-hover:fill-purple-500/20" 
+                      className="h-4 w-4 text-teal-400/80 fill-none transition-[transform,fill,color] duration-500 ease-out will-change-transform group-hover:-translate-y-0.5 group-hover:-rotate-3 group-hover:scale-105 group-hover:text-teal-300/95 group-hover:fill-teal-500/20" 
                     />
                     <span className="text-sm font-medium tracking-wide text-white/90 transition-colors duration-300 group-hover:text-white">
                       Wardrobe
@@ -149,10 +149,10 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className={`h-9 w-9 hover:bg-purple-500/10 ${mobileMotionClass}`}
+                  className={`h-9 w-9 hover:bg-teal-500/10 ${mobileMotionClass}`}
                 >
                   <Link href="/color-match" title="Color Match">
-                    <Palette className="w-4 h-4 text-purple-500" />
+                    <Palette className="w-4 h-4 text-teal-500" />
                   </Link>
                 </Button>
                 
@@ -160,10 +160,10 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className={`h-9 w-9 hover:bg-violet-500/10 ${mobileMotionClass}`}
+                  className={`h-9 w-9 hover:bg-emerald-500/10 ${mobileMotionClass}`}
                 >
                   <Link href="/likes" title="Your Likes">
-                    <Heart className="w-4 h-4 text-violet-500" />
+                    <Heart className="w-4 h-4 text-emerald-500" />
                   </Link>
                 </Button>
 
@@ -171,10 +171,10 @@ export function Header() {
                   asChild
                   variant="ghost"
                   size="icon"
-                  className={`h-9 w-9 hover:bg-purple-500/10 ${mobileMotionClass}`}
+                  className={`h-9 w-9 hover:bg-teal-500/10 ${mobileMotionClass}`}
                 >
                   <Link href="/wardrobe" title="Your Wardrobe">
-                    <Shirt className="w-4 h-4 text-purple-500" />
+                    <Shirt className="w-4 h-4 text-teal-500" />
                   </Link>
                 </Button>
               </div>

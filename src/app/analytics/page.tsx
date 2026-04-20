@@ -103,14 +103,14 @@ const COLOR_MAP: Record<string, string> = {
 };
 
 function getHexColor(color: string): string {
-  if (!color) return '#6366F1';
+  if (!color) return '#14B8A6';
   const normalized = color.toLowerCase().trim();
   if (/^#[0-9a-f]{6}$/i.test(color)) return color.toUpperCase();
   if (/^#[0-9a-f]{3}$/i.test(color)) {
     const [, r, g, b] = color.match(/^#(.)(.)(.)$/) || [];
     return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
   }
-  return COLOR_MAP[normalized] || '#6366F1';
+  return COLOR_MAP[normalized] || '#14B8A6';
 }
 
 const ITEM_TYPE_LABELS: Record<string, string> = {
@@ -119,8 +119,8 @@ const ITEM_TYPE_LABELS: Record<string, string> = {
 };
 
 const ITEM_TYPE_COLORS: Record<string, string> = {
-  top: '#8B5CF6', bottom: '#6366F1', dress: '#D946EF', shoes: '#818CF8',
-  accessory: '#C084FC', outerwear: '#E879F9',
+  top: '#10B981', bottom: '#14B8A6', dress: '#06B6D4', shoes: '#22C55E',
+  accessory: '#2DD4BF', outerwear: '#34D399',
 };
 
 // ─── Chart: Horizontal Bar ─────────────────────────────────────
@@ -272,8 +272,8 @@ function ActivitySparkline({ data }: { data: { label: string; count: number }[] 
           })}
           <defs>
             <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#A855F7" />
-              <stop offset="100%" stopColor="#6366F1" />
+              <stop offset="0%" stopColor="#10B981" />
+              <stop offset="100%" stopColor="#0D9488" />
             </linearGradient>
           </defs>
         </svg>
@@ -284,13 +284,13 @@ function ActivitySparkline({ data }: { data: { label: string; count: number }[] 
 
 // ─── Stat Card ──────────────────────────────────────────────────
 const STAT_ACCENT: Record<string, string> = {
-  violet: '#8B5CF6', pink: '#D946EF', blue: '#6366F1', emerald: '#C084FC',
+  violet: '#10B981', pink: '#14B8A6', blue: '#06B6D4', emerald: '#34D399',
 };
 
 function StatCard({ title, value, subtitle, icon: Icon, color }: {
   title: string; value: string | number; subtitle: string; icon: React.ElementType; color: string;
 }) {
-  const accent = STAT_ACCENT[color] || '#6366F1';
+  const accent = STAT_ACCENT[color] || '#14B8A6';
   return (
     <motion.div variants={itemVariants}>
       <Card className="backdrop-blur-xl relative overflow-hidden" style={{ borderColor: `color-mix(in srgb, ${accent} 20%, transparent)` }}>
@@ -315,7 +315,7 @@ function EngagementRing({ score }: { score: number }) {
   const radius = 38;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (score / 100) * circumference;
-  const scoreColor = score >= 70 ? '#8B5CF6' : score >= 40 ? '#D946EF' : '#6366F1';
+  const scoreColor = score >= 70 ? '#10B981' : score >= 40 ? '#14B8A6' : '#06B6D4';
 
   return (
     <div className="flex items-center gap-4">
@@ -631,10 +631,10 @@ export default function AnalyticsPage() {
         {/* Particles Background */}
         {isMounted && (
           <div className="absolute inset-0 opacity-40 pointer-events-none">
-            <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-purple-500/10" />}>
+            <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-teal-500/5 via-transparent to-teal-500/10" />}>
               <Particles
                 className="absolute inset-0"
-                particleColors={['#a855f7', '#c4b5fd']}
+                particleColors={['#0d6a60', '#1a8b7e']}
                 particleCount={50}
                 particleSpread={10}
                 speed={0.2}
@@ -653,7 +653,7 @@ export default function AnalyticsPage() {
             <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto">
               {isMounted && (
                 <Suspense fallback={
-                  <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">
+                  <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-teal-400 to-teal-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">
                     Style Analytics
                   </h1>
                 }>
@@ -662,8 +662,8 @@ export default function AnalyticsPage() {
                     stroke={true}
                     width={true}
                     weight={false}
-                    textColor="#c4b5fd"
-                    strokeColor="#7c3aed"
+                    textColor="#ccfbf1"
+                    strokeColor="#115e59"
                     minFontSize={32}
                   />
                 </Suspense>
@@ -972,7 +972,7 @@ export default function AnalyticsPage() {
                           data={insights.seasonalDistribution.map((s, i) => ({
                             name: s.season,
                             value: s.count,
-                            color: ['#8B5CF6', '#D946EF', '#6366F1', '#C084FC'][i % 4],
+                            color: ['#10B981', '#14B8A6', '#06B6D4', '#34D399'][i % 4],
                           }))}
                         />
                       </CardContent>
@@ -1008,7 +1008,7 @@ export default function AnalyticsPage() {
                             data={insights.wardrobeBreakdown.map(w => ({
                               name: ITEM_TYPE_LABELS[w.type] || w.type,
                               value: w.count,
-                              color: ITEM_TYPE_COLORS[w.type] || '#6366F1',
+                              color: ITEM_TYPE_COLORS[w.type] || '#14B8A6',
                             }))}
                           />
                         </div>
