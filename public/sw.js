@@ -88,6 +88,17 @@ function isStaticAssetRequest(url, request) {
   );
 }
 
+function isLikelyRoutePrefetch(url, request) {
+  if (!isSameOrigin(url)) return false;
+  if (isApiRequest(url)) return false;
+  if (isNavigationRequest(request)) return false;
+  if (url.pathname.startsWith('/_next/')) return false;
+  if (request.destination && request.destination !== 'empty') return false;
+
+  // Route prefetches are usually extensionless same-origin GET requests.
+  return !url.pathname.includes('.') && request.method === 'GET';
+}
+
 self.addEventListener('install', (event) => {
   debugLog('Installing...');
   event.waitUntil(
@@ -278,12 +289,25 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    fetch(request).catch(() =>
-      new Response('Unavailable', {
+    fetch(request).catch(async () => {
+      if (isLikelyRoutePrefetch(url, request)) {
+        const cachedRoute = await caches.match(request, { ignoreSearch: true });
+        if (cachedRoute) return cachedRoute;
+
+        const rootFallback = await caches.match('/');
+        if (rootFallback) return rootFallback;
+
+        const offlineFallback = await caches.match(OFFLINE_FALLBACK_URL);
+        if (offlineFallback) return offlineFallback;
+
+        return new Response('', { status: 204 });
+      }
+
+      return new Response('Unavailable', {
         status: 503,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-      })
-    )
+      });
+    })
   );
 });
 
