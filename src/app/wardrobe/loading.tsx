@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 export default function WardrobeLoading() {
   return (
     <div className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_10%_18%,rgba(20,184,166,0.15),transparent_30%),radial-gradient(circle_at_84%_82%,rgba(124,58,237,0.25),transparent_40%),linear-gradient(145deg,#060912_0%,#0f172a_100%)]" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_10%_18%,rgba(16,185,129,0.14),transparent_30%),radial-gradient(circle_at_84%_82%,rgba(20,184,166,0.17),transparent_40%),linear-gradient(145deg,#040607_0%,#0a1115_100%)]" />
       <div className="relative z-10 mx-auto max-w-6xl">
         <header className="mb-10 text-center">
           <div className="mb-3 flex justify-center">

@@ -4,7 +4,7 @@ import { ShimmerSkeleton } from '@/components/ShimmerSkeleton';
 export default function StyleCheckLoading() {
   return (
     <div className="relative min-h-screen overflow-hidden py-12 px-4 sm:px-6 lg:px-8">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_14%_20%,rgba(20,184,166,0.16),transparent_30%),radial-gradient(circle_at_82%_80%,rgba(79,70,229,0.28),transparent_44%),linear-gradient(140deg,#060912_0%,#0b1225_100%)]" />
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_14%_20%,rgba(16,185,129,0.16),transparent_30%),radial-gradient(circle_at_82%_80%,rgba(20,184,166,0.18),transparent_44%),linear-gradient(140deg,#040607_0%,#08110f_100%)]" />
       <div className="relative z-10 mx-auto max-w-4xl">
         <header className="mb-14 text-center">
           <div className="mb-4 flex justify-center">

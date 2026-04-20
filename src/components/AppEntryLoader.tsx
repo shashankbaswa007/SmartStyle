@@ -7,10 +7,10 @@ import { BRAND } from '@/lib/branding';
 
 const WORDMARK = Array.from(BRAND.name);
 const RIPPLE_LAYERS = [
-  { delay: 0, size: 'clamp(7.4rem, 25vw, 10.8rem)', border: 'rgba(196, 181, 253, 0.32)', glow: 'rgba(167, 139, 250, 0.26)' },
-  { delay: 0.85, size: 'clamp(8.3rem, 29vw, 12.2rem)', border: 'rgba(192, 132, 252, 0.24)', glow: 'rgba(167, 139, 250, 0.2)' },
-  { delay: 1.7, size: 'clamp(9.1rem, 32vw, 13.5rem)', border: 'rgba(165, 180, 252, 0.2)', glow: 'rgba(129, 140, 248, 0.18)' },
-  { delay: 2.55, size: 'clamp(10rem, 36vw, 14.8rem)', border: 'rgba(196, 181, 253, 0.14)', glow: 'rgba(167, 139, 250, 0.14)' },
+  { delay: 0, size: 'clamp(7.4rem, 25vw, 10.8rem)', border: 'rgba(110, 231, 183, 0.34)', glow: 'rgba(16, 185, 129, 0.22)' },
+  { delay: 0.85, size: 'clamp(8.3rem, 29vw, 12.2rem)', border: 'rgba(153, 246, 228, 0.28)', glow: 'rgba(20, 184, 166, 0.2)' },
+  { delay: 1.7, size: 'clamp(9.1rem, 32vw, 13.5rem)', border: 'rgba(209, 250, 229, 0.2)', glow: 'rgba(15, 118, 110, 0.16)' },
+  { delay: 2.55, size: 'clamp(10rem, 36vw, 14.8rem)', border: 'rgba(167, 139, 250, 0.08)', glow: 'rgba(15, 118, 110, 0.13)' },
 ];
 
 export function AppEntryLoader() {
@@ -18,7 +18,7 @@ export function AppEntryLoader() {
 
   return (
     <div
-      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#050915] px-6"
+      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#05080A] px-6"
       role="status"
       aria-label="SmartStyle is loading"
     >
@@ -27,7 +27,7 @@ export function AppEntryLoader() {
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            'radial-gradient(circle at 16% 18%, rgba(167, 139, 250, 0.26), transparent 36%), radial-gradient(circle at 84% 14%, rgba(129, 140, 248, 0.22), transparent 42%), radial-gradient(ellipse 68% 52% at 50% 86%, rgba(91, 33, 182, 0.28), transparent 76%), linear-gradient(160deg, #0a0817 0%, #100c24 46%, #070612 100%)',
+            'radial-gradient(circle at 16% 18%, rgba(16, 185, 129, 0.18), transparent 36%), radial-gradient(circle at 84% 14%, rgba(20, 184, 166, 0.14), transparent 42%), radial-gradient(ellipse 68% 52% at 50% 86%, rgba(15, 118, 110, 0.22), transparent 76%), linear-gradient(160deg, #040607 0%, #08110F 46%, #030405 100%)',
         }}
       />
 
@@ -40,7 +40,7 @@ export function AppEntryLoader() {
           transition={{ duration: 8.2, repeat: Infinity, ease: [0.25, 0.46, 0.45, 0.94] }}
           style={{
             background:
-              'radial-gradient(ellipse 680px 410px at 50% 30%, rgba(221, 214, 254, 0.24), rgba(167, 139, 250, 0.08) 42%, transparent 78%)',
+              'radial-gradient(ellipse 680px 410px at 50% 30%, rgba(236, 253, 245, 0.2), rgba(16, 185, 129, 0.08) 42%, transparent 78%)',
           }}
         />
       )}
@@ -53,7 +53,7 @@ export function AppEntryLoader() {
           transition={{ duration: 8.8, repeat: Infinity, ease: 'linear' }}
           style={{
             background:
-              'linear-gradient(110deg, transparent 12%, rgba(237, 233, 254, 0.22) 44%, rgba(196, 181, 253, 0.24) 58%, transparent 88%)',
+              'linear-gradient(110deg, transparent 12%, rgba(236, 253, 245, 0.2) 44%, rgba(153, 246, 228, 0.18) 58%, transparent 88%)',
             filter: 'blur(14px)',
           }}
         />
@@ -72,7 +72,7 @@ export function AppEntryLoader() {
                   height: layer.size,
                   border: `1px solid ${layer.border}`,
                   background:
-                    'radial-gradient(circle, rgba(221, 214, 254, 0.16) 0%, rgba(196, 181, 253, 0.08) 38%, rgba(139, 92, 246, 0.02) 62%, transparent 74%)',
+                    'radial-gradient(circle, rgba(236, 253, 245, 0.16) 0%, rgba(153, 246, 228, 0.08) 38%, rgba(16, 185, 129, 0.02) 62%, transparent 74%)',
                   boxShadow: `0 0 28px ${layer.glow}`,
                   filter: 'blur(0.4px)',
                   willChange: 'transform, opacity',
@@ -97,7 +97,7 @@ export function AppEntryLoader() {
                 width: 'clamp(5.8rem, 19vw, 8.2rem)',
                 height: 'clamp(5.8rem, 19vw, 8.2rem)',
                 background:
-                  'radial-gradient(circle, rgba(224, 231, 255, 0.3) 0%, rgba(196, 181, 253, 0.18) 42%, rgba(167, 139, 250, 0.05) 68%, transparent 80%)',
+                  'radial-gradient(circle, rgba(236, 253, 245, 0.28) 0%, rgba(153, 246, 228, 0.18) 42%, rgba(15, 118, 110, 0.05) 68%, transparent 80%)',
                 filter: 'blur(6px)',
                 willChange: 'transform, opacity',
               }}
@@ -107,15 +107,15 @@ export function AppEntryLoader() {
           )}
 
           <motion.div
-            className="relative flex items-center justify-center rounded-full border border-violet-100/28 bg-white/[0.04] p-4 backdrop-blur-xl"
+            className="relative flex items-center justify-center rounded-full border border-emerald-100/24 bg-white/[0.03] p-4 backdrop-blur-xl"
             style={{
               width: 'clamp(4.9rem, 16vw, 7.2rem)',
               height: 'clamp(4.9rem, 16vw, 7.2rem)',
               boxShadow: prefersReducedMotion
-                ? '0 0 0 1px rgba(221, 214, 254, 0.18)'
-                : '0 0 44px rgba(167, 139, 250, 0.34), inset 0 0 36px rgba(196, 181, 253, 0.18)',
+                ? '0 0 0 1px rgba(209, 250, 229, 0.18)'
+                : '0 0 38px rgba(16, 185, 129, 0.28), inset 0 0 28px rgba(153, 246, 228, 0.14)',
               background:
-                'radial-gradient(circle at 34% 26%, rgba(237, 233, 254, 0.36), rgba(196, 181, 253, 0.2) 36%, rgba(30, 27, 75, 0.34) 78%)',
+                'radial-gradient(circle at 34% 26%, rgba(236, 253, 245, 0.32), rgba(153, 246, 228, 0.18) 36%, rgba(10, 14, 13, 0.34) 78%)',
               willChange: 'transform, opacity',
             }}
             initial={{ opacity: 0, scale: 0.92, y: 8 }}
@@ -130,9 +130,9 @@ export function AppEntryLoader() {
                   : {
                       scale: [1, 1.028, 1],
                       boxShadow: [
-                        '0 0 22px rgba(196, 181, 253, 0.2)',
-                        '0 0 44px rgba(196, 181, 253, 0.38)',
-                        '0 0 22px rgba(196, 181, 253, 0.2)',
+                        '0 0 18px rgba(153, 246, 228, 0.18)',
+                        '0 0 36px rgba(16, 185, 129, 0.34)',
+                        '0 0 18px rgba(153, 246, 228, 0.18)',
                       ],
                     }
               }
@@ -200,7 +200,7 @@ export function AppEntryLoader() {
           {WORDMARK.map((letter, index) => (
             <motion.span
               key={`wordmark-${index}`}
-              className="font-entry-premium text-[clamp(1.78rem,7.6vw,2.58rem)] font-semibold tracking-[0.01em] text-transparent bg-clip-text bg-gradient-to-r from-violet-100 via-indigo-100 to-fuchsia-100"
+              className="font-entry-premium text-[clamp(1.78rem,7.6vw,2.58rem)] font-semibold tracking-[0.01em] text-transparent bg-clip-text bg-gradient-to-r from-emerald-50 via-teal-100 to-slate-100"
               variants={
                 prefersReducedMotion
                   ? {
@@ -224,7 +224,7 @@ export function AppEntryLoader() {
 
         {!prefersReducedMotion && (
           <motion.p
-            className="mt-2 text-[0.72rem] uppercase tracking-[0.22em] text-violet-100/70"
+            className="mt-2 text-[0.72rem] uppercase tracking-[0.22em] text-emerald-100/68"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.95, duration: 0.9, ease: [0.25, 0.46, 0.45, 0.94] }}

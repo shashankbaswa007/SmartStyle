@@ -20,10 +20,10 @@ export function PremiumAuthLoader({
 
   if (prefersReducedMotion || !premium) {
     return (
-      <div className="relative min-h-screen overflow-hidden bg-[#050813]">
+      <div className="relative min-h-screen overflow-hidden bg-[#05080A]">
         <div className="absolute inset-0">
           <DarkVeil
-            hueShift={9}
+            hueShift={152}
             noiseIntensity={0.012}
             scanlineIntensity={0.02}
             speed={0.26}
@@ -36,7 +36,7 @@ export function PremiumAuthLoader({
           className="absolute inset-0"
           style={{
             background:
-              'radial-gradient(circle_at_18%_20%,rgba(56,189,248,0.16),transparent_35%),radial-gradient(circle_at_82%_22%,rgba(99,102,241,0.2),transparent_42%),linear-gradient(140deg,rgba(2,6,23,0.78)_0%,rgba(2,6,23,0.9)_100%)',
+              'radial-gradient(circle_at_18%_20%,rgba(16,185,129,0.14),transparent_35%),radial-gradient(circle_at_82%_22%,rgba(20,184,166,0.16),transparent_42%),linear-gradient(140deg,rgba(2,8,6,0.78)_0%,rgba(3,7,6,0.9)_100%)',
           }}
         />
 
@@ -45,7 +45,7 @@ export function PremiumAuthLoader({
             <div className="flex justify-center">
               <AnimatedLogo size={58} />
             </div>
-            <p className="mt-6 text-center text-[11px] uppercase tracking-[0.15em] text-slate-300/72">{statusText}</p>
+            <p className="mt-6 text-center text-[11px] uppercase tracking-[0.15em] text-emerald-100/66">{statusText}</p>
           </div>
         </div>
       </div>
@@ -56,10 +56,10 @@ export function PremiumAuthLoader({
   const markOnlyWidth = 58;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#050813]">
+    <div className="relative min-h-screen overflow-hidden bg-[#05080A]">
       <div className="absolute inset-0">
         <DarkVeil
-          hueShift={9}
+          hueShift={152}
           noiseIntensity={0.014}
           scanlineIntensity={0.02}
           speed={0.28}
@@ -76,7 +76,7 @@ export function PremiumAuthLoader({
         transition={{ duration: stages.atmosphereFadeIn.end, ease: 'easeInOut' }}
         style={{
           background:
-            'radial-gradient(circle_at_14%_20%,rgba(56,189,248,0.18),transparent_34%),radial-gradient(circle_at_86%_20%,rgba(99,102,241,0.24),transparent_44%),radial-gradient(circle_at_50%_85%,rgba(14,165,233,0.08),transparent_42%),linear-gradient(140deg,rgba(2,6,23,0.78)_0%,rgba(2,6,23,0.9)_100%)',
+            'radial-gradient(circle_at_14%_20%,rgba(16,185,129,0.16),transparent_34%),radial-gradient(circle_at_86%_20%,rgba(20,184,166,0.2),transparent_44%),radial-gradient(circle_at_50%_85%,rgba(13,148,136,0.07),transparent_42%),linear-gradient(140deg,rgba(2,8,6,0.78)_0%,rgba(3,7,6,0.9)_100%)',
         }}
       />
 
@@ -93,7 +93,7 @@ export function PremiumAuthLoader({
         }}
         style={{
           background:
-            'radial-gradient(ellipse 680px 440px at 50% 30%, rgba(186,230,253,0.18) 0%, rgba(56,189,248,0.12) 28%, transparent 74%)',
+            'radial-gradient(ellipse 680px 440px at 50% 30%, rgba(209,250,229,0.16) 0%, rgba(16,185,129,0.1) 28%, transparent 74%)',
         }}
       />
 
@@ -109,7 +109,7 @@ export function PremiumAuthLoader({
         }}
         style={{
           background:
-            'linear-gradient(100deg, transparent 15%, rgba(226,232,240,0.2) 48%, rgba(125,211,252,0.16) 58%, transparent 84%)',
+            'linear-gradient(100deg, transparent 15%, rgba(236,253,245,0.16) 48%, rgba(153,246,228,0.14) 58%, transparent 84%)',
           filter: 'blur(14px)',
         }}
       />
@@ -126,9 +126,9 @@ export function PremiumAuthLoader({
             className="pointer-events-none absolute inset-3 rounded-[1.5rem]"
             animate={{
               boxShadow: [
-                '0 0 0 rgba(125,211,252,0.16)',
-                '0 0 38px rgba(125,211,252,0.38)',
-                '0 0 0 rgba(125,211,252,0.16)',
+                '0 0 0 rgba(16,185,129,0.14)',
+                '0 0 30px rgba(16,185,129,0.3)',
+                '0 0 0 rgba(16,185,129,0.14)',
               ],
             }}
             transition={{
@@ -183,7 +183,7 @@ export function PremiumAuthLoader({
               ease: 'easeInOut',
             }}
             style={{
-              boxShadow: 'inset 0 0 42px rgba(56,189,248,0.16), 0 0 68px rgba(56,189,248,0.12)',
+              boxShadow: 'inset 0 0 32px rgba(16,185,129,0.14), 0 0 56px rgba(20,184,166,0.1)',
             }}
           />
 
@@ -191,7 +191,7 @@ export function PremiumAuthLoader({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: stages.wordmarkEntrance.start + 0.24, duration: 0.55 }}
-            className="mt-6 text-center text-[11px] uppercase tracking-[0.15em] text-slate-300/72"
+            className="mt-6 text-center text-[11px] uppercase tracking-[0.15em] text-emerald-100/66"
           >
             {statusText}
           </motion.p>

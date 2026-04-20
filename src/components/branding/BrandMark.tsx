@@ -23,9 +23,15 @@ export function BrandMark({
   className,
 }: BrandMarkProps) {
   const gradientId = useId();
+  const ringId = useId();
+  const ringInnerId = useId();
   const highlightId = useId();
   const resolvedSize = size ?? sizeMap[variant];
   const resolvedDetail = detail === 'auto' ? (resolvedSize <= 22 ? 'minimal' : 'full') : detail;
+  const showSecondaryRing = resolvedDetail === 'full';
+  const primaryRingRadius = resolvedDetail === 'minimal' ? 22 : 23;
+  const glyphFontSize = resolvedSize <= 22 ? 13 : 14.2;
+  const glyphLetterSpacing = resolvedSize <= 22 ? '0.2px' : '0.28px';
 
   return (
     <svg
@@ -37,40 +43,86 @@ export function BrandMark({
       role="img"
     >
       <defs>
-        <linearGradient id={`${gradientId}-brand-core`} x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor={BRAND.colors.accent} />
-          <stop offset="0.5" stopColor={BRAND.colors.core} />
-          <stop offset="1" stopColor={BRAND.colors.glow} />
+        <radialGradient id={`${gradientId}-brand-core`} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(22 18) rotate(52) scale(48)">
+          <stop offset="0" stopColor="#1A2220" />
+          <stop offset="0.58" stopColor={BRAND.colors.core} />
+          <stop offset="1" stopColor={BRAND.colors.coreDeep} />
+        </radialGradient>
+        <radialGradient id={`${gradientId}-brand-aura`} cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(32 30) rotate(90) scale(30)">
+          <stop offset="0" stopColor="rgba(27,154,141,0.15)" />
+          <stop offset="0.7" stopColor="rgba(15,118,110,0.06)" />
+          <stop offset="1" stopColor="rgba(15,118,110,0)" />
+        </radialGradient>
+        <linearGradient id={`${ringId}-brand-ring-primary`} x1="10" y1="50" x2="54" y2="14" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="rgba(16,185,129,0.72)" />
+          <stop offset="0.58" stopColor="rgba(20,184,166,0.52)" />
+          <stop offset="1" stopColor="rgba(245,247,244,0.12)" />
         </linearGradient>
-        <linearGradient id={`${highlightId}-brand-needle`} x1="40" y1="6" x2="60" y2="24" gradientUnits="userSpaceOnUse">
-          <stop offset="0" stopColor={BRAND.colors.frost} />
-          <stop offset="1" stopColor={BRAND.colors.mist} />
+        <linearGradient id={`${ringInnerId}-brand-ring-secondary`} x1="54" y1="12" x2="14" y2="56" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="rgba(245,247,244,0.22)" />
+          <stop offset="0.54" stopColor="rgba(16,185,129,0.46)" />
+          <stop offset="1" stopColor="rgba(167,139,250,0.08)" />
+        </linearGradient>
+        <linearGradient id={`${highlightId}-brand-edge`} x1="16" y1="14" x2="36" y2="26" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="rgba(255,255,255,0.44)" />
+          <stop offset="1" stopColor="rgba(255,255,255,0)" />
         </linearGradient>
       </defs>
 
-      <rect x="4" y="4" width="56" height="56" rx="18" fill={`url(#${gradientId}-brand-core)`} />
-      <rect x="4" y="4" width="56" height="56" rx="18" fill="rgba(3, 7, 18, 0.16)" />
+      <circle cx="32" cy="32" r="30" fill={`url(#${gradientId}-brand-core)`} />
+      <circle cx="32" cy="32" r="30" fill={`url(#${gradientId}-brand-aura)`} />
+      <circle cx="32" cy="32" r="29.2" stroke="rgba(245,247,244,0.14)" strokeWidth="0.8" />
 
-      <path
-        d="M43 16.8 31.3 35.8a2.5 2.5 0 0 1-3.9.2l-5.1-6.5a2.2 2.2 0 1 0-3.4 2.8l7.1 8.9a6.6 6.6 0 0 0 10.8-.6l10-16.8a2.2 2.2 0 0 0-3.8-2.4Z"
-        fill="rgba(8, 12, 28, 0.65)"
+      <circle
+        cx="32"
+        cy="32"
+        r={primaryRingRadius}
+        stroke={`url(#${ringId}-brand-ring-primary)`}
+        strokeWidth={resolvedDetail === 'minimal' ? 1.5 : 1.65}
+        opacity={resolvedDetail === 'minimal' ? 0.64 : 0.74}
       />
 
-      {resolvedDetail === 'full' ? (
-        <path
-          d="M39.9 11.7 54.1 10a1.5 1.5 0 0 1 1.6 2.2L48.8 26a1.5 1.5 0 0 1-2.8-.3l-1.7-6a1.5 1.5 0 0 0-1.1-1.1l-5.8-1.6a1.5 1.5 0 0 1-.3-2.9Z"
-          fill={`url(#${highlightId}-brand-needle)`}
+      {showSecondaryRing ? (
+        <circle
+          cx="32"
+          cy="32"
+          r="17.2"
+          stroke={`url(#${ringInnerId}-brand-ring-secondary)`}
+          strokeWidth="1.6"
+          opacity="0.62"
         />
       ) : null}
 
-      {resolvedDetail === 'full' ? (
-        <path
-          d="M34.4 43.2c0 4.3-3.9 7.7-8.7 7.7-4.8 0-8.7-3.4-8.7-7.7 0-2.5 1.4-4.7 3.5-6.2 1.8 2.8 4.8 4.6 8.3 4.6 2 0 3.9-.7 5.6-1.8Z"
-          fill="rgba(15, 23, 42, 0.45)"
-        />
-      ) : (
-        <circle cx="49" cy="15" r="3" fill={BRAND.colors.frost} opacity="0.85" />
-      )}
+      {showSecondaryRing ? (
+        <path d="M16.8 22.4C18.8 18.8 22.7 16.3 27.2 16.3" stroke={`url(#${highlightId}-brand-edge)`} strokeWidth="1" strokeLinecap="round" />
+      ) : null}
+
+      <text
+        x="32"
+        y="33.1"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="rgba(5,8,10,0.52)"
+        fontFamily="Sora, Space Grotesk, Avenir Next, sans-serif"
+        fontSize={glyphFontSize}
+        fontWeight="600"
+        letterSpacing={glyphLetterSpacing}
+      >
+        SS
+      </text>
+      <text
+        x="32"
+        y="32"
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill={BRAND.colors.frost}
+        fontFamily="Sora, Space Grotesk, Avenir Next, sans-serif"
+        fontSize={glyphFontSize}
+        fontWeight="600"
+        letterSpacing={glyphLetterSpacing}
+      >
+        SS
+      </text>
     </svg>
   );
 }

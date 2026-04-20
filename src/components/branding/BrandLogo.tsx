@@ -60,7 +60,7 @@ export function BrandLogo({
                 <>
                   <span className="text-foreground">Smart</span>
                   <span
-                    className={cn('text-teal-300/95', accentClassName)}
+                    className={cn('text-emerald-300/95', accentClassName)}
                     style={{ letterSpacing: BRAND.logo.wordmark.accentLetterSpacing }}
                   >
                     Style
