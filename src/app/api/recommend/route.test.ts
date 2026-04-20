@@ -437,4 +437,49 @@ describe('POST /api/recommend', () => {
     expect(payload.requestId).toBe('req-enqueue-failure');
     expect(payload.retryable).toBe(true);
   });
+
+  it('returns degraded fallback payload when unhandled error maps to backend unavailable', async () => {
+    mockValidateRequest.mockReturnValue({
+      success: true,
+      data: {
+        photoDataUri: 'data:image/jpeg;base64,ZmFrZQ==',
+        occasion: 'office',
+        genre: 'minimalist',
+        gender: 'male',
+        userId: 'anonymous',
+      },
+    });
+    mockQuickValidateImageDataUri.mockReturnValue({ isValid: true });
+    mockEnqueueRecommendJob.mockRejectedValue(new Error('service unavailable'));
+
+    const response = await POST(
+      new Request('http://localhost/api/recommend', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-request-id': 'req-backend-unavailable',
+        },
+        body: JSON.stringify({
+          photoDataUri: 'data:image/jpeg;base64,ZmFrZQ==',
+          occasion: 'office',
+          genre: 'minimalist',
+          gender: 'male',
+          userId: 'anonymous',
+        }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-request-id')).toBe('req-backend-unavailable');
+
+    const payload = await response.json();
+    expect(payload.code).toBe('RECOMMEND_BACKEND_UNAVAILABLE');
+    expect(payload.errorCategory).toBe('BACKEND_UNAVAILABLE');
+    expect(payload.status).toBe('failed');
+    expect(payload.degraded).toBe(true);
+    expect(payload.backendAvailable).toBe(false);
+    expect(payload.fallbackSource).toBe('simplified');
+    expect(payload.requestId).toBe('req-backend-unavailable');
+    expect(payload.retryable).toBe(true);
+  });
 });

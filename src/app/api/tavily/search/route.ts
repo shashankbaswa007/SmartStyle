@@ -56,12 +56,20 @@ export async function POST(req: Request) {
       maxRequests: 30,
     });
     if (!rateLimit.allowed) {
+      const retryAfterSeconds = Math.max(1, Math.ceil((rateLimit.resetAt.getTime() - Date.now()) / 1000));
       return NextResponse.json(
-        { error: 'Too many requests. Please try again later.', links: { amazon: null, tatacliq: null, myntra: null } },
         {
-          status: 429,
+          links: { amazon: null, tatacliq: null, myntra: null },
+          warning: 'Shopping links temporarily unavailable',
+          error: 'Too many requests. Please try again later.',
+          code: 'RATE_LIMIT_EXCEEDED',
+          throttled: true,
+          retryAfterSeconds,
+        },
+        {
+          status: 200,
           headers: {
-            'Retry-After': String(Math.ceil((rateLimit.resetAt.getTime() - Date.now()) / 1000)),
+            'Retry-After': String(retryAfterSeconds),
             'X-RateLimit-Remaining': '0',
             'X-RateLimit-Reset': rateLimit.resetAt.toISOString(),
           },

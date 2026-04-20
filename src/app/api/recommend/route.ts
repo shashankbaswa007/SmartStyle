@@ -705,6 +705,38 @@ export async function POST(req: Request) {
       error: toLogSafeError(error),
     });
 
+    if (mappedError.status === 503) {
+      logLifecycle('degraded', {
+        errorCode: mappedError.code,
+        errorCategory: mappedError.errorCategory,
+        httpStatus: 200,
+        backendAvailable: false,
+        degraded: true,
+      });
+
+      return NextResponse.json(
+        {
+          success: true,
+          requestId,
+          status: 'failed',
+          payload: null,
+          fallbackSource: 'simplified',
+          degraded: true,
+          backendAvailable: false,
+          code: mappedError.code,
+          errorCategory: mappedError.errorCategory,
+          error: mappedError.message,
+          retryable: true,
+        },
+        {
+          status: 200,
+          headers: {
+            'X-Request-Id': requestId,
+          },
+        }
+      );
+    }
+
     logLifecycle('error', {
       errorCode: mappedError.code,
       errorCategory: mappedError.errorCategory,

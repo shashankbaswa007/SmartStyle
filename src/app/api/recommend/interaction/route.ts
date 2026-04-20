@@ -37,9 +37,21 @@ export async function POST(req: Request) {
   }
 
   if (!limit.allowed) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((limit.resetAt.getTime() - Date.now()) / 1000));
     return NextResponse.json(
-      { success: false, tracked: false, error: 'Too many requests', code: 'RATE_LIMIT_EXCEEDED' },
-      { status: 429 }
+      {
+        success: true,
+        tracked: false,
+        warning: 'interaction_rate_limited',
+        code: 'RATE_LIMIT_EXCEEDED',
+        retryAfterSeconds,
+      },
+      {
+        status: 200,
+        headers: {
+          'Retry-After': String(retryAfterSeconds),
+        },
+      }
     );
   }
 
