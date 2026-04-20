@@ -116,7 +116,7 @@ describe('POST /api/recommend', () => {
     }
   });
 
-  it('returns 503 in production when recommendation provider env vars are missing', async () => {
+  it('returns degraded failed payload in production when recommendation provider env vars are missing', async () => {
     process.env.NODE_ENV = 'production';
     delete process.env.GROQ_API_KEY;
     delete process.env.GOOGLE_GENAI_API_KEY;
@@ -139,12 +139,16 @@ describe('POST /api/recommend', () => {
       })
     );
 
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(200);
     expect(response.headers.get('x-request-id')).toBe('req-missing-env');
 
     const payload = await response.json();
     expect(payload.code).toBe('RECOMMEND_BACKEND_MISCONFIGURED');
     expect(payload.errorCategory).toBe('ENV_MISCONFIGURED');
+    expect(payload.degraded).toBe(true);
+    expect(payload.backendAvailable).toBe(false);
+    expect(payload.status).toBe('failed');
+    expect(payload.fallbackSource).toBe('simplified');
     expect(payload.missingCritical).toContain('GROQ_API_KEY or GOOGLE_GENAI_API_KEY or GOOGLE_GENAI_API_KEY_BACKUP');
   });
 

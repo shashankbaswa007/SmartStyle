@@ -44,7 +44,27 @@ export async function GET(req: Request) {
 
   const job = await getRecommendJobStatus(jobId);
   if (!job) {
-    return errorResponse(404, 'JOB_NOT_FOUND', 'Recommendation job was not found', requestId);
+    return NextResponse.json(
+      {
+        success: true,
+        requestId,
+        status: 'failed',
+        jobId,
+        payload: null,
+        fallbackSource: 'simplified',
+        degraded: true,
+        backendAvailable: false,
+        code: 'JOB_STATE_UNAVAILABLE',
+        errorCategory: 'BACKEND_UNAVAILABLE',
+        error: 'Recommendation job state is temporarily unavailable. Serving fallback response.',
+      },
+      {
+        status: 200,
+        headers: {
+          'X-Request-Id': requestId,
+        },
+      }
+    );
   }
 
   if (job.status === 'queued' || job.status === 'processing') {

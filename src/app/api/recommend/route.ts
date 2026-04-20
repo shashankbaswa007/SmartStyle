@@ -216,20 +216,35 @@ export async function POST(req: Request) {
     if (process.env.NODE_ENV === 'production') {
       const missingCritical = getRecommendMissingCriticalEnv();
       if (missingCritical.length > 0) {
-        logLifecycle('error', {
+        logLifecycle('degraded', {
           errorCode: 'RECOMMEND_BACKEND_MISCONFIGURED',
           errorCategory: 'ENV_MISCONFIGURED',
-          httpStatus: 503,
+          httpStatus: 200,
+          backendAvailable: false,
+          degraded: true,
           missingCritical,
         });
 
-        return buildErrorResponse(
-          503,
-          'RECOMMEND_BACKEND_MISCONFIGURED',
-          'Recommendation service is not fully configured in this deployment.',
-          requestId,
-          'ENV_MISCONFIGURED',
-          { missingCritical }
+        return NextResponse.json(
+          {
+            success: true,
+            requestId,
+            status: 'failed',
+            payload: null,
+            fallbackSource: 'simplified',
+            degraded: true,
+            backendAvailable: false,
+            code: 'RECOMMEND_BACKEND_MISCONFIGURED',
+            errorCategory: 'ENV_MISCONFIGURED',
+            error: 'Recommendation service is not fully configured in this deployment. Serving fallback response.',
+            missingCritical,
+          },
+          {
+            status: 200,
+            headers: {
+              'X-Request-Id': requestId,
+            },
+          }
         );
       }
     }
