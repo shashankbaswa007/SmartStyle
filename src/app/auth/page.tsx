@@ -363,7 +363,7 @@ export default function AuthPage() {
         {/* Background layers */}
         <div className="absolute inset-0 z-0">
           <DarkVeil
-            hueShift={10}
+            hueShift={152}
             noiseIntensity={0.014}
             scanlineIntensity={0.02}
             speed={0.3}
@@ -503,7 +503,7 @@ export default function AuthPage() {
                 }}
                 className="text-center mb-6 sm:mb-10"
               >
-                <h2 className="font-headline text-2xl font-semibold tracking-wide text-white">SmartStyle</h2>
+                <h2 className="font-entry-premium text-2xl font-semibold tracking-wide text-white">SmartStyle</h2>
                 <p className="text-xs tracking-widest text-slate-400 uppercase mt-1.5">Your Personal Style Assistant</p>
               </motion.div>
 
@@ -518,24 +518,8 @@ export default function AuthPage() {
                 }}
                 onClick={handleGoogleSignIn}
                 disabled={googleLoading}
-                className="group relative w-full h-[48px] sm:h-[52px] rounded-full bg-gradient-to-r from-teal-700 via-teal-600 to-teal-700 text-white font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-all duration-300 hover:shadow-[0_8px_32px_rgba(13,106,96,0.42)] hover:translate-y-[-2px] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed overflow-hidden"
+                className="group relative w-full h-[48px] sm:h-[52px] rounded-full border border-teal-300/24 bg-teal-600 text-white font-medium text-sm sm:text-base flex items-center justify-center gap-2 transition-all duration-300 hover:bg-teal-500 hover:shadow-[0_10px_28px_rgba(13,106,96,0.34)] hover:translate-y-[-1px] active:translate-y-0 active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {/* Shimmer effect on hover */}
-                <motion.div
-                  className="absolute inset-0 opacity-0 group-hover:opacity-100"
-                  initial={{ x: '-100%' }}
-                  whileHover={{
-                    x: '100%',
-                  }}
-                  transition={{
-                    duration: 0.6,
-                    ease: 'easeInOut',
-                  }}
-                  style={{
-                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
-                  }}
-                />
-
                 <span className="relative flex items-center gap-2 z-10 whitespace-nowrap">
                   {googleLoading ? (
                     <>

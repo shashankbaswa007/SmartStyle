@@ -10,7 +10,7 @@ const RIPPLE_LAYERS = [
   { delay: 0, size: 'clamp(7.4rem, 25vw, 10.8rem)', border: 'rgba(110, 231, 183, 0.34)', glow: 'rgba(16, 185, 129, 0.22)' },
   { delay: 0.85, size: 'clamp(8.3rem, 29vw, 12.2rem)', border: 'rgba(153, 246, 228, 0.28)', glow: 'rgba(20, 184, 166, 0.2)' },
   { delay: 1.7, size: 'clamp(9.1rem, 32vw, 13.5rem)', border: 'rgba(209, 250, 229, 0.2)', glow: 'rgba(15, 118, 110, 0.16)' },
-  { delay: 2.55, size: 'clamp(10rem, 36vw, 14.8rem)', border: 'rgba(167, 139, 250, 0.08)', glow: 'rgba(15, 118, 110, 0.13)' },
+  { delay: 2.55, size: 'clamp(10rem, 36vw, 14.8rem)', border: 'rgba(20, 184, 166, 0.1)', glow: 'rgba(15, 118, 110, 0.13)' },
 ];
 
 export function AppEntryLoader() {
@@ -18,7 +18,7 @@ export function AppEntryLoader() {
 
   return (
     <div
-      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#05080A] px-6"
+      className="relative flex h-full w-full items-center justify-center overflow-hidden bg-[#050D0A] px-6"
       role="status"
       aria-label="SmartStyle is loading"
     >

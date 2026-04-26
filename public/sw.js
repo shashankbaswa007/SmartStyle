@@ -1,6 +1,6 @@
 const STATIC_CACHE = 'smartstyle-static-v13';
 const OFFLINE_FALLBACK_URL = '/offline.html';
-const BRAND_ASSET_VERSION = '2026-04-20.2';
+const BRAND_ASSET_VERSION = '2026-04-25.1';
 const BRANDING_NETWORK_FIRST = true;
 
 const VERSIONED_BRANDING_ASSETS = [

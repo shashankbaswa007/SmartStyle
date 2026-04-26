@@ -17,9 +17,9 @@ export const AUTH_LOGO_LOCKUP = {
     'absolute inset-[-1px] rounded-full border-[1.5px] border-slate-200/56 border-l-transparent border-t-slate-100/24 shadow-[0_0_10px_rgba(20,184,166,0.18)]',
   center:
     'absolute inset-[7px] z-10 flex items-center justify-center rounded-full border border-white/24 bg-gradient-to-br from-emerald-300/22 via-teal-300/16 to-slate-300/18 shadow-[0_0_18px_rgba(16,185,129,0.24)]',
-  glyph: 'relative font-headline text-[14px] font-semibold leading-none tracking-[0.07em] text-slate-50',
+  glyph: 'relative font-entry-premium text-[14px] font-semibold leading-none tracking-[0.07em] text-slate-50',
   glyphEcho: 'pointer-events-none absolute -inset-x-[1px] top-[1px] opacity-0 blur-[0.45px]',
-  wordmark: 'font-headline text-[1.42rem] font-semibold leading-none tracking-[-0.02em] text-slate-50',
+  wordmark: 'font-entry-premium text-[1.42rem] font-semibold leading-none tracking-[-0.02em] text-slate-50',
   tagline: 'mt-[2px] font-body text-[10px] uppercase tracking-[0.16em] text-emerald-100/68',
   gap: 'gap-2.5',
 };
@@ -32,7 +32,7 @@ export const AUTH_LOGO_MOTION = {
 
 export const AUTH_LOGO_CONFIG = {
   glyph: {
-    font: 'font-headline',
+    font: 'font-entry-premium',
     weight: 'font-semibold',
     style: '',
     letter: 'SS',
@@ -40,7 +40,7 @@ export const AUTH_LOGO_CONFIG = {
     glyphBlur: 'blur-[0.45px]',
   },
   wordmark: {
-    font: 'font-headline',
+    font: 'font-entry-premium',
     weight: 'font-semibold',
     text: 'SmartStyle',
   },
@@ -63,7 +63,7 @@ export const AUTH_ANIMATION_CONFIG = {
 export const AUTH_COLORS = {
   primaryCyan: 'rgba(13,106,96,0.28)',
   secondaryIndigo: 'rgba(26,139,126,0.22)',
-  accentTeal: 'rgba(111,100,136,0.07)',
+  accentTeal: 'rgba(20,184,166,0.12)',
   darkBg: '#050D0A',
   cardBg: 'bg-black/65',
 };

@@ -12,7 +12,7 @@ export const BRAND = {
     coreDeep: '#050D0A',
     accent: '#0D6A60',
     glow: '#1A8B7E',
-    trace: '#6F6488',
+    trace: '#2F7E74',
     ink: '#05080A',
     frost: '#F5F7F4',
     mist: '#D1E8E2',
@@ -42,7 +42,7 @@ export const BRAND = {
 export const INTRO_STORAGE_KEY = 'smartstyle_intro_seen';
 export const INTRO_REPLAY_QUERY = 'replayIntro';
 export const APP_LOADER_SESSION_KEY = 'smartstyle:app-loader:shown';
-export const BRAND_ASSET_VERSION = '2026-04-20.2';
+export const BRAND_ASSET_VERSION = '2026-04-25.1';
 
 export function withBrandAssetVersion(path: string): string {
   const separator = path.includes('?') ? '&' : '?';

@@ -115,7 +115,7 @@ export function LogoIntro({ onFinish }: LogoIntroProps) {
   }
 
   if (phase === 'checking') {
-    return <div className="fixed inset-0 z-[120] bg-[#05050d]" aria-hidden="true" />;
+    return <div className="fixed inset-0 z-[120] bg-[#050D0A]" aria-hidden="true" />;
   }
 
   return (
@@ -124,7 +124,7 @@ export function LogoIntro({ onFinish }: LogoIntroProps) {
         <motion.div
           initial={{ opacity: 1 }}
           exit={{ opacity: 0, transition: { duration: duration(MOTION_DURATION.normal, 'primary') } }}
-          className="fixed inset-0 z-[120] overflow-hidden bg-[#05050d]"
+          className="fixed inset-0 z-[120] overflow-hidden bg-[#050D0A]"
           aria-label="SmartStyle intro"
           role="status"
         >
