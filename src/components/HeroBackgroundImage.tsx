@@ -41,7 +41,7 @@ export default function HeroBackgroundImage() {
   return (
     <video
       ref={videoRef}
-      src="/hero-compressed.mp4"
+      src="/hero-loop.mp4"
       autoPlay
       muted
       loop
