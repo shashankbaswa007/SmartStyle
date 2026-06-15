@@ -844,9 +844,9 @@ export async function enqueueRecommendJob(
       }
     }
 
-    // Trigger processing asynchronously unless explicitly deferred by caller.
+    // Fire-and-forget — never await inline to avoid 504s on Vercel Hobby.
     if (autoStart) {
-      void processRecommendJob(jobId);
+      void processRecommendJob(jobId).catch(() => {});
     }
 
     return { jobId, deduped: false, status: 'queued' };
@@ -858,7 +858,7 @@ export async function enqueueRecommendJob(
 }
 
 export async function startRecommendJob(jobId: string): Promise<void> {
-  void processRecommendJob(jobId);
+  await processRecommendJob(jobId);
 }
 
 export async function markRecommendJobRateLimited(jobId: string, message: string): Promise<void> {
@@ -948,7 +948,7 @@ async function runWorkflow(job: RecommendJobRecord): Promise<any> {
         userId: job.input.userId || '',
       }),
       {
-        timeoutMs: 70_000,
+        timeoutMs: 60_000,
         retries: 0,
         operationName: 'recommend.job.analysis',
       }
@@ -992,58 +992,67 @@ async function runWorkflow(job: RecommendJobRecord): Promise<any> {
     generatedImageColors: null;
   }> = [];
 
-  for (const outfit of outfits) {
-      const colorHexCodes = outfit.colorPalette?.map((c) => {
-        if (typeof c === 'string') return c;
-        const colorObj = c as { hex?: string };
-        return colorObj.hex || '#000000';
-      }) || [];
+  const imagePromises = outfits.map(async (outfit, index) => {
+    const colorHexCodes = outfit.colorPalette?.map((c) => {
+      if (typeof c === 'string') return c;
+      const colorObj = c as { hex?: string };
+      return colorObj.hex || '#000000';
+    }) || [];
 
-      const shoppingLinksData = generateShoppingLinks({
-        gender: job.input.gender,
-        items: outfit.items,
-        colorPalette: colorHexCodes.slice(0, 5),
-        style: outfit.styleType || 'casual',
-        description: outfit.description,
-      });
+    const shoppingLinksData = generateShoppingLinks({
+      gender: job.input.gender,
+      items: outfit.items,
+      colorPalette: colorHexCodes.slice(0, 5),
+      style: outfit.styleType || 'casual',
+      description: outfit.description,
+    });
 
-      const shoppingLinks = {
-        amazon: shoppingLinksData.byPlatform.amazon[0]?.url || null,
-        myntra: shoppingLinksData.byPlatform.myntra[0]?.url || null,
-        tatacliq: shoppingLinksData.byPlatform.tataCliq[0]?.url || null,
-      };
+    const shoppingLinks = {
+      amazon: shoppingLinksData.byPlatform.amazon[0]?.url || null,
+      myntra: shoppingLinksData.byPlatform.myntra[0]?.url || null,
+      tatacliq: shoppingLinksData.byPlatform.tataCliq[0]?.url || null,
+    };
 
-      const imagePrompt = outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`;
-      let imageUrl: string;
-      try {
-        imageUrl = await generateImageWithRetry(imagePrompt, colorHexCodes, 16_000);
-      } catch {
-        failedImageCount += 1;
-        imageUrl = buildImageFallbackDataUri(outfit.title);
-      }
-      imageUrls.push(imageUrl);
+    const imagePrompt = outfit.imagePrompt || `${outfit.title} ${outfit.items.join(' ')}`;
+    let imageUrl: string;
+    try {
+      imageUrl = await generateImageWithRetry(imagePrompt, colorHexCodes, 15_000);
+    } catch {
+      imageUrl = buildImageFallbackDataUri(outfit.title);
+    }
 
-      if (job.partialPayload) {
-        job.partialPayload = applyImageProgressToPartial(job.partialPayload, imageUrls);
-      }
+    return { outfit, imageUrl, colorHexCodes, shoppingLinks, index };
+  });
 
-      job.progress = {
-        ...(job.progress || { stage: 'queued' as RecommendProgressStage }),
-        stage: 'images',
-        totalImages: outfits.length,
-        imagesReady: imageUrls.length,
-      };
-      job.updatedAt = now();
-      await saveJob(job);
+  const imageResults = await Promise.all(imagePromises);
 
-      enrichedOutfits.push({
-        ...outfit,
-        colorPalette: colorHexCodes.slice(0, 5),
-        imageUrl,
-        shoppingLinks,
-        generatedImageColors: null,
-      });
+  for (const result of imageResults) {
+    if (result.imageUrl.startsWith('data:image/svg+xml')) {
+      failedImageCount += 1;
+    }
+    imageUrls[result.index] = result.imageUrl;
+
+    enrichedOutfits[result.index] = {
+      ...result.outfit,
+      colorPalette: result.colorHexCodes.slice(0, 5),
+      imageUrl: result.imageUrl,
+      shoppingLinks: result.shoppingLinks,
+      generatedImageColors: null,
+    };
   }
+
+  if (job.partialPayload) {
+    job.partialPayload = applyImageProgressToPartial(job.partialPayload, imageUrls);
+  }
+
+  job.progress = {
+    ...(job.progress || { stage: 'queued' as RecommendProgressStage }),
+    stage: 'images',
+    totalImages: outfits.length,
+    imagesReady: imageUrls.length,
+  };
+  job.updatedAt = now();
+  await saveJob(job);
 
   if (failedImageCount >= outfits.length) {
     throw new RecommendJobError('IMAGE_GENERATION_FAILED', 'Image generation failed for all recommendations.');
@@ -1238,15 +1247,18 @@ export async function getRecommendJobStatus(jobId: string): Promise<RecommendJob
   const job = await getJob(jobId);
   if (!job) return null;
 
-  // Opportunistic processing in case background trigger was interrupted.
+  // Opportunistic processing: fire in the background if the job is stale/queued.
+  // Do NOT await — the status endpoint must return instantly to avoid 504s
+  // on Vercel Hobby's 10s limit. The job state in Redis will be updated
+  // by the background promise, and the next client poll will see the result.
   if (job.status === 'queued') {
-    void processRecommendJob(jobId);
+    void processRecommendJob(jobId).catch(() => {});
   } else if (job.status === 'processing') {
     const lastProgressAt = job.updatedAt || job.startedAt || job.createdAt;
     const isStaleProcessing = now() - lastProgressAt > STALE_PROCESSING_REQUEUE_MS;
     const stillWithinTimeoutWindow = now() - job.createdAt <= RECOMMEND_JOB_TIMEOUT_MS;
     if (isStaleProcessing && stillWithinTimeoutWindow) {
-      void processRecommendJob(jobId);
+      void processRecommendJob(jobId).catch(() => {});
     }
   }
 

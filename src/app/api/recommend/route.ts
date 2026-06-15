@@ -14,8 +14,6 @@ import {
   markRecommendJobRateLimited,
   setRecommendJobUsageReservation,
   startRecommendJob,
-  awaitRecommendJobTerminalState,
-  RECOMMEND_JOB_TIMEOUT_MS,
 } from '@/lib/recommend/async-jobs';
 import { buildUsageIdempotencyKey } from '@/lib/usage-idempotency';
 import { getTimezoneOffsetMinutesFromRequest, RATE_LIMIT_SCOPES } from '@/lib/usage-limits';
@@ -24,7 +22,6 @@ import { logger } from '@/lib/logger';
 import { incrementProductionCounter } from '@/lib/production-telemetry';
 
 export const runtime = 'nodejs';
-export const maxDuration = 15;
 const RECOMMEND_ENDPOINT = '/api/recommend';
 const RECOMMEND_SLOW_REQUEST_MS = 2200;
 
@@ -60,8 +57,8 @@ function buildErrorResponse(
 function getRecommendMissingCriticalEnv(): string[] {
   const missing: string[] = [];
 
-  if (!process.env.GROQ_API_KEY && !process.env.GOOGLE_GENAI_API_KEY && !process.env.GOOGLE_GENAI_API_KEY_BACKUP) {
-    missing.push('GROQ_API_KEY or GOOGLE_GENAI_API_KEY or GOOGLE_GENAI_API_KEY_BACKUP');
+  if (!process.env.GROQ_API_KEY && !process.env.GOOGLE_GENAI_API_KEY && !process.env.GOOGLE_AI_API_KEY && !process.env.GOOGLE_GENAI_API_KEY_BACKUP) {
+    missing.push('GROQ_API_KEY or GOOGLE_GENAI_API_KEY or GOOGLE_AI_API_KEY or GOOGLE_GENAI_API_KEY_BACKUP');
   }
 
   return missing;
@@ -139,7 +136,6 @@ function toLogSafeError(error: unknown): { name?: string; message: string } {
 }
 
 export async function POST(req: Request) {
-  const TERMINAL_WAIT_MS = Math.max(1_200, Math.min(6_500, RECOMMEND_JOB_TIMEOUT_MS - 3_000));
   const requestStartedAt = Date.now();
   const requestId = req.headers.get('x-request-id') || crypto.randomUUID();
   const requestLogger =
@@ -565,68 +561,18 @@ export async function POST(req: Request) {
       usageRateLimitDegraded = true;
     }
 
-    await startRecommendJob(queued.jobId);
-
-    const terminalJob = await awaitRecommendJobTerminalState(queued.jobId, {
-      timeoutMs: TERMINAL_WAIT_MS,
-      pollIntervalMs: 550,
+    // Fire job processing in the background — do NOT await.
+    // Vercel Hobby has a strict 10s serverless timeout. The AI workflow
+    // (Gemini analysis + image generation) takes 15-30s and WILL cause a 504
+    // if awaited inline. Instead, return 202 immediately and let the client
+    // poll /api/recommend/status. The status endpoint has built-in
+    // "opportunistic processing" that picks up queued/stale jobs.
+    void startRecommendJob(queued.jobId).catch((err) => {
+      requestLogger.error('Background job processing failed', {
+        jobId: queued.jobId,
+        error: toLogSafeError(err),
+      });
     });
-
-    if (terminalJob && (terminalJob.status === 'completed' || terminalJob.status === 'failed')) {
-      const result = terminalJob.result as
-        | {
-            payload?: unknown;
-            recommendationId?: string | null;
-            cached?: boolean;
-            cacheSource?: string;
-            code?: string;
-            success?: boolean;
-            error?: string;
-            message?: string;
-          }
-        | undefined;
-
-      requestLogger.info('Recommend request completed within fast terminal wait window', {
-        jobId: terminalJob.jobId,
-        status: terminalJob.status,
-      });
-
-      const degradedResponse = terminalJob.status === 'failed' || usageRateLimitDegraded;
-      const errorCategory: ObservabilityErrorCategory = degradedResponse ? 'BACKEND_UNAVAILABLE' : 'UNKNOWN_ERROR';
-      logLifecycle(degradedResponse ? 'degraded' : 'success', {
-        errorCode: degradedResponse
-          ? String(result?.code || terminalJob.error || (usageRateLimitDegraded ? 'RATE_LIMIT_UNAVAILABLE' : 'RECOMMEND_JOB_FAILED'))
-          : null,
-        errorCategory: degradedResponse ? errorCategory : null,
-        httpStatus: 200,
-        terminalStatus: terminalJob.status,
-        deduped: false,
-      });
-
-      return NextResponse.json(
-        {
-          success: true,
-          requestId,
-          status: terminalJob.status,
-          jobId: terminalJob.jobId,
-          progress: terminalJob.progress,
-          partialPayload: terminalJob.partialPayload ?? null,
-          payload: result?.payload ?? null,
-          recommendationId: result?.recommendationId ?? null,
-          cached: result?.cached ?? false,
-          cacheSource: result?.cacheSource ?? 'job',
-          fallbackSource: terminalJob.fallbackSource,
-          error: result?.error ?? terminalJob.error,
-          code: result?.code,
-          errorCategory: degradedResponse ? errorCategory : undefined,
-          degraded: degradedResponse,
-          backendAvailable: !degradedResponse,
-          usageRateLimitDegraded,
-          completedAt: terminalJob.completedAt,
-        },
-        { status: 200, headers: { 'X-Request-Id': requestId } }
-      );
-    }
 
     requestLogger.info('Recommend request acknowledged with queued response', {
       jobId: queued.jobId,
@@ -649,16 +595,14 @@ export async function POST(req: Request) {
         jobId: queued.jobId,
         deduped: queued.deduped,
         usageRateLimitDegraded,
-        message: queued.deduped
-          ? 'Similar request already in progress or cached; attached to existing job.'
-          : 'Recommendation job queued successfully.',
+        message: 'Recommendation job queued successfully.',
       },
       { status: 202, headers: { 'X-Request-Id': requestId } }
     );
   } catch (error) {
     if (queuedJobId) {
       try {
-        await startRecommendJob(queuedJobId);
+        void startRecommendJob(queuedJobId).catch(() => {});
       } catch (recoveryError) {
         requestLogger.error('Failed to recover queued job after route exception', {
           jobId: queuedJobId,
