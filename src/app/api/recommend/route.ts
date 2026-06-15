@@ -14,6 +14,7 @@ import {
   markRecommendJobRateLimited,
   setRecommendJobUsageReservation,
   startRecommendJob,
+  awaitRecommendJobTerminalState,
 } from '@/lib/recommend/async-jobs';
 import { buildUsageIdempotencyKey } from '@/lib/usage-idempotency';
 import { getTimezoneOffsetMinutesFromRequest, RATE_LIMIT_SCOPES } from '@/lib/usage-limits';
