@@ -217,7 +217,7 @@ export default function SavedPalettesPage() {
                         {palette.occasions.map((occasion) => (
                           <span
                             key={occasion}
-                            className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs rounded-full capitalize"
+                            className="px-2 py-0.5 bg-teal-100 dark:bg-teal-900/30 text-teal-700 dark:text-teal-300 text-xs rounded-full capitalize"
                           >
                             {occasion}
                           </span>
@@ -229,7 +229,7 @@ export default function SavedPalettesPage() {
                         {palette.seasons.map((season) => (
                           <span
                             key={season}
-                            className="px-2 py-0.5 bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-xs rounded-full capitalize"
+                            className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-xs rounded-full capitalize"
                           >
                             {season}
                           </span>

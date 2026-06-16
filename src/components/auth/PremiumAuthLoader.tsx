@@ -20,7 +20,7 @@ export function PremiumAuthLoader({
 
   if (prefersReducedMotion || !premium) {
     return (
-      <div className="relative min-h-screen overflow-hidden bg-[#05080A]">
+      <div className="relative min-h-screen overflow-hidden bg-[#050D0A]">
         <div className="absolute inset-0">
           <DarkVeil
             hueShift={152}
@@ -56,7 +56,7 @@ export function PremiumAuthLoader({
   const markOnlyWidth = 58;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#05080A]">
+    <div className="relative min-h-screen overflow-hidden bg-[#050D0A]">
       <div className="absolute inset-0">
         <DarkVeil
           hueShift={152}

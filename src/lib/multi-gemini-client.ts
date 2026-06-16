@@ -29,7 +29,7 @@ class MultiGeminiManager {
    * Initialize all available Gemini API keys
    */
   private initializeKeys() {
-    const primaryKey = process.env.GOOGLE_GENAI_API_KEY;
+    const primaryKey = process.env.GOOGLE_GENAI_API_KEY || process.env.GOOGLE_AI_API_KEY;
     const backupKey = process.env.GOOGLE_GENAI_API_KEY_BACKUP;
 
     if (primaryKey) {

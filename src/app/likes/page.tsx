@@ -82,7 +82,7 @@ export default function LikesPage() {
         {isMounted && (
           <Particles
             className="absolute inset-0"
-            particleColors={['#7c3aed', '#5b21b6']}
+            particleColors={['#0d6a60', '#1a8b7e']}
             particleCount={200}
             particleSpread={10}
             speed={0.5}
@@ -99,14 +99,14 @@ export default function LikesPage() {
         <header className="text-center mb-8 sm:mb-12 md:mb-16 relative">
           <div className="relative h-[180px] sm:h-[240px] md:h-[300px] max-w-4xl mx-auto">
             {isMounted && (
-              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-violet-400 to-purple-600 bg-clip-text text-transparent">Your Likes</h1>}>
+              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-emerald-400 to-teal-600 bg-clip-text text-transparent">Your Likes</h1>}>
                 <TextPressure
                   text="Your Likes"
                   stroke={true}
                   width={true}
                   weight={false}
-                  textColor="#c4b5fd"
-                  strokeColor="#6d28d9"
+                  textColor="#ccfbf1"
+                  strokeColor="#115e59"
                   minFontSize={32}
                 />
               </Suspense>
@@ -221,7 +221,7 @@ export default function LikesPage() {
                   <div className="relative aspect-square">
                     {imageStates.get(outfit.id) === 'loading' && (
                       <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-background/60 backdrop-blur-sm">
-                        <Loader2 className="h-7 w-7 animate-spin text-violet-500" />
+                        <Loader2 className="h-7 w-7 animate-spin text-emerald-500" />
                         <p className="text-xs text-muted-foreground">Loading image...</p>
                       </div>
                     )}
@@ -271,7 +271,7 @@ export default function LikesPage() {
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
-                      <div className="bg-violet-600 rounded-full p-2 shadow-lg">
+                      <div className="bg-emerald-600 rounded-full p-2 shadow-lg">
                         <Heart className="w-5 h-5 text-white fill-white" />
                       </div>
                     </div>
@@ -352,7 +352,7 @@ export default function LikesPage() {
                                         href={itemLinks.amazon}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-violet-500/30 bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 transition-colors"
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                                         title={`Shop ${item} on Amazon`}
                                       >
                                         <ShoppingCart className="w-2.5 h-2.5" />
@@ -364,7 +364,7 @@ export default function LikesPage() {
                                         href={itemLinks.tatacliq}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-purple-500/30 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20 transition-colors"
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-teal-500/30 bg-teal-500/10 text-teal-600 dark:text-teal-400 hover:bg-teal-500/20 transition-colors"
                                         title={`Shop ${item} on TATA CLiQ`}
                                       >
                                         <ShoppingCart className="w-2.5 h-2.5" />
@@ -376,7 +376,7 @@ export default function LikesPage() {
                                         href={itemLinks.myntra}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 hover:bg-fuchsia-500/20 transition-colors"
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs border border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                                         title={`Shop ${item} on Myntra`}
                                       >
                                         <ShoppingCart className="w-2.5 h-2.5" />

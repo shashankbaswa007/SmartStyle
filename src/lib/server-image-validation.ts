@@ -8,7 +8,23 @@
  * 4. Size verification (DoS prevention)
  */
 
-import { createCanvas, loadImage, Image } from 'canvas';
+type CanvasImage = { width: number; height: number };
+type CanvasModule = {
+  createCanvas: (width: number, height: number) => {
+    getContext: (contextId: '2d') => { drawImage: (image: unknown, dx: number, dy: number) => void };
+    toBuffer: (mimeType?: string) => Buffer;
+  };
+  loadImage: (src: Buffer | string) => Promise<CanvasImage>;
+};
+
+let canvasModulePromise: Promise<CanvasModule> | null = null;
+
+async function getCanvasModule(): Promise<CanvasModule> {
+  if (!canvasModulePromise) {
+    canvasModulePromise = import('canvas') as Promise<CanvasModule>;
+  }
+  return canvasModulePromise;
+}
 
 // Security limits
 const MAX_DIMENSION = 4096; // Max width or height (4K)
@@ -35,6 +51,8 @@ export async function validateAndSanitizeImage(
   dataUri: string
 ): Promise<ImageValidationResult> {
   try {
+    const { createCanvas, loadImage } = await getCanvasModule();
+
     // 1. Extract format and base64 data
     const matches = dataUri.match(/^data:image\/(jpeg|jpg|png|webp);base64,(.+)$/i);
     if (!matches) {
@@ -66,7 +84,7 @@ export async function validateAndSanitizeImage(
     }
 
     // 3. Load image to get dimensions (also validates it's a real image)
-    let img: Image;
+    let img: CanvasImage;
     try {
       img = await loadImage(buffer);
     } catch (error) {
@@ -178,6 +196,7 @@ export async function validateImageDimensions(
   buffer: Buffer
 ): Promise<{ isValid: boolean; error?: string; width?: number; height?: number }> {
   try {
+    const { loadImage } = await getCanvasModule();
     const img = await loadImage(buffer);
     const width = img.width;
     const height = img.height;

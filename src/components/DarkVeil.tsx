@@ -241,7 +241,7 @@ export default function DarkVeil({
         className="absolute inset-0 transition-opacity duration-300"
         style={{
           background:
-            'radial-gradient(circle at 20% 25%, rgba(76, 29, 149, 0.7), rgba(17, 24, 39, 0.9) 42%), radial-gradient(circle at 78% 28%, rgba(67, 56, 202, 0.48), transparent 48%), linear-gradient(135deg, rgba(3, 7, 18, 1) 0%, rgba(17, 24, 39, 1) 100%)',
+            'radial-gradient(circle at 20% 25%, rgba(16, 120, 106, 0.62), rgba(9, 15, 13, 0.92) 42%), radial-gradient(circle at 78% 28%, rgba(45, 140, 128, 0.32), transparent 50%), linear-gradient(135deg, rgba(3, 7, 6, 1) 0%, rgba(12, 20, 17, 1) 100%)',
         }}
       />
       <canvas ref={ref} className="absolute inset-0 block h-full w-full" />

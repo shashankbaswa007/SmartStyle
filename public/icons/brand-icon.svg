@@ -19,7 +19,7 @@
     <linearGradient id="ringInner" x1="82" y1="16" x2="18" y2="86" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="rgba(244,247,245,0.2)"/>
       <stop offset="0.52" stop-color="rgba(16,185,129,0.52)"/>
-      <stop offset="1" stop-color="rgba(167,139,250,0.08)"/>
+      <stop offset="1" stop-color="rgba(20,184,166,0.14)"/>
     </linearGradient>
     <linearGradient id="edgeHighlight" x1="18" y1="16" x2="58" y2="38" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="rgba(255,255,255,0.48)"/>

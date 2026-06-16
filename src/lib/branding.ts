@@ -1,20 +1,21 @@
 export const BRAND = {
   name: 'SmartStyle',
   tagline: 'Tailored by intelligence',
-  themeColor: '#0F1F1B',
+  themeColor: '#0A1411',
   radius: {
     card: 28,
     panel: 22,
     control: 12,
   },
   colors: {
-    core: '#0F1F1B',
-    coreDeep: '#08120F',
-    accent: '#0F766E',
-    glow: '#1B9A8D',
+    core: '#0A1411',
+    coreDeep: '#050D0A',
+    accent: '#0D6A60',
+    glow: '#1A8B7E',
+    trace: '#2F7E74',
     ink: '#05080A',
     frost: '#F5F7F4',
-    mist: '#CFE5DF',
+    mist: '#D1E8E2',
   },
   logo: {
     wordmark: {
@@ -41,7 +42,7 @@ export const BRAND = {
 export const INTRO_STORAGE_KEY = 'smartstyle_intro_seen';
 export const INTRO_REPLAY_QUERY = 'replayIntro';
 export const APP_LOADER_SESSION_KEY = 'smartstyle:app-loader:shown';
-export const BRAND_ASSET_VERSION = '2026-04-20.2';
+export const BRAND_ASSET_VERSION = '2026-04-25.1';
 
 export function withBrandAssetVersion(path: string): string {
   const separator = path.includes('?') ? '&' : '?';

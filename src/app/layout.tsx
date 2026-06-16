@@ -12,6 +12,8 @@ import { MotionProvider } from '@/components/MotionProvider';
 import { BRAND, withBrandAssetVersion } from '@/lib/branding';
 import Script from 'next/script';
 
+const useGoogleFonts = process.env.DISABLE_NEXT_GOOGLE_FONTS !== '1';
+
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-inter',
@@ -91,6 +93,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const fontVariables = useGoogleFonts
+    ? `${inter.variable} ${playfairDisplay.variable} ${sora.variable}`
+    : '';
+
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
@@ -101,7 +107,7 @@ export default function RootLayout({
         <meta name="format-detection" content="telephone=no" />
         <meta name="mobile-web-app-capable" content="yes" />
       </head>
-      <body className={`${inter.variable} ${playfairDisplay.variable} ${sora.variable} font-body antialiased bg-background`}>
+      <body className={`${fontVariables} font-body antialiased bg-background`}>
         <ErrorBoundary>
           <MotionProvider>
             <AuthProvider>

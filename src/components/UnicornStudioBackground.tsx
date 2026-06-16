@@ -69,7 +69,7 @@ export default function UnicornStudioBackground({
     <>
       {/* Loading fallback with gradient animation */}
       {!isLoaded && (
-        <div className="absolute inset-0 bg-gradient-to-br from-purple-600/20 via-pink-600/20 to-blue-600/20 animate-pulse" />
+        <div className="absolute inset-0 bg-gradient-to-br from-teal-600/20 via-cyan-600/20 to-emerald-600/20 animate-pulse" />
       )}
       
       {/* UnicornStudio container */}

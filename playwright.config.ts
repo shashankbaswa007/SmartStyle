@@ -23,7 +23,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'E2E_AUTH_BYPASS=1 NEXT_PUBLIC_E2E_AUTH_BYPASS=true npm run build && E2E_AUTH_BYPASS=1 NEXT_PUBLIC_E2E_AUTH_BYPASS=true npm run start',
+    command: 'E2E_AUTH_BYPASS=1 NEXT_PUBLIC_E2E_AUTH_BYPASS=true npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: false,
     timeout: 600 * 1000,

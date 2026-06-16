@@ -163,7 +163,7 @@ export function SaveColorPalette({
       {!isOpen ? (
         <button
           onClick={() => setIsOpen(true)}
-          className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg hover:shadow-xl"
+          className="px-6 py-3 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-lg font-medium hover:from-teal-700 hover:to-emerald-700 transition-all shadow-lg hover:shadow-xl"
         >
           <span className="flex items-center gap-2">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
@@ -337,7 +337,7 @@ function SavePaletteModal({
               value={formData.name}
               onChange={(e) => setFormData((prev: typeof formData) => ({ ...prev, name: e.target.value }))}
               placeholder="e.g., Summer Evening Vibes"
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-foreground rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-foreground rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
               required
               aria-required="true"
             />
@@ -357,7 +357,7 @@ function SavePaletteModal({
                   aria-pressed={formData.occasions.includes(occasion)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     formData.occasions.includes(occasion)
-                      ? 'bg-purple-600 text-white shadow-md'
+                      ? 'bg-teal-600 text-white shadow-md'
                       : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
                 >
@@ -381,7 +381,7 @@ function SavePaletteModal({
                   aria-pressed={formData.seasons.includes(season)}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                     formData.seasons.includes(season)
-                      ? 'bg-purple-600 text-white shadow-md'
+                      ? 'bg-teal-600 text-white shadow-md'
                       : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
                   }`}
                 >
@@ -402,7 +402,7 @@ function SavePaletteModal({
               onChange={(e) => setFormData((prev: typeof formData) => ({ ...prev, notes: e.target.value }))}
               placeholder="Add any notes about this color palette..."
               rows={3}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-foreground rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-foreground rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent"
             />
           </div>
         </div>
@@ -417,7 +417,7 @@ function SavePaletteModal({
           <button
             onClick={onSave}
             disabled={isSaving}
-            className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-lg font-medium hover:from-teal-700 hover:to-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isSaving ? 'Saving...' : 'Save Palette'}
           </button>

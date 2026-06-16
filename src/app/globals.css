@@ -183,12 +183,12 @@
 
 .auth-matte-card {
   background:
-    radial-gradient(140% 120% at 12% 0%, rgba(148, 163, 184, 0.12) 0%, rgba(10, 10, 15, 0.88) 45%, rgba(8, 9, 14, 0.94) 100%),
+    radial-gradient(140% 120% at 12% 0%, rgba(13, 106, 96, 0.12) 0%, rgba(6, 14, 12, 0.88) 45%, rgba(4, 9, 8, 0.94) 100%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, rgba(255, 255, 255, 0.01) 100%);
   box-shadow:
-    0 26px 48px rgba(2, 6, 23, 0.5),
+    0 26px 48px rgba(4, 9, 8, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(148, 163, 184, 0.08);
+    inset 0 -1px 0 rgba(13, 106, 96, 0.08);
   backdrop-filter: blur(8px) saturate(82%);
 }
 

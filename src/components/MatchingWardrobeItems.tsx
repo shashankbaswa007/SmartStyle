@@ -122,9 +122,9 @@ export function MatchingWardrobeItems({
 
   if (!user) {
     return (
-      <div className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/30 dark:to-pink-950/30 rounded-xl p-6 border-2 border-dashed border-purple-300 dark:border-purple-700">
+      <div className="bg-gradient-to-br from-teal-50 to-emerald-50 dark:from-teal-950/30 dark:to-emerald-950/30 rounded-xl p-6 border-2 border-dashed border-teal-300 dark:border-teal-700">
         <div className="text-center">
-          <svg className="w-12 h-12 mx-auto text-purple-400 dark:text-purple-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+          <svg className="w-12 h-12 mx-auto text-teal-400 dark:text-teal-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
           </svg>
           <h3 className="text-lg font-semibold text-foreground mb-2">
@@ -156,7 +156,7 @@ export function MatchingWardrobeItems({
 
   if (matchingItems.length === 0) {
     return (
-      <div className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-xl p-6 border-2 border-dashed border-blue-300 dark:border-blue-700">
+      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 rounded-xl p-6 border-2 border-dashed border-blue-300 dark:border-blue-700">
         <div className="text-center">
           <svg className="w-12 h-12 mx-auto text-blue-400 dark:text-blue-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
@@ -191,7 +191,7 @@ export function MatchingWardrobeItems({
     <div className="bg-card rounded-xl p-4 sm:p-6 shadow-sm border border-border" role="region" aria-label="Matching wardrobe items">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+          <div className="w-10 h-10 bg-gradient-to-br from-teal-500 to-emerald-500 rounded-full flex items-center justify-center">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
             </svg>
@@ -209,7 +209,7 @@ export function MatchingWardrobeItems({
         {matchingItems.length > 4 && (
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 rounded px-2 py-1"
+            className="text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-teal-500 focus:ring-offset-2 rounded px-2 py-1"
             aria-expanded={isExpanded}
             aria-label={isExpanded ? 'Show fewer matching items' : `View all ${matchingItems.length} matching items`}
           >
@@ -223,7 +223,7 @@ export function MatchingWardrobeItems({
           <button
             key={item.id}
             onClick={() => onItemClick?.(item)}
-            className="group relative aspect-square rounded-lg overflow-hidden bg-muted hover:ring-4 hover:ring-purple-500/50 transition-all focus:outline-none focus:ring-4 focus:ring-purple-500/50"
+            className="group relative aspect-square rounded-lg overflow-hidden bg-muted hover:ring-4 hover:ring-teal-500/50 transition-all focus:outline-none focus:ring-4 focus:ring-teal-500/50"
             aria-label={`${item.description || item.itemType} - matching wardrobe item`}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}

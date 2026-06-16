@@ -11,7 +11,7 @@
     "runtime": "nodejs18"
   },
   "hosting": {
-    "public": "out",
+    "source": ".",
     "ignore": [
       "firebase.json",
       "**/.*",

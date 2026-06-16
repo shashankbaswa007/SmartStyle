@@ -156,10 +156,10 @@ export default function ColorMatchPage() {
       {/* Particles Background - Optimized, respects reduced motion */}
       <div className="absolute inset-0 z-0 pointer-events-none" aria-hidden="true">
       {isMounted && !prefersReducedMotion && (
-          <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-violet-500/10" />}>
+          <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-emerald-500/10" />}>
             <Particles
                 className="absolute inset-0"
-                particleColors={['#7c3aed', '#c4b5fd']}
+                particleColors={['#0d6a60', '#1a8b7e']}
                 particleCount={200}
                 particleSpread={10}
                 speed={0.5}
@@ -171,7 +171,7 @@ export default function ColorMatchPage() {
           </Suspense>
       )}
       {prefersReducedMotion && (
-        <div className="absolute inset-0 bg-gradient-to-br from-violet-500/5 via-transparent to-violet-500/10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/5 via-transparent to-emerald-500/10" />
       )}
       </div>
 
@@ -180,14 +180,14 @@ export default function ColorMatchPage() {
         <header className="text-center mb-8 sm:mb-12 md:mb-16 space-y-3 sm:space-y-4">
           <div className="relative h-[120px] sm:h-[200px] md:h-[300px] max-w-4xl mx-auto">
             {isMounted && (
-              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-violet-400 to-violet-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">Color-Match</h1>}>
+              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-emerald-400 to-emerald-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">Color-Match</h1>}>
                 <TextPressure
                   text="Color-Match"
                   stroke={true}
                   width={true}
                   weight={false}
-                  textColor="#c4b5fd"
-                  strokeColor="#5b21b6"
+                  textColor="#ccfbf1"
+                  strokeColor="#115e59"
                   minFontSize={32}
                 />
               </Suspense>
@@ -305,10 +305,10 @@ export default function ColorMatchPage() {
               ))}
             </div>
             
-            <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/50 rounded-lg">
+            <div className="mt-4 p-3 bg-teal-50 dark:bg-teal-950/30 border border-teal-200 dark:border-teal-800/50 rounded-lg">
               <div className="flex items-start gap-2">
-                <Info className="w-4 h-4 text-purple-600 dark:text-purple-400 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-purple-700 dark:text-purple-300">
+                <Info className="w-4 h-4 text-teal-600 dark:text-teal-400 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-teal-700 dark:text-teal-300">
                   {harmonyType === 'recommended' 
                     ? 'Recommended mode automatically selects the best harmony based on your color\'s characteristics.'
                     : 'Manual mode lets you choose a specific harmony type based on color theory principles.'}
@@ -350,7 +350,7 @@ export default function ColorMatchPage() {
                 <div className="relative flex-1">
                   <Input
                     type="text"
-                    placeholder='e.g., "red", "#7c3aed", "rgb(59, 130, 246)"'
+                    placeholder='e.g., "red", "#0d6a60", "rgb(59, 130, 246)"'
                     value={color}
                     onChange={(e) => setColor(e.target.value)}
                     onKeyDown={(e) => {
@@ -382,7 +382,7 @@ export default function ColorMatchPage() {
                   <label className="text-sm font-medium">Pick Color:</label>
                   <input
                     type="color"
-                    value={color.startsWith('#') ? color : '#7c3aed'}
+                    value={color.startsWith('#') ? color : '#0d6a60'}
                     onChange={(e) => setColor(e.target.value)}
                     className="w-12 h-12 rounded cursor-pointer border-2 border-border"
                   />
@@ -409,10 +409,10 @@ export default function ColorMatchPage() {
               </Button>
             </div>
 
-            <div className="mt-2 p-3 bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800/50 rounded-lg">
+            <div className="mt-2 p-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-lg">
               <div className="flex items-start gap-2">
-                <Info className="w-4 h-4 text-violet-600 dark:text-violet-400 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-violet-700 dark:text-violet-300">
+                <Info className="w-4 h-4 text-emerald-600 dark:text-emerald-400 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-emerald-700 dark:text-emerald-300">
                   Try color names, hex codes (#FF0000), or pick from swatches above
                 </p>
               </div>
@@ -754,18 +754,18 @@ export default function ColorMatchPage() {
 
             {/* Quick Fashion Tips - Always Visible */}
             <motion.div variants={itemVariants} className="mb-6">
-              <div className="bg-gradient-to-br from-purple-50 to-purple-50 dark:from-purple-950/20 dark:to-purple-950/20 border border-purple-200 dark:border-purple-800/30 shadow-lg rounded-xl p-4 sm:p-6">
+              <div className="bg-gradient-to-br from-teal-50 to-teal-50 dark:from-teal-950/20 dark:to-teal-950/20 border border-teal-200 dark:border-teal-800/30 shadow-lg rounded-xl p-4 sm:p-6">
                 <h3 className="font-semibold text-base mb-3 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <Sparkles className="w-4 h-4 text-teal-600 dark:text-teal-400" />
                   Quick Styling Tips
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                   <div className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-1.5 flex-shrink-0" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 mt-1.5 flex-shrink-0" />
                     <p className="text-muted-foreground"><span className="font-semibold text-foreground">60-30-10 Rule:</span> 60% main, 30% secondary, 10% accent</p>
                   </div>
                   <div className="flex items-start gap-2">
-                    <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-1.5 flex-shrink-0" />
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 mt-1.5 flex-shrink-0" />
                     <p className="text-muted-foreground"><span className="font-semibold text-foreground">Key Colors First:</span> Start with starred colors above</p>
                   </div>
                 </div>
@@ -815,26 +815,26 @@ export default function ColorMatchPage() {
                 </div>
 
                 {/* Detailed Fashion Tips */}
-                <div className="bg-gradient-to-br from-purple-50 to-purple-50 dark:from-purple-950/20 dark:to-purple-950/20 border border-purple-200 dark:border-purple-800/30 shadow-lg rounded-2xl p-6">
+                <div className="bg-gradient-to-br from-teal-50 to-teal-50 dark:from-teal-950/20 dark:to-teal-950/20 border border-teal-200 dark:border-teal-800/30 shadow-lg rounded-2xl p-6">
                   <h3 className="font-semibold text-lg mb-3 flex items-center gap-2">
-                    <Sparkles className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                    <Sparkles className="w-5 h-5 text-teal-600 dark:text-teal-400" />
                     Advanced Styling Techniques
                   </h3>
                   <div className="grid md:grid-cols-2 gap-3 text-sm">
                     <div className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-2 flex-shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 mt-2 flex-shrink-0" />
                       <p className="text-muted-foreground"><span className="font-semibold text-foreground">Bold Contrast:</span> Use complementary colors for statement pieces</p>
                     </div>
                     <div className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-2 flex-shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 mt-2 flex-shrink-0" />
                       <p className="text-muted-foreground"><span className="font-semibold text-foreground">Soft Harmony:</span> Analogous colors create effortless, flowing outfits</p>
                     </div>
                     <div className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-2 flex-shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 mt-2 flex-shrink-0" />
                       <p className="text-muted-foreground"><span className="font-semibold text-foreground">Accent Colors:</span> Use lighter/darker shades as accessories</p>
                     </div>
                     <div className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-purple-600 dark:bg-purple-400 mt-2 flex-shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-teal-600 dark:bg-teal-400 mt-2 flex-shrink-0" />
                       <p className="text-muted-foreground"><span className="font-semibold text-foreground">Seasonal Adaptation:</span> Adjust color intensity for different seasons</p>
                     </div>
                   </div>

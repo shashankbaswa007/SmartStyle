@@ -4,10 +4,10 @@
   "description": "Get AI-powered style feedback, color analysis, and personalized outfit recommendations",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#0F1F1B",
+  "background_color": "#050D0A",
+  "theme_color": "#0A1411",
   "orientation": "portrait-primary",
-  "assetVersion": "2026-04-20.2",
+  "assetVersion": "2026-04-25.1",
   "icons": [
     {
       "src": "/icons/brand-icon.svg?v=2026-04-20.2",

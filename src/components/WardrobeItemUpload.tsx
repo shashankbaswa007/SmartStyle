@@ -827,9 +827,9 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
             </div>
           </div>
           {imageFile && suggestionsApplied && (
-            <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded-lg flex items-start gap-2">
-              <Info className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
-              <p className="text-xs text-purple-800">
+            <div className="mt-2 p-2 bg-teal-50 border border-teal-200 rounded-lg flex items-start gap-2">
+              <Info className="h-4 w-4 text-teal-600 mt-0.5 flex-shrink-0" />
+              <p className="text-xs text-teal-800">
                 Smart suggestions have been applied based on your image. You can edit any field to customize.
               </p>
             </div>
@@ -950,7 +950,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
                       variant="outline"
                       size="sm"
                       onClick={() => imageFile && generateSmartSuggestions(imageFile)}
-                      className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                      className="border-teal-300 text-teal-700 hover:bg-teal-50"
                     >
                       ✨ Get Suggestions
                     </Button>
@@ -965,7 +965,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
             <div className="flex items-center justify-between">
               <Label htmlFor="itemType">Item Type *</Label>
               {showSuggestionBadge && itemType && (
-                <Badge className="bg-purple-100 text-purple-700 text-xs animate-pulse">
+                <Badge className="bg-teal-100 text-teal-700 text-xs animate-pulse">
                   ✨ Suggested
                 </Badge>
               )}
@@ -1007,7 +1007,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
               <div className="flex items-center justify-between">
                 <Label htmlFor="category">Category</Label>
                 {showSuggestionBadge && category && (
-                  <Badge className="bg-purple-100 text-purple-700 text-xs animate-pulse">
+                  <Badge className="bg-teal-100 text-teal-700 text-xs animate-pulse">
                     ✨ Suggested
                   </Badge>
                 )}
@@ -1037,7 +1037,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
             <div className="flex items-center justify-between">
               <Label>Seasons</Label>
               {showSuggestionBadge && selectedSeasons.length > 0 && (
-                <Badge className="bg-purple-100 text-purple-700 text-xs animate-pulse">
+                <Badge className="bg-teal-100 text-teal-700 text-xs animate-pulse">
                   ✨ Suggested
                 </Badge>
               )}
@@ -1064,7 +1064,7 @@ export function WardrobeItemUpload({ open, onOpenChange, onItemAdded }: Wardrobe
             <div className="flex items-center justify-between">
               <Label>Occasions</Label>
               {showSuggestionBadge && selectedOccasions.length > 0 && (
-                <Badge className="bg-purple-100 text-purple-700 text-xs animate-pulse">
+                <Badge className="bg-teal-100 text-teal-700 text-xs animate-pulse">
                   ✨ Suggested
                 </Badge>
               )}

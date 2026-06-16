@@ -68,10 +68,10 @@ export default function StyleCheckPage() {
           {isMounted && (
             <>
               {isTabVisible && supportsWebGL && showParticles ? (
-                <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 via-transparent to-purple-500/10" />}>
+                <Suspense fallback={<div className="absolute inset-0 bg-gradient-to-br from-emerald-500/6 via-transparent to-teal-500/10" />}>
                   <Particles
                     className="absolute inset-0"
-                    particleColors={['#a855f7', '#c4b5fd']}
+                    particleColors={['#0d6a60', '#1a8b7e']}
                     particleCount={200}
                     particleSpread={10}
                     speed={0.5}
@@ -90,14 +90,14 @@ export default function StyleCheckPage() {
         <header className="text-center mb-8 sm:mb-12 md:mb-16">
           <div className="relative h-[180px] sm:h-[240px] md:h-[300px]">
             {isMounted && (
-              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 to-purple-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">Style-Check</h1>}>
+              <Suspense fallback={<h1 className="text-3xl sm:text-4xl md:text-6xl font-bold bg-gradient-to-r from-teal-400 to-teal-600 bg-clip-text text-transparent pt-12 sm:pt-16 md:pt-24">Style-Check</h1>}>
                 <TextPressure
                   text="Style-Check"
                   stroke={true}
                   width={true}
                   weight={false}
-                  textColor="#c4b5fd"
-                  strokeColor="#7c3aed"
+                  textColor="#ccfbf1"
+                  strokeColor="#115e59"
                   minFontSize={32}
                 />
               </Suspense>
@@ -133,7 +133,7 @@ export default function StyleCheckPage() {
             />
           )}
           <div className="mx-auto mt-8 max-w-lg">
-            <div className="rounded-lg p-1 bg-gradient-to-r from-purple-500/20 to-violet-500/20">
+            <div className="rounded-lg p-1 bg-gradient-to-r from-teal-500/20 to-emerald-500/20">
               <UsageLimitMeter
                 variant="styleCheck"
                 title="Daily Analysis Limit"
@@ -161,7 +161,7 @@ export default function StyleCheckPage() {
             }}
           />
         ) : (
-          <Suspense fallback={<div className="flex justify-center items-center min-h-[400px]"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div><p className="text-muted-foreground">Loading style advisor...</p></div></div>}>
+          <Suspense fallback={<div className="flex justify-center items-center min-h-[400px]"><div className="text-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600 mx-auto mb-4"></div><p className="text-muted-foreground">Loading style advisor...</p></div></div>}>
             <StyleAdvisor isLimitReached={isStyleCheckLimitReached} />
           </Suspense>
         )}

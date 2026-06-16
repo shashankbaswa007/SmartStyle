@@ -61,7 +61,7 @@ export function BrandMark({
         <linearGradient id={`${ringInnerId}-brand-ring-secondary`} x1="54" y1="12" x2="14" y2="56" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="rgba(245,247,244,0.22)" />
           <stop offset="0.54" stopColor="rgba(16,185,129,0.46)" />
-          <stop offset="1" stopColor="rgba(167,139,250,0.08)" />
+          <stop offset="1" stopColor="rgba(20,184,166,0.14)" />
         </linearGradient>
         <linearGradient id={`${highlightId}-brand-edge`} x1="16" y1="14" x2="36" y2="26" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="rgba(255,255,255,0.44)" />
