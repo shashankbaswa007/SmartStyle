@@ -30,6 +30,7 @@ import { emitUsageConsumed } from "@/lib/usage-events";
 import SmartStyleLoader from '@/components/SmartStyleLoader';
 import { publicRolloutFlags } from '@/lib/public-rollout-flags';
 import { OutfitSkeletonGrid } from './OutfitCardSkeleton';
+import { analyzeImageDeep, applySegmentationMask } from '@/lib/mediapipe-analysis';
 
 // Processing step interface
 interface ProcessingStep {
@@ -422,7 +423,16 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
   const [lastAnalysisRequest, setLastAnalysisRequest] = React.useState<AnalysisRequest | null>(null);
   const [showCamera, setShowCamera] = React.useState(false);
   const [isCameraActive, setIsCameraActive] = React.useState(false);
-  const [extractedData, setExtractedData] = React.useState<{ skinTone: string; dressColors: string; colorPalette?: string[] } | null>(null);
+  const [extractedData, setExtractedData] = React.useState<{ 
+    skinTone: string; 
+    dressColors: string; 
+    colorPalette?: string[];
+    faceShape?: string;
+    bodyType?: string;
+    bodyProportions?: string;
+    upperBodyColor?: string;
+    lowerBodyColor?: string;
+  } | null>(null);
   const [isValidatingImage, setIsValidatingImage] = React.useState(false);
   const [imageValidationError, setImageValidationError] = React.useState<string | null>(null);
   const [progressStage, setProgressStage] = React.useState(0);
@@ -644,9 +654,8 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
             description: `Ready for style analysis! (Confidence: ${validation.confidence}%)`,
           });
           
-          // Extract colors immediately
-          const extracted = extractColorsFromCanvas();
-          setExtractedData(extracted);
+          // Extract colors and deep analysis immediately
+          extractColorsFromCanvas().then(extracted => setExtractedData(extracted));
           
           // Convert data URL to File object for form validation
           fetch(imageDataUrl)
@@ -749,8 +758,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
             const ctx = canvas.getContext('2d');
             if (ctx) {
               ctx.drawImage(img, 0, 0);
-              const extracted = extractColorsFromCanvas();
-              setExtractedData(extracted);
+              extractColorsFromCanvas().then(extracted => setExtractedData(extracted));
             }
           }
         };
@@ -809,22 +817,41 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     setIsValidatingImage(false);
   };
 
-  const extractColorsFromCanvas = (): { skinTone: string; dressColors: string; colorPalette?: string[] } => {
+  const extractColorsFromCanvas = async (): Promise<{ 
+    skinTone: string; 
+    dressColors: string; 
+    colorPalette?: string[];
+    faceShape?: string;
+    bodyType?: string;
+    bodyProportions?: string;
+    upperBodyColor?: string;
+    lowerBodyColor?: string;
+  }> => {
     const canvas = canvasRef.current;
     if (!canvas) return { skinTone: "not detected", dressColors: "not detected" };
 
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return { skinTone: "not detected", dressColors: "not detected" };
 
+    setLoadingMessage("Analyzing facial structure and body type locally...");
+    const deepResult = await analyzeImageDeep(canvas);
+
     console.time('colorExtraction');
+
+    // If segmentation mask is available, apply it to isolate the person
+    const processingCanvas = deepResult?.segmentationMask
+      ? applySegmentationMask(canvas, deepResult.segmentationMask)
+      : canvas;
+    const processingCtx = processingCanvas.getContext('2d', { willReadFrequently: true });
+    if (!processingCtx) return { skinTone: "not detected", dressColors: "not detected" };
     
     // ═══════════════════════════════════════════════════════════════════
     // STAGE 0: Lightweight preprocessing
     // Downscale → 3×3 Gaussian blur (gray-world applied after skin detect)
     // ═══════════════════════════════════════════════════════════════════
     const MAX_DIM = 256;
-    const origW = canvas.width;
-    const origH = canvas.height;
+    const origW = processingCanvas.width;
+    const origH = processingCanvas.height;
     const scale = Math.min(1, MAX_DIM / Math.max(origW, origH));
     const width = Math.round(origW * scale);
     const height = Math.round(origH * scale);
@@ -839,7 +866,7 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     workCanvas.width = width;
     workCanvas.height = height;
     const workCtx = workCanvas.getContext('2d', { willReadFrequently: true })!;
-    workCtx.drawImage(canvas, 0, 0, width, height);
+    workCtx.drawImage(processingCanvas, 0, 0, width, height);
     const imageData = workCtx.getImageData(0, 0, width, height);
     const data = imageData.data;
 
@@ -1259,7 +1286,12 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
     return { 
       skinTone, 
       dressColors: dressColorsStr || 'neutral tones',
-      colorPalette: extractedPalette
+      colorPalette: extractedPalette,
+      faceShape: deepResult?.faceShape ?? undefined,
+      bodyType: deepResult?.bodyAnalysis?.bodyType ?? undefined,
+      bodyProportions: deepResult?.bodyAnalysis?.proportions ?? undefined,
+      upperBodyColor: dressColorsStr ? uniqueColors[0] : undefined, // Approximation based on dominant
+      lowerBodyColor: dressColorsStr && uniqueColors.length > 1 ? uniqueColors[1] : undefined
     };
   };
 
@@ -1444,6 +1476,13 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
         request.skinTone = skinToneValue;
         request.dressColors = dressColorsValue;
 
+        // Pass deep analysis fields to request if available
+        if (extractedData?.faceShape) request.faceShape = extractedData.faceShape;
+        if (extractedData?.bodyType) request.bodyType = extractedData.bodyType;
+        if (extractedData?.bodyProportions) request.bodyProportions = extractedData.bodyProportions;
+        if (extractedData?.upperBodyColor) request.upperBodyColor = extractedData.upperBodyColor;
+        if (extractedData?.lowerBodyColor) request.lowerBodyColor = extractedData.lowerBodyColor;
+
         setLastAnalysisRequest({
           photoDataUri: request.photoDataUri,
           occasion: request.occasion,
@@ -1455,6 +1494,11 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
           skinTone: skinToneValue,
           dressColors: dressColorsValue,
           userId: request.userId,
+          faceShape: request.faceShape,
+          bodyType: request.bodyType,
+          bodyProportions: request.bodyProportions,
+          upperBodyColor: request.upperBodyColor,
+          lowerBodyColor: request.lowerBodyColor,
         });
         
         updateStep('extract', 'complete');
@@ -2334,6 +2378,27 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
                                   <p className="font-semibold">Click to upload or drag and drop</p>
                                   <p className="text-xs">PNG, JPG up to 10MB</p>
                                 </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Deep Analysis Feedback */}
+                          {extractedData && (extractedData.faceShape || extractedData.bodyType) && (
+                            <div className="mt-4 p-4 rounded-lg border border-accent/20 bg-accent/5 space-y-2 animate-fade-in-up">
+                              <h4 className="text-sm font-semibold flex items-center gap-2">
+                                <span className="bg-accent text-accent-foreground text-xs px-2 py-0.5 rounded-full">On-Device AI</span>
+                                Deep Analysis
+                              </h4>
+                              <div className="grid grid-cols-2 gap-2 text-sm capitalize">
+                                {extractedData.faceShape && (
+                                  <div><span className="text-muted-foreground">Face Shape:</span> {extractedData.faceShape}</div>
+                                )}
+                                {extractedData.bodyType && (
+                                  <div><span className="text-muted-foreground">Body Build:</span> {extractedData.bodyType}</div>
+                                )}
+                              </div>
+                              {extractedData.bodyProportions && (
+                                <p className="text-xs text-muted-foreground mt-1 capitalize">Proportions: {extractedData.bodyProportions}</p>
                               )}
                             </div>
                           )}

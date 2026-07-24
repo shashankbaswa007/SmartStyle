@@ -41,11 +41,11 @@ graph TB
     end
 
     subgraph API["API Routes (Next.js)"]
-        REC[/api/recommend]
-        COL[/api/getColorMatches]
-        SHOP[/api/tavily]
-        LIKE[/api/likes]
-        PREF[/api/preferences]
+        REC["/api/recommend"]
+        COL["/api/getColorMatches"]
+        SHOP["/api/tavily"]
+        LIKE["/api/likes"]
+        PREF["/api/preferences"]
         RL[Rate Limiter]
         VAL[Zod Validation]
     end
