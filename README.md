@@ -15,7 +15,7 @@
 
 | Category | Highlights |
 |----------|-----------|
-| **Photo Analysis** | Upload/camera capture with client-side person detection (skin-tone filtering, edge analysis) |
+| **Photo Analysis & AI Vision** | **Privacy-First Deep Learning**: Client-side MediaPipe WASM models (Selfie Segmentation, 468-point Face Landmarker for face shape, 33-point Pose Landmarker for body posture) + real-time smart skin-tone filtering. Zero image uploads for vision extraction! |
 | **AI Recommendations** | 3 personalized outfits via Groq Llama 3.3 70B (Gemini 2.0 Flash fallback) |
 | **Image Generation** | Hybrid multi-provider: Replicate FLUX (position 1) + Pollinations.ai (free, positions 2-3) with Firebase Storage caching (60-70% hit rate) |
 | **Color Matching** | Client-side color-theory engine (complementary, analogous, triadic, split-complementary, tetradic, monochromatic) powered by chroma-js |
@@ -34,10 +34,11 @@
 graph TB
     subgraph Client["Client (Next.js 14 App Router)"]
         UI[React 18 + Tailwind + shadcn/ui]
-        CE[Color Extraction<br/>Vibrant.js]
-        IV[Image Validation<br/>Client-side CV]
-        CM[Color Matching<br/>chroma-js]
-        PWA[Service Worker + PWA]
+        DL["MediaPipe Vision (WASM)<br/>Face/Pose/Segmentation"]
+        CE["Color Extraction<br/>Vibrant.js"]
+        IV["Image Validation<br/>Client-side CV"]
+        CM["Color Matching<br/>chroma-js"]
+        PWA["Service Worker + PWA"]
     end
 
     subgraph API["API Routes (Next.js)"]
@@ -68,6 +69,7 @@ graph TB
         TAVILY[Tavily<br/>Shopping Search]
     end
 
+    UI --> DL --> REC
     UI --> CE --> REC
     UI --> IV --> REC
     UI --> CM
@@ -88,8 +90,8 @@ graph TB
 ### System Flow
 
 ```
-Upload Photo → Client-side Validation → Color Extraction →
-AI Analysis (Groq/Gemini) → Generate 3 Recommendations →
+Upload Photo → Local Deep Learning (MediaPipe WASM Face/Pose/Seg) → Color Extraction →
+AI Analysis (Groq Llama 3.3 / Gemini) → Generate 3 Recommendations →
 Create Visual Outfits (FLUX/Pollinations) → Cache in Storage →
 Add Shopping Links (Tavily) → Display Results →
 Track Feedback → Update Preferences → Improve Future Picks
@@ -131,6 +133,7 @@ SmartStyle/
 │   │
 │   ├── lib/                          # Core business logic
 │   │   ├── firebase.ts               # Firebase initialization
+│   │   ├── mediapipe-analysis.ts     # Client-side WASM Deep Learning (Face/Pose/Segmentation)
 │   │   ├── color-extraction.ts       # Smart color detection
 │   │   ├── preference-engine.ts      # User preference tracking
 │   │   ├── blocklist-manager.ts      # Style blocklists
@@ -162,18 +165,20 @@ SmartStyle/
 
 **Flow:**
 1. User uploads photo (drag-drop, file picker, or camera)
-2. Smart color extraction identifies outfit colors (ignores skin tones)
-3. AI analyzes photo with context (weather, user preferences)
-4. Generates 3 personalized outfit recommendations
-5. Creates AI-generated images for each outfit
-6. Adds shopping links for each item
-7. Displays with match score badges
+2. **On-Device Deep Learning (MediaPipe WASM)**: Runs Selfie Segmentation to separate fabric from background, Face Landmarker (468 points) to classify face shape, and Pose Landmarker (33 points) to estimate body type—entirely locally in browser memory!
+3. Smart color extraction identifies dominant outfit colors from segmented apparel (ignores skin tones & background)
+4. AI analyzes style metrics + user preferences via Groq Llama 3.3 70B (zero raw photo transmission required)
+5. Generates 3 personalized outfit recommendations with custom visual prompts
+6. Creates AI-generated images for each outfit via FLUX / Pollinations
+7. Adds matching shopping links for each item and displays with match score badges
 
 **Key Files:**
 - `src/app/style-check/page.tsx` - Main page
+- `src/components/style-advisor.tsx` - Interactive advisor block with deep analysis status
 - `src/components/style-advisor-results.tsx` - Results display
-- `src/app/api/recommend/route.ts` - Backend API
-- `src/lib/color-extraction.ts` - Color detection
+- `src/lib/mediapipe-analysis.ts` - Client-side Deep Learning vision pipeline
+- `src/app/api/recommend/route.ts` - Backend recommendation orchestration API
+- `src/lib/color-extraction.ts` - Smart skin-tone & color detection
 
 ---
 
