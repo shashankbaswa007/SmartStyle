@@ -24,7 +24,7 @@ export function getTimezoneOffsetMinutesFromRequest(request: Request): number {
 }
 
 export const USAGE_LIMITS = {
-  recommend: 10,
+  recommend: 3,
   wardrobeOutfit: 10,
   wardrobeUpload: 10,
 } as const;
