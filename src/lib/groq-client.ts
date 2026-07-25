@@ -25,6 +25,12 @@ export interface GroqRecommendationInput {
   userId?: string;
   userPreferences?: ComprehensivePreferences;
   userBlocklists?: Blocklists;
+  // NEW: Deep analysis fields (from client-side MediaPipe)
+  faceShape?: string;
+  bodyType?: string;
+  bodyProportions?: string;
+  upperBodyColor?: string;
+  lowerBodyColor?: string;
 }
 
 export interface GroqOutfitRecommendation {
@@ -163,6 +169,11 @@ function buildGroqPrompt(input: GroqRecommendationInput): string {
     dressColors,
     userPreferences,
     userBlocklists,
+    faceShape,
+    bodyType,
+    bodyProportions,
+    upperBodyColor,
+    lowerBodyColor,
   } = input;
 
   // Base context
@@ -173,7 +184,9 @@ Generate 3 complete, diverse outfit recommendations for the following scenario:
 **Style Genre:** ${genre || 'Any'}
 **Gender:** ${gender || 'Unisex'}
 ${weather ? `**Weather:** ${weather}` : ''}
-${skinTone ? `**Skin Tone:** ${skinTone}` : ''}`;
+${skinTone ? `**Skin Tone:** ${skinTone}` : ''}
+${upperBodyColor ? `**Upper Body Color:** ${upperBodyColor}` : ''}
+${lowerBodyColor ? `**Lower Body Color:** ${lowerBodyColor}` : ''}`;
 
   // Add personalization if available
   if (userPreferences && userBlocklists) {
@@ -199,6 +212,12 @@ ${skinTone ? `**Skin Tone:** ${skinTone}` : ''}`;
   // Continue with rest of prompt (current colors and format instructions)
   prompt += `
 ${dressColors ? `**Current Outfit Colors:** ${dressColors}` : ''}
+
+${faceShape || bodyType ? `**🧠 ON-DEVICE DEEP LEARNING ANALYSIS (High Confidence):**
+${faceShape ? `- **Face Shape:** ${faceShape} → Recommend necklines and collar styles that complement this.` : ''}
+${bodyType ? `- **Body Type:** ${bodyType} → Suggest fits and silhouettes that flatter this build.` : ''}
+${bodyProportions ? `- **Body Proportions:** ${bodyProportions} → Consider balance and visual proportion.` : ''}
+` : ''}
 
 Your task: Create 3 RADICALLY DIFFERENT complete outfits. Each must be UNIQUE:
 

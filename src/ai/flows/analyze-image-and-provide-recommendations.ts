@@ -108,9 +108,18 @@ const AnalyzeImageAndProvideRecommendationsInputSchema = z.object({
   }).optional().describe('Optional structured weekly weather forecast for planning outfits ahead.'),
   weeklyWeatherSummary: z.string().optional().describe('Optional human-readable summary of the 7-day weather trend.'),
   skinTone: z.string().describe("The person's estimated skin tone (extracted client-side from the photo)."),
-  dressColors: z.string().describe('A comma-separated list of the primary colors of the outfit (extracted client-side from the photo).'),
+  dressColors: z.union([
+    z.string(),
+    z.array(z.string())
+  ]).describe('A comma-separated list of the primary colors of the outfit or an array of color strings (extracted client-side from the photo).'),
   previousRecommendation: z.string().optional().describe('A JSON string of a previous recommendation that the user was not satisfied with. If provided, generate a different recommendation.'),
   userId: z.string().optional().describe('User ID for personalization (if available)'),
+  // Deep analysis fields from client-side MediaPipe (on-device AI)
+  faceShape: z.string().optional().describe('Face shape detected via on-device AI (oval, round, square, heart, oblong).'),
+  bodyType: z.string().optional().describe('Body type detected via on-device AI (athletic, slim, average, broad).'),
+  bodyProportions: z.string().optional().describe('Human-readable body proportions summary from on-device pose analysis.'),
+  upperBodyColor: z.string().optional().describe('Dominant upper body garment color from segmented analysis.'),
+  lowerBodyColor: z.string().optional().describe('Dominant lower body garment color from segmented analysis.'),
 });
 export type AnalyzeImageAndProvideRecommendationsInput = z.infer<typeof AnalyzeImageAndProvideRecommendationsInputSchema>;
 
@@ -231,6 +240,32 @@ const prompt = ai.definePrompt({
   {{/if}}
   - **User's Skin Tone:** {{{skinTone}}} (extracted client-side from photo)
   - **User's Current Outfit Colors:** {{{dressColors}}} (extracted client-side from photo)
+  {{#if upperBodyColor}}
+  - **Upper Body Garment Color:** {{{upperBodyColor}}} (from AI-segmented clothing region)
+  {{/if}}
+  {{#if lowerBodyColor}}
+  - **Lower Body Garment Color:** {{{lowerBodyColor}}} (from AI-segmented clothing region)
+  {{/if}}
+
+  {{#if faceShape}}
+  **🧠 ON-DEVICE DEEP LEARNING ANALYSIS (High Confidence — detected locally on user's device):**
+  - **Face Shape:** {{{faceShape}}}
+    → Use this to recommend necklines, collars, and hairstyle-complementing accessories:
+      • Oval: most necklines work; V-necks and crew necks are ideal
+      • Round: V-necks, open collars, and vertical details elongate
+      • Square: scoop necks, round collars, and soft curves balance angular jaw
+      • Heart: boat necks, off-shoulder, and wider necklines balance narrow chin
+      • Oblong: turtlenecks, crew necks, and horizontal elements add width
+  {{#if bodyType}}
+  - **Body Type:** {{{bodyType}}}
+  - **Body Proportions:** {{{bodyProportions}}}
+    → Use this to recommend fits, silhouettes, and layering:
+      • Athletic/broad shoulders: structured blazers, raglan sleeves suit well
+      • Slim build: layering adds dimension; avoid oversized pieces that overwhelm
+      • Average build: most fits work; focus on proportion balance
+      • Broad build: vertical lines, monochrome palettes elongate silhouette
+  {{/if}}
+  {{/if}}
 
   {{#if validationFeedback}}
   **SCHEMA VALIDATION NOTICE:** {{{validationFeedback}}}
@@ -838,12 +873,18 @@ const analyzeImageAndProvideRecommendationsFlow = ai.defineFlow(
           gender: input.gender,
           weather: input.weather,
           skinTone: input.skinTone,
-          dressColors: input.dressColors,
+          dressColors: Array.isArray(input.dressColors) ? input.dressColors.join(', ') : input.dressColors,
           previousRecommendation: input.previousRecommendation,
           // ✨ NEW: Pass personalization data to Groq
           userId: input.userId,
           userPreferences: userPreferences || undefined,
           userBlocklists: userBlocklists || undefined,
+          // Deep analysis fields
+          faceShape: input.faceShape,
+          bodyType: input.bodyType,
+          bodyProportions: input.bodyProportions,
+          upperBodyColor: input.upperBodyColor,
+          lowerBodyColor: input.lowerBodyColor,
         };
         
         const groqResult = await generateRecommendationsWithGroq(groqInput);

@@ -134,6 +134,31 @@ export const recommendRequestSchema = z.object({
   uxVariant: z.enum(['A', 'B'])
     .optional()
     .describe('Optional UX experiment variant for messaging and trust cues'),
+
+  // Deep analysis fields (from client-side MediaPipe)
+  faceShape: z.enum(['oval', 'round', 'square', 'heart', 'oblong'])
+    .optional()
+    .describe('Face shape detected via on-device AI (MediaPipe Face Landmarker)'),
+
+  bodyType: z.string()
+    .max(50)
+    .optional()
+    .describe('Body type detected via on-device AI (MediaPipe Pose Landmarker)'),
+
+  bodyProportions: z.string()
+    .max(200)
+    .optional()
+    .describe('Human-readable body proportions summary from on-device pose analysis'),
+
+  upperBodyColor: z.string()
+    .max(100)
+    .optional()
+    .describe('Dominant upper body garment color(s) from segmented analysis'),
+
+  lowerBodyColor: z.string()
+    .max(100)
+    .optional()
+    .describe('Dominant lower body garment color(s) from segmented analysis'),
 });
 
 export type RecommendRequest = z.infer<typeof recommendRequestSchema>;
