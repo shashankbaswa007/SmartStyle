@@ -2747,7 +2747,11 @@ export function StyleAdvisor({ isLimitReached = false }: StyleAdvisorProps) {
                   imageSources={imageSources}
                   recommendationId={recommendationId}
                   gender={lastAnalysisRequest?.gender}
-                  detectedDressColors={lastAnalysisRequest?.dressColors || extractedData?.dressColors}
+                  detectedDressColors={
+                    Array.isArray(lastAnalysisRequest?.dressColors || extractedData?.dressColors)
+                      ? (lastAnalysisRequest?.dressColors || extractedData?.dressColors as string[]).join(', ')
+                      : (lastAnalysisRequest?.dressColors || extractedData?.dressColors as string | undefined)
+                  }
                   weatherSummary={weather}
                   weatherForecast={weatherForecast}
                 />
