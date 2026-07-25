@@ -115,6 +115,12 @@ const nextConfig = {
       // packages not installed — skip
     }
     
+    // Suppress Critical Dependency warning for mediapipe vision_bundle.mjs 
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      { module: /node_modules\/@mediapipe\/tasks-vision/ }
+    ];
+
     return config;
   },
   // OPTIMIZED: Reduce bundle size
