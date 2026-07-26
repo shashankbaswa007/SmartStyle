@@ -114,6 +114,12 @@ async function ensureModelsLoaded(): Promise<boolean> {
   return !_initFailed;
 }
 
+/**
+ * Yields the main thread for a brief moment to allow the browser to process UI paints,
+ * preventing jank and frozen loading animations during heavy WASM inference.
+ */
+const yieldThread = () => new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
 // ---------- Public API ----------
 
 /**
@@ -132,6 +138,7 @@ export async function analyzeImageDeep(
   // ── Segmentation ──
   let segmentationMask: ImageData | null = null;
   try {
+    await yieldThread(); // Allow UI to paint loading state
     const tSeg = performance.now();
     const segResult = _segmenter.segment(canvas);
     segTime = performance.now() - tSeg;
@@ -162,6 +169,7 @@ export async function analyzeImageDeep(
   // ── Face Landmarker ──
   let faceShape: FaceShape | null = null;
   try {
+    await yieldThread(); // Prevent UI lockup between models
     const tFace = performance.now();
     const faceResult = _faceLandmarker.detect(canvas);
     faceTime = performance.now() - tFace;
@@ -176,6 +184,7 @@ export async function analyzeImageDeep(
   // ── Pose Landmarker ──
   let bodyAnalysis: BodyAnalysis | null = null;
   try {
+    await yieldThread(); // Prevent UI lockup between models
     const tPose = performance.now();
     const poseResult = _poseLandmarker.detect(canvas);
     poseTime = performance.now() - tPose;
